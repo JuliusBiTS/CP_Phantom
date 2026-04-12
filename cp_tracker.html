@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Cyberpunk Phantom // Tracker</title>
+<style>
+:root {
+  --bg: #080808;
+  --surface: #111;
+  --surface2: #161616;
+  --border: #1e1e1e;
+  --border2: #2a2a2a;
+  --text: #d8d8d8;
+  --text2: #666;
+  --text3: #3a3a3a;
+  --red: #9b1c1c;
+  --red-bright: #e53e3e;
+  --teal: #1a4a5a;
+  --teal-bright: #2e9ab5;
+  --gold: #b8860b;
+  --gold-bright: #f0c040;
+  --green: #1a4a1a;
+  --green-bright: #4aaa4a;
+  --font: 'Courier New', monospace;
+  --radius: 2px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; min-height: 100vh; overflow-x: hidden; }
+button { font-family: var(--font); cursor: pointer; border: none; border-radius: var(--radius); transition: all 0.1s; }
+button:active { transform: scale(0.97); }
+input, textarea, select { font-family: var(--font); background: var(--surface); color: var(--text); border: 1px solid var(--border2); border-radius: var(--radius); padding: 8px 10px; width: 100%; font-size: 13px; outline: none; }
+input:focus, textarea:focus, select:focus { border-color: var(--teal-bright); }
+label { font-size: 10px; color: var(--text2); letter-spacing: 0.15em; text-transform: uppercase; display: block; margin-bottom: 4px; }
+h2 { font-size: 11px; letter-spacing: 0.25em; color: var(--text2); text-transform: uppercase; margin-bottom: 12px; }
+.screen { display: none; min-height: 100vh; }
+.screen.active { display: flex; flex-direction: column; }
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+/* ── SETUP + LOGIN ── */
+.center-screen { align-items: center; justify-content: center; padding: 24px; }
+.card { background: var(--surface); border: 1px solid var(--border2); padding: 28px 24px; width: 100%; max-width: 420px; }
+.brand { font-size: 10px; letter-spacing: 0.35em; color: var(--text3); margin-bottom: 8px; }
+.title-large { font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: 0.04em; margin-bottom: 4px; }
+.subtitle { font-size: 11px; color: var(--text2); margin-bottom: 24px; }
+.field { margin-bottom: 14px; }
+.btn { padding: 11px 20px; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; }
+.btn-primary { background: var(--teal); color: #9ae0f0; border: 1px solid var(--teal-bright); width: 100%; }
+.btn-primary:hover { background: #1e5a6a; }
+.btn-danger { background: var(--red); color: #ffaaaa; border: 1px solid var(--red-bright); }
+.btn-danger:hover { background: #7a1515; }
+.btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border2); }
+.btn-ghost:hover { border-color: var(--text2); color: var(--text); }
+.btn-gold { background: #2a1e00; color: var(--gold-bright); border: 1px solid var(--gold); }
+.btn-small { padding: 5px 10px; font-size: 10px; }
+.btn-icon { padding: 6px 10px; font-size: 14px; line-height: 1; }
+.note { font-size: 10px; color: var(--text3); margin-top: 12px; line-height: 1.6; }
+.note a { color: var(--teal-bright); }
+.error-msg { background: rgba(155,28,28,0.15); border: 1px solid var(--red); color: #ffaaaa; padding: 8px 12px; font-size: 11px; margin-bottom: 12px; display: none; }
+.divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+/* ── TOP BAR ── */
+.topbar { background: var(--surface); border-bottom: 1px solid var(--border2); padding: 0 16px; height: 48px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; position: sticky; top: 0; z-index: 100; }
+.topbar-brand { font-size: 9px; letter-spacing: 0.25em; color: var(--text3); white-space: nowrap; }
+.topbar-title { font-size: 13px; font-weight: 700; color: var(--text); flex: 1; }
+.topbar-badge { font-size: 9px; padding: 3px 8px; letter-spacing: 0.1em; border-radius: var(--radius); }
+.badge-gm { background: var(--red); color: #ffaaaa; }
+.badge-player { background: var(--teal); color: #9ae0f0; }
+.badge-combat { background: var(--red); color: #ffaaaa; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+.topbar-round { font-size: 11px; color: var(--gold-bright); white-space: nowrap; }
+/* ── TABS ── */
+.tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surface); }
+.tab { flex: 1; padding: 10px 8px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; background: transparent; color: var(--text2); border: none; border-bottom: 2px solid transparent; cursor: pointer; font-family: var(--font); transition: all 0.15s; }
+.tab.active { color: var(--teal-bright); border-bottom-color: var(--teal-bright); }
+.tab-content { display: none; flex: 1; overflow-y: auto; }
+.tab-content.active { display: block; }
+/* ── COMBAT VIEW ── */
+.combat-header { padding: 12px 16px; display: flex; gap: 8px; align-items: center; border-bottom: 1px solid var(--border); background: var(--surface2); }
+.round-display { font-size: 20px; font-weight: 700; color: var(--gold-bright); min-width: 60px; }
+.round-label { font-size: 9px; color: var(--text3); letter-spacing: 0.2em; }
+.initiative-strip { display: flex; gap: 6px; overflow-x: auto; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+.init-chip { padding: 6px 10px; border: 1px solid var(--border2); background: var(--surface2); font-size: 10px; white-space: nowrap; cursor: pointer; transition: all 0.1s; border-radius: var(--radius); min-width: 64px; text-align: center; }
+.init-chip.active-turn { border-color: var(--gold-bright); color: var(--gold-bright); background: rgba(176,130,0,0.1); }
+.init-chip.npc { border-color: var(--red); color: #ffaaaa; }
+.init-chip.dead { opacity: 0.3; text-decoration: line-through; }
+.combatants { padding: 8px 16px; display: flex; flex-direction: column; gap: 6px; }
+/* ── COMBATANT CARD ── */
+.combatant-card { background: var(--surface); border: 1px solid var(--border); overflow: hidden; transition: border-color 0.1s; }
+.combatant-card.active-turn { border-color: var(--gold-bright); }
+.combatant-card.is-npc { border-left: 3px solid var(--red); }
+.combatant-card.is-pc { border-left: 3px solid var(--teal-bright); }
+.combatant-card.is-dead { opacity: 0.4; }
+.combatant-top { padding: 10px 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.combatant-name { font-size: 13px; font-weight: 700; flex: 1; }
+.combatant-init { font-size: 10px; color: var(--text3); min-width: 28px; }
+.hp-display { display: flex; flex-direction: column; align-items: flex-end; }
+.hp-numbers { font-size: 13px; font-weight: 700; }
+.hp-numbers.critical { color: var(--red-bright); }
+.hp-numbers.wounded { color: var(--gold-bright); }
+.hp-numbers.healthy { color: var(--green-bright); }
+.hp-bar { width: 80px; height: 4px; background: var(--border); border-radius: 2px; margin-top: 3px; overflow: hidden; }
+.hp-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+.hp-bar-fill.healthy { background: var(--green-bright); }
+.hp-bar-fill.wounded { background: var(--gold-bright); }
+.hp-bar-fill.critical { background: var(--red-bright); }
+.flink-badge { font-size: 8px; padding: 2px 6px; letter-spacing: 0.1em; border-radius: var(--radius); }
+.flink-available { background: rgba(46,154,181,0.2); color: var(--teal-bright); border: 1px solid var(--teal-bright); }
+.flink-used { background: rgba(60,60,60,0.3); color: var(--text3); border: 1px solid var(--border); text-decoration: line-through; }
+.status-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.status-chip { font-size: 9px; padding: 2px 6px; border-radius: var(--radius); letter-spacing: 0.08em; }
+.status-bleed { background: rgba(155,28,28,0.3); color: #ffaaaa; border: 1px solid var(--red); }
+.status-burn { background: rgba(180,100,0,0.3); color: #ffcc88; border: 1px solid #cc6600; }
+.status-malfunction { background: rgba(60,0,80,0.3); color: #dd88ff; border: 1px solid #880088; }
+.status-stagger { background: rgba(30,60,80,0.3); color: #88bbdd; border: 1px solid #446688; }
+.status-custom { background: rgba(50,50,50,0.5); color: var(--text2); border: 1px solid var(--border2); }
+.combatant-detail { display: none; border-top: 1px solid var(--border); padding: 12px; background: var(--surface2); }
+.combatant-detail.open { display: block; }
+.detail-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
+.detail-label { font-size: 9px; color: var(--text3); letter-spacing: 0.15em; min-width: 52px; }
+.adj-group { display: flex; gap: 4px; align-items: center; }
+.adj-btn { width: 32px; height: 32px; font-size: 16px; font-weight: 700; background: var(--surface); border: 1px solid var(--border2); color: var(--text); display: flex; align-items: center; justify-content: center; border-radius: var(--radius); }
+.adj-btn:hover { border-color: var(--text2); }
+.adj-btn.red { border-color: var(--red); color: var(--red-bright); background: rgba(155,28,28,0.1); }
+.adj-btn.red:hover { background: rgba(155,28,28,0.2); }
+.adj-btn.green { border-color: var(--green-bright); color: var(--green-bright); background: rgba(26,74,26,0.15); }
+.adj-btn.green:hover { background: rgba(26,74,26,0.3); }
+.adj-input { width: 56px; height: 32px; text-align: center; border: 1px solid var(--border2); padding: 4px; }
+.stamina-dots { display: flex; gap: 3px; flex-wrap: wrap; }
+.dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border2); cursor: pointer; transition: all 0.1s; }
+.dot.filled { background: var(--teal-bright); border-color: var(--teal-bright); }
+.dot.empty { background: transparent; }
+.armor-display { display: flex; gap: 8px; }
+.armor-piece { background: var(--surface); border: 1px solid var(--border); padding: 6px 10px; font-size: 11px; }
+.armor-label { font-size: 9px; color: var(--text3); }
+.armor-sp { font-size: 13px; font-weight: 700; }
+.armor-sp-temp { font-size: 10px; color: var(--gold-bright); }
+.status-add { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+/* ── MAIN CONTENT SCROLLABLE ── */
+.main-scroll { flex: 1; overflow-y: auto; }
+/* ── CHARACTERS TAB ── */
+.char-list { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+.char-item { background: var(--surface); border: 1px solid var(--border); padding: 12px 14px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.char-item:hover { border-color: var(--border2); }
+.char-item-name { flex: 1; font-size: 14px; font-weight: 700; }
+.char-item-sub { font-size: 10px; color: var(--text2); }
+.char-item-hp { font-size: 12px; color: var(--green-bright); }
+.add-char-btn { margin: 0 16px 16px; display: flex; align-items: center; gap: 8px; background: transparent; border: 1px dashed var(--border2); color: var(--text2); padding: 12px; font-family: var(--font); font-size: 11px; letter-spacing: 0.1em; width: calc(100% - 32px); justify-content: center; cursor: pointer; }
+.add-char-btn:hover { border-color: var(--teal-bright); color: var(--teal-bright); }
+/* ── MODAL ── */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 200; display: none; align-items: flex-start; justify-content: center; padding: 16px; overflow-y: auto; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--surface); border: 1px solid var(--border2); width: 100%; max-width: 560px; margin: auto; }
+.modal-header { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.modal-title { font-size: 12px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text); }
+.modal-close { background: transparent; color: var(--text2); border: none; font-size: 18px; cursor: pointer; padding: 0 4px; }
+.modal-body { padding: 16px; max-height: 75vh; overflow-y: auto; }
+.modal-footer { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+.section-heading { font-size: 9px; letter-spacing: 0.2em; color: var(--text3); text-transform: uppercase; margin: 16px 0 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.slot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.slot-item { background: var(--surface2); border: 1px solid var(--border); padding: 8px 10px; display: flex; align-items: center; gap: 8px; min-height: 40px; }
+.slot-empty { border-style: dashed; cursor: pointer; justify-content: center; color: var(--text3); font-size: 10px; }
+.slot-empty:hover { border-color: var(--teal-bright); color: var(--teal-bright); }
+.slot-filled { cursor: pointer; }
+.slot-name { font-size: 11px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot-bonus { font-size: 10px; color: var(--gold-bright); white-space: nowrap; }
+.slot-size { font-size: 9px; color: var(--text3); }
+.talent-used { opacity: 0.4; }
+.talent-toggle { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border2); background: transparent; cursor: pointer; flex-shrink: 0; }
+.talent-toggle.used { background: var(--red); border-color: var(--red-bright); }
+.talent-toggle.available { background: var(--teal); border-color: var(--teal-bright); }
+.inline-row { display: flex; gap: 8px; }
+.inline-row .field { flex: 1; }
+/* ── ENCOUNTER BUILDER ── */
+.enc-section { padding: 12px 16px; }
+.enc-enemy-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.enc-enemy { background: var(--surface); border: 1px solid var(--red); padding: 10px 12px; display: flex; align-items: center; gap: 10px; }
+.enc-enemy-name { flex: 1; font-size: 13px; }
+.enc-enemy-hp { font-size: 11px; color: var(--gold-bright); }
+/* ── PLAYER VIEW ── */
+.player-view { padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+.player-card { background: var(--surface); border: 1px solid var(--border2); padding: 14px; }
+.player-card-title { font-size: 9px; letter-spacing: 0.2em; color: var(--text3); margin-bottom: 10px; text-transform: uppercase; }
+.big-stat { display: flex; align-items: baseline; gap: 6px; }
+.big-stat-val { font-size: 32px; font-weight: 700; }
+.big-stat-max { font-size: 16px; color: var(--text2); }
+.big-stat-label { font-size: 9px; color: var(--text3); letter-spacing: 0.15em; }
+.turn-indicator { background: rgba(176,130,0,0.1); border: 1px solid var(--gold-bright); padding: 10px 14px; color: var(--gold-bright); font-size: 12px; text-align: center; letter-spacing: 0.1em; }
+.initiative-list { display: flex; flex-direction: column; gap: 4px; }
+.init-row { display: flex; gap: 8px; align-items: center; padding: 6px 10px; background: var(--surface2); }
+.init-row.current { background: rgba(176,130,0,0.1); border-left: 2px solid var(--gold-bright); }
+.init-row-name { flex: 1; font-size: 12px; }
+.init-row-hp { font-size: 11px; }
+/* ── DAMAGE INPUT MODAL ── */
+.dmg-modal { max-width: 300px; }
+.dmg-keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 12px 0; }
+.dmg-key { padding: 14px; font-size: 18px; font-weight: 700; background: var(--surface2); border: 1px solid var(--border2); color: var(--text); border-radius: var(--radius); }
+.dmg-key:hover { border-color: var(--teal-bright); }
+.dmg-key.action { font-size: 12px; }
+.dmg-display { background: var(--surface2); border: 1px solid var(--border2); padding: 10px; text-align: right; font-size: 24px; font-weight: 700; color: var(--teal-bright); min-height: 50px; margin-bottom: 8px; }
+/* ── TOAST ── */
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--teal-bright); color: var(--teal-bright); padding: 8px 16px; font-size: 11px; letter-spacing: 0.1em; z-index: 500; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
+.toast.show { opacity: 1; }
+/* ── RESPONSIVE ── */
+@media (min-width: 768px) {
+  .slot-grid { grid-template-columns: 1fr 1fr 1fr; }
+  .combatants { padding: 8px 20px; }
+  .initiative-strip { padding: 10px 20px; }
+}
+</style>
+</head>
+<body>
+
+<!-- SETUP SCREEN -->
+<div id="screen-setup" class="screen center-screen">
+  <div class="card">
+    <div class="brand">CYBERPUNK PHANTOM //</div>
+    <div class="title-large">CAMPAIGN TRACKER</div>
+    <div class="subtitle">First-time setup — connect to Firebase</div>
+    <div class="error-msg" id="setup-error"></div>
+    <div class="field">
+      <label>Firebase Database URL</label>
+      <input type="text" id="setup-db-url" placeholder="https://your-project-default-rtdb.firebaseio.com">
+    </div>
+    <div class="field">
+      <label>GM PIN (4–8 characters)</label>
+      <input type="password" id="setup-gm-pin" placeholder="Choose a GM PIN" maxlength="8">
+    </div>
+    <div class="field">
+      <label>Campaign Name</label>
+      <input type="text" id="setup-campaign" placeholder="e.g. The Time Market" maxlength="40">
+    </div>
+    <button class="btn btn-primary" onclick="doSetup()">INITIALIZE CAMPAIGN</button>
+    <div class="note">
+      Needs a free Firebase Realtime Database.<br>
+      1. Go to <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a><br>
+      2. New project → Realtime Database → Start in test mode<br>
+      3. Copy the database URL above (ends in .firebaseio.com)<br>
+      Already set up? <a href="#" onclick="showLogin()">Login instead</a>
+    </div>
+  </div>
+</div>
+
+<!-- LOGIN SCREEN -->
+<div id="screen-login" class="screen center-screen">
+  <div class="card">
+    <div class="brand">CYBERPUNK PHANTOM //</div>
+    <div class="title-large" id="login-campaign-name">CAMPAIGN</div>
+    <div class="subtitle">Enter your PIN to connect</div>
+    <div class="error-msg" id="login-error">Wrong PIN. Try again.</div>
+    <div class="field">
+      <label>PIN</label>
+      <input type="password" id="login-pin" placeholder="Your PIN" maxlength="8" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn btn-primary" onclick="doLogin()">CONNECT</button>
+    <hr class="divider">
+    <p class="note">GM: Use your GM PIN for full access.<br>Players: Use the PIN your GM gave you.</p>
+  </div>
+</div>
+
+<!-- GM SCREEN -->
+<div id="screen-gm" class="screen">
+  <div class="topbar">
+    <span class="topbar-brand">CP //</span>
+    <span class="topbar-title" id="gm-campaign-title">CAMPAIGN</span>
+    <span id="gm-combat-badge" class="topbar-badge badge-combat" style="display:none">● COMBAT</span>
+    <span id="gm-round-display" class="topbar-round" style="display:none"></span>
+    <span class="topbar-badge badge-gm">GM</span>
+  </div>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('combat')">Combat</button>
+    <button class="tab" onclick="switchTab('characters')">Characters</button>
+    <button class="tab" onclick="switchTab('encounter')">Encounter</button>
+    <button class="tab" onclick="switchTab('settings')">Settings</button>
+  </div>
+
+  <!-- COMBAT TAB -->
+  <div id="tab-combat" class="tab-content active main-scroll">
+    <div id="combat-idle" style="padding:20px 16px">
+      <div style="color:var(--text3);font-size:11px;letter-spacing:0.15em;margin-bottom:16px">NO ACTIVE COMBAT</div>
+      <div id="pre-combat-chars" style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px"></div>
+      <button class="btn btn-primary" style="max-width:240px" onclick="startCombat()">START COMBAT</button>
+    </div>
+    <div id="combat-active" style="display:none">
+      <div class="combat-header">
+        <div>
+          <div class="round-label">ROUND</div>
+          <div class="round-display" id="round-num">1</div>
+        </div>
+        <div style="display:flex;gap:8px;flex:1;justify-content:flex-end;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-small" onclick="nextTurn()">▶ NEXT TURN</button>
+          <button class="btn btn-ghost btn-small" onclick="nextRound()">↻ NEXT ROUND</button>
+          <button class="btn btn-danger btn-small" onclick="endCombat()">END COMBAT</button>
+        </div>
+      </div>
+      <div class="initiative-strip" id="initiative-strip"></div>
+      <div class="combatants" id="combatants-list"></div>
+    </div>
+  </div>
+
+  <!-- CHARACTERS TAB -->
+  <div id="tab-characters" class="tab-content main-scroll">
+    <div class="char-list" id="char-list"></div>
+    <button class="add-char-btn" onclick="openCharModal(null)">+ ADD CHARACTER / NPC</button>
+  </div>
+
+  <!-- ENCOUNTER TAB -->
+  <div id="tab-encounter" class="tab-content main-scroll">
+    <div class="enc-section">
+      <h2>Build Encounter</h2>
+      <div style="color:var(--text2);font-size:11px;margin-bottom:12px;line-height:1.6">
+        Add NPCs to this encounter. They'll appear in combat when you start it. Paste JSON from the Enemy Generator or add manually.
+      </div>
+      <div class="enc-enemy-list" id="enc-enemy-list"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-small" onclick="openAddNPCModal()">+ ADD NPC MANUALLY</button>
+        <button class="btn btn-ghost btn-small" onclick="openPasteModal()">⬇ PASTE FROM GENERATOR</button>
+        <button class="btn btn-ghost btn-small" style="color:var(--text3)" onclick="clearEncounter()">CLEAR ALL</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS TAB -->
+  <div id="tab-settings" class="tab-content main-scroll">
+    <div style="padding:16px">
+      <h2>Settings</h2>
+      <div class="field">
+        <label>Campaign Name</label>
+        <input type="text" id="settings-campaign" oninput="updateCampaignName(this.value)">
+      </div>
+      <div class="section-heading">Player PINs</div>
+      <div style="color:var(--text2);font-size:11px;margin-bottom:10px;line-height:1.6">Assign a PIN to each PC character. Players use this PIN to access their character on their phone.</div>
+      <div id="player-pins-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      <hr class="divider">
+      <div class="section-heading">Reset Combat</div>
+      <button class="btn btn-danger btn-small" onclick="if(confirm('Reset all HP to max and clear status effects?'))resetAllHP()">RESET ALL HP & STATUS</button>
+      <hr class="divider">
+      <button class="btn btn-ghost btn-small" onclick="logout()">LOGOUT</button>
+    </div>
+  </div>
+</div>
+
+<!-- PLAYER SCREEN -->
+<div id="screen-player" class="screen">
+  <div class="topbar">
+    <span class="topbar-brand">CP //</span>
+    <span class="topbar-title" id="player-char-name">CHARACTER</span>
+    <span class="topbar-badge badge-player">PLAYER</span>
+  </div>
+  <div class="tabs">
+    <button class="tab active" onclick="switchPlayerTab('status')">Status</button>
+    <button class="tab" onclick="switchPlayerTab('talents')">Talents</button>
+    <button class="tab" onclick="switchPlayerTab('gear')">Gear</button>
+    <button class="tab" onclick="switchPlayerTab('inventory')">Inventory</button>
+  </div>
+
+  <div id="player-tab-status" class="tab-content active main-scroll">
+    <div class="player-view">
+      <div id="player-turn-indicator" style="display:none" class="turn-indicator">⚡ YOUR TURN</div>
+      <div class="player-card" style="border-left:3px solid var(--teal-bright)">
+        <div class="player-card-title">Hit Points</div>
+        <div class="big-stat">
+          <div class="big-stat-val healthy" id="player-hp-val">0</div>
+          <div class="big-stat-max">/ <span id="player-hp-max">0</span></div>
+          <div class="big-stat-label">HP</div>
+        </div>
+        <div style="margin-top:8px">
+          <div class="hp-bar" style="width:100%"><div class="hp-bar-fill healthy" id="player-hp-bar" style="width:100%"></div></div>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+          <div style="font-size:10px;color:var(--text3)">Wound State: </div>
+          <div id="player-wound-state" style="font-size:10px;color:var(--green-bright)">HEALTHY</div>
+        </div>
+      </div>
+      <div class="player-card">
+        <div class="player-card-title">Stamina</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="big-stat">
+            <div class="big-stat-val" id="player-sta-val" style="color:var(--teal-bright)">0</div>
+            <div class="big-stat-max">/ <span id="player-sta-max">0</span></div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="adj-btn red" onclick="adjustPlayerStat('stamina',-1)">−</button>
+            <button class="adj-btn green" onclick="adjustPlayerStat('stamina',1)">+</button>
+          </div>
+        </div>
+        <div class="stamina-dots" id="player-stamina-dots" style="margin-top:8px"></div>
+      </div>
+      <div class="player-card">
+        <div class="player-card-title">Flink</div>
+        <div id="player-flink-display" style="display:flex;gap:8px;align-items:center">
+          <button id="player-flink-btn" class="btn flink-available" onclick="togglePlayerFlink()" style="padding:10px 16px;font-size:10px;letter-spacing:0.1em">FLINK AVAILABLE</button>
+        </div>
+      </div>
+      <div class="player-card">
+        <div class="player-card-title">Status Effects</div>
+        <div class="status-chips" id="player-status-chips">
+          <span style="font-size:10px;color:var(--text3)">No active effects</span>
+        </div>
+      </div>
+      <div class="player-card">
+        <div class="player-card-title">Armor</div>
+        <div class="armor-display" id="player-armor"></div>
+      </div>
+      <div class="player-card">
+        <div class="player-card-title">Initiative Order</div>
+        <div class="initiative-list" id="player-initiative-list"></div>
+      </div>
+    </div>
+  </div>
+  <div id="player-tab-talents" class="tab-content main-scroll">
+    <div class="player-view">
+      <div class="player-card">
+        <div class="player-card-title">Talents & Techniques (tap to toggle used)</div>
+        <div id="player-talents-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+    </div>
+  </div>
+  <div id="player-tab-gear" class="tab-content main-scroll">
+    <div class="player-view">
+      <div class="player-card">
+        <div class="player-card-title">Weapons</div>
+        <div id="player-weapons-list" style="display:flex;flex-direction:column;gap:4px"></div>
+      </div>
+      <div class="player-card">
+        <div class="player-card-title">Cyberware</div>
+        <div id="player-cyberware-list" style="display:flex;flex-direction:column;gap:4px"></div>
+      </div>
+    </div>
+  </div>
+  <div id="player-tab-inventory" class="tab-content main-scroll">
+    <div class="player-view">
+      <div class="player-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div class="player-card-title" style="margin:0">Inventory</div>
+          <div style="font-size:11px;color:var(--gold-bright)">₡ <span id="player-eb">0</span> eb</div>
+        </div>
+        <div id="player-inventory-list" style="display:flex;flex-direction:column;gap:4px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODALS -->
+<!-- Character Edit Modal -->
+<div class="modal-overlay" id="char-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="char-modal-title">ADD CHARACTER</span>
+      <button class="modal-close" onclick="closeModal('char-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="inline-row">
+        <div class="field"><label>Name</label><input type="text" id="cm-name" placeholder="Character name"></div>
+        <div class="field" style="max-width:80px"><label>Type</label>
+          <select id="cm-type"><option value="pc">PC</option><option value="npc">NPC</option></select>
+        </div>
+      </div>
+      <div class="inline-row">
+        <div class="field"><label>HP Max</label><input type="number" id="cm-hp" placeholder="19" min="1"></div>
+        <div class="field"><label>Stamina Max</label><input type="number" id="cm-sta" placeholder="19" min="1"></div>
+      </div>
+      <div class="inline-row">
+        <div class="field"><label>Initiative</label><input type="number" id="cm-init" placeholder="10" min="0"></div>
+        <div class="field"><label>Eurodollar (eb)</label><input type="number" id="cm-eb" placeholder="700" min="0"></div>
+      </div>
+      <div class="inline-row">
+        <div class="field"><label>Flink?</label>
+          <select id="cm-flink"><option value="1">Yes</option><option value="0">No</option></select>
+        </div>
+        <div class="field"><label>Player PIN (PCs only)</label><input type="text" id="cm-pin" placeholder="Optional" maxlength="8"></div>
+      </div>
+      <div class="section-heading">Armor</div>
+      <div class="inline-row">
+        <div class="field"><label>Body Armor</label><input type="text" id="cm-armor-body-name" placeholder="Light Armorjack"></div>
+        <div class="field" style="max-width:70px"><label>SP</label><input type="number" id="cm-armor-body-sp" placeholder="11" min="0"></div>
+      </div>
+      <div class="inline-row">
+        <div class="field"><label>Head Armor</label><input type="text" id="cm-armor-head-name" placeholder="None"></div>
+        <div class="field" style="max-width:70px"><label>SP</label><input type="number" id="cm-armor-head-sp" placeholder="0" min="0"></div>
+      </div>
+      <div class="section-heading">Weapons (max 5 slots)</div>
+      <div id="cm-weapons-list" style="display:flex;flex-direction:column;gap:4px"></div>
+      <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addWeaponRow()">+ ADD WEAPON</button>
+      <div class="section-heading">Talents & Techniques (max 10 slots)</div>
+      <div id="cm-talents-list" style="display:flex;flex-direction:column;gap:4px"></div>
+      <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addTalentRow()">+ ADD TALENT/TECHNIQUE</button>
+      <div class="section-heading">Cyberware</div>
+      <textarea id="cm-cyberware" placeholder="One per line, e.g.: Reflex Booster (+2 Reflexes)" rows="3" style="resize:vertical"></textarea>
+      <div class="section-heading">Inventory (max 40 slots)</div>
+      <div id="cm-inventory-list" style="display:flex;flex-direction:column;gap:4px"></div>
+      <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addInventoryRow()">+ ADD ITEM</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-small" id="cm-delete-btn" style="display:none;margin-right:auto" onclick="deleteCharacter()">DELETE</button>
+      <button class="btn btn-ghost btn-small" onclick="closeModal('char-modal')">CANCEL</button>
+      <button class="btn btn-primary btn-small" onclick="saveCharacter()">SAVE</button>
+    </div>
+  </div>
+</div>
+
+<!-- Damage Modal -->
+<div class="modal-overlay" id="dmg-modal">
+  <div class="modal dmg-modal">
+    <div class="modal-header">
+      <span class="modal-title" id="dmg-modal-title">ADJUST HP</span>
+      <button class="modal-close" onclick="closeModal('dmg-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="dmg-display" id="dmg-display">0</div>
+      <div class="dmg-keypad">
+        <button class="dmg-key" onclick="dmgKey('1')">1</button>
+        <button class="dmg-key" onclick="dmgKey('2')">2</button>
+        <button class="dmg-key" onclick="dmgKey('3')">3</button>
+        <button class="dmg-key" onclick="dmgKey('4')">4</button>
+        <button class="dmg-key" onclick="dmgKey('5')">5</button>
+        <button class="dmg-key" onclick="dmgKey('6')">6</button>
+        <button class="dmg-key" onclick="dmgKey('7')">7</button>
+        <button class="dmg-key" onclick="dmgKey('8')">8</button>
+        <button class="dmg-key" onclick="dmgKey('9')">9</button>
+        <button class="dmg-key action" onclick="dmgKey('C')">CLR</button>
+        <button class="dmg-key" onclick="dmgKey('0')">0</button>
+        <button class="dmg-key action" onclick="dmgKey('⌫')">⌫</button>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-danger" style="flex:1;padding:12px" onclick="applyDmg(-1)">− DAMAGE</button>
+        <button class="btn btn-gold" style="flex:1;padding:12px" onclick="applyDmg(1)">+ HEAL</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Status Effect Modal -->
+<div class="modal-overlay" id="status-modal">
+  <div class="modal" style="max-width:320px">
+    <div class="modal-header">
+      <span class="modal-title">ADD STATUS EFFECT</span>
+      <button class="modal-close" onclick="closeModal('status-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>Effect Type</label>
+        <select id="status-type">
+          <option value="bleed">Bleed (2 dmg/round)</option>
+          <option value="burn">Burn (2 or 4 dmg/round)</option>
+          <option value="malfunction">Cyberware Malfunction</option>
+          <option value="stagger">Stagger (lose Nebenaktion)</option>
+          <option value="blind">Blind</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+      <div class="field" id="status-custom-field" style="display:none">
+        <label>Effect Name</label>
+        <input type="text" id="status-custom-name" placeholder="e.g. Suppressed">
+      </div>
+      <div class="inline-row">
+        <div class="field"><label>Rounds</label><input type="number" id="status-rounds" value="3" min="1" max="99"></div>
+        <div class="field"><label>Stacks</label><input type="number" id="status-stacks" value="1" min="1" max="5"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-small" onclick="closeModal('status-modal')">CANCEL</button>
+      <button class="btn btn-primary btn-small" onclick="addStatusEffect()">ADD</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add NPC Modal -->
+<div class="modal-overlay" id="npc-modal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <span class="modal-title">ADD NPC TO ENCOUNTER</span>
+      <button class="modal-close" onclick="closeModal('npc-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>Name / Archetype</label><input type="text" id="npc-name" placeholder="e.g. Corpo Guard"></div>
+      <div class="inline-row">
+        <div class="field"><label>HP</label><input type="number" id="npc-hp" placeholder="22" min="1"></div>
+        <div class="field"><label>Stamina</label><input type="number" id="npc-sta" placeholder="15" min="1"></div>
+        <div class="field"><label>Initiative</label><input type="number" id="npc-init" placeholder="12" min="0"></div>
+      </div>
+      <div class="inline-row">
+        <div class="field"><label>Body Armor</label><input type="text" id="npc-armor-name" placeholder="Light Armorjack"></div>
+        <div class="field" style="max-width:70px"><label>SP</label><input type="number" id="npc-armor-sp" placeholder="11" min="0"></div>
+      </div>
+      <div class="field">
+        <label>Weapons (one per line, e.g.: Assault Rifle +11)</label>
+        <textarea id="npc-weapons" rows="3" style="resize:vertical" placeholder="Assault Rifle +11 | Autofire&#10;Heavy Pistol +5"></textarea>
+      </div>
+      <div class="inline-row">
+        <div class="field"><label>Flink?</label>
+          <select id="npc-flink"><option value="0">No</option><option value="1">Yes</option></select>
+        </div>
+        <div class="field"><label>Tier</label>
+          <select id="npc-tier"><option>GRUNT</option><option selected>THREAT</option><option>BOSS</option></select>
+        </div>
+      </div>
+      <div class="field"><label>Loot (one item per line)</label>
+        <textarea id="npc-loot" rows="3" style="resize:vertical" placeholder="Assault Rifle +11&#10;Credchip ~300eb"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-small" onclick="closeModal('npc-modal')">CANCEL</button>
+      <button class="btn btn-primary btn-small" onclick="saveNPC()">ADD TO ENCOUNTER</button>
+    </div>
+  </div>
+</div>
+
+<!-- Paste from Generator Modal -->
+<div class="modal-overlay" id="paste-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">PASTE FROM ENEMY GENERATOR</span>
+      <button class="modal-close" onclick="closeModal('paste-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="color:var(--text2);font-size:11px;margin-bottom:10px;line-height:1.6">
+        Copy the enemy JSON from the Enemy Generator and paste it here. Works for single enemy or full encounter (encounterTitle field detected automatically).
+      </div>
+      <textarea id="paste-json" rows="8" style="resize:vertical;font-size:11px" placeholder='{"name":"Corpo Guard","tier":"THREAT",...}'></textarea>
+      <div id="paste-error" style="color:var(--red-bright);font-size:11px;margin-top:6px;display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-small" onclick="closeModal('paste-modal')">CANCEL</button>
+      <button class="btn btn-primary btn-small" onclick="parsePaste()">IMPORT</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let db = null;
+let session = { role: null, charId: null, gmPin: null };
+let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [] };
+let editingCharId = null;
+let dmgTargetId = null;
+let statusTargetId = null;
+let pollTimer = null;
+let lastStateHash = '';
+
+// ═══════════════════════════════════════════════════════════════
+// FIREBASE / SYNC
+// ═══════════════════════════════════════════════════════════════
+function initFirebase(dbUrl) {
+  try {
+    if (firebase.apps.length) firebase.apps[0].delete();
+    const app = firebase.initializeApp({ databaseURL: dbUrl }, 'tracker');
+    db = firebase.database(app);
+    return true;
+  } catch(e) { console.error(e); return false; }
+}
+
+function dbPath() { return 'campaign'; }
+
+async function dbRead() {
+  const snap = await db.ref(dbPath()).get();
+  return snap.exists() ? snap.val() : null;
+}
+
+async function dbWrite(path, val) {
+  await db.ref(dbPath() + '/' + path).set(val);
+}
+
+async function dbUpdate(updates) {
+  const prefixed = {};
+  for (const [k, v] of Object.entries(updates)) prefixed[dbPath() + '/' + k] = v;
+  await db.ref('/').update(prefixed);
+}
+
+function startSync() {
+  if (pollTimer) clearInterval(pollTimer);
+  db.ref(dbPath()).on('value', snap => {
+    if (!snap.exists()) return;
+    const data = snap.val();
+    const hash = JSON.stringify(data);
+    if (hash === lastStateHash) return;
+    lastStateHash = hash;
+    state.characters = data.characters || {};
+    state.combat = data.combat || { active: false, round: 1, currentTurn: 0, order: [] };
+    state.campaignName = data.campaignName || 'Campaign';
+    state.encounterQueue = data.encounterQueue || [];
+    renderAll();
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SETUP + LOGIN
+// ═══════════════════════════════════════════════════════════════
+async function doSetup() {
+  const url = document.getElementById('setup-db-url').value.trim();
+  const pin = document.getElementById('setup-gm-pin').value.trim();
+  const name = document.getElementById('setup-campaign').value.trim() || 'Campaign';
+  const err = document.getElementById('setup-error');
+  if (!url || !pin) { showError(err, 'Database URL and GM PIN required.'); return; }
+  if (!initFirebase(url)) { showError(err, 'Invalid Firebase URL.'); return; }
+  try {
+    await dbWrite('campaignName', name);
+    await dbWrite('gmPin', btoa(pin));
+    localStorage.setItem('cp_db_url', url);
+    localStorage.setItem('cp_campaign', name);
+    showToast('Campaign initialized!');
+    showLogin();
+  } catch(e) { showError(err, 'Could not connect: ' + e.message); }
+}
+
+async function doLogin() {
+  const pin = document.getElementById('login-pin').value.trim();
+  const err = document.getElementById('login-error');
+  err.style.display = 'none';
+  try {
+    const data = await dbRead();
+    if (!data) { showError(err, 'No campaign data found.'); return; }
+    // Check GM
+    if (data.gmPin && atob(data.gmPin) === pin) {
+      session = { role: 'gm', charId: null, gmPin: pin };
+      state.characters = data.characters || {};
+      state.combat = data.combat || { active: false, round: 1, currentTurn: 0, order: [] };
+      state.campaignName = data.campaignName || 'Campaign';
+      state.encounterQueue = data.encounterQueue || [];
+      startSync();
+      showGM();
+      return;
+    }
+    // Check player pins
+    if (data.characters) {
+      for (const [id, char] of Object.entries(data.characters)) {
+        if (char.pin && char.pin === pin) {
+          session = { role: 'player', charId: id };
+          state.characters = data.characters;
+          state.combat = data.combat || { active: false, round: 1, currentTurn: 0, order: [] };
+          state.campaignName = data.campaignName || 'Campaign';
+          startSync();
+          showPlayer();
+          return;
+        }
+      }
+    }
+    showError(err, 'Wrong PIN. Try again.');
+  } catch(e) { showError(err, 'Connection error: ' + e.message); }
+}
+
+function showError(el, msg) { el.textContent = msg; el.style.display = 'block'; }
+
+// ═══════════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function showLogin() {
+  const url = localStorage.getItem('cp_db_url');
+  const name = localStorage.getItem('cp_campaign');
+  if (url && !db) initFirebase(url);
+  if (name) document.getElementById('login-campaign-name').textContent = name.toUpperCase();
+  document.getElementById('login-pin').value = '';
+  document.getElementById('login-error').style.display = 'none';
+  showScreen('screen-login');
+}
+
+function showGM() {
+  document.getElementById('gm-campaign-title').textContent = state.campaignName.toUpperCase();
+  renderAll();
+  showScreen('screen-gm');
+}
+
+function showPlayer() {
+  document.getElementById('player-char-name').textContent = (state.characters[session.charId]?.name || 'CHARACTER').toUpperCase();
+  renderPlayerView();
+  showScreen('screen-player');
+}
+
+function logout() { session = { role: null, charId: null }; if (db) { db.ref(dbPath()).off(); } showLogin(); }
+
+// ═══════════════════════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('#screen-gm .tab').forEach((t, i) => {
+    const names = ['combat','characters','encounter','settings'];
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('#screen-gm .tab-content').forEach(c => {
+    c.classList.toggle('active', c.id === 'tab-' + name);
+  });
+  if (name === 'settings') renderSettings();
+}
+
+function switchPlayerTab(name) {
+  document.querySelectorAll('#screen-player .tab').forEach((t, i) => {
+    const names = ['status','talents','gear','inventory'];
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('#screen-player .tab-content').forEach(c => {
+    c.classList.toggle('active', c.id === 'player-tab-' + name);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER — GM
+// ═══════════════════════════════════════════════════════════════
+function renderAll() {
+  if (session.role === 'gm') {
+    document.getElementById('gm-campaign-title').textContent = state.campaignName.toUpperCase();
+    const combatActive = state.combat?.active;
+    document.getElementById('gm-combat-badge').style.display = combatActive ? 'inline-block' : 'none';
+    document.getElementById('gm-round-display').style.display = combatActive ? 'inline-block' : 'none';
+    if (combatActive) document.getElementById('gm-round-display').textContent = 'R' + (state.combat.round || 1);
+    document.getElementById('combat-idle').style.display = combatActive ? 'none' : 'block';
+    document.getElementById('combat-active').style.display = combatActive ? 'block' : 'none';
+    if (combatActive) renderCombat(); else renderPreCombat();
+    renderCharList();
+    renderEncounterQueue();
+  } else if (session.role === 'player') {
+    renderPlayerView();
+  }
+}
+
+function renderPreCombat() {
+  const el = document.getElementById('pre-combat-chars');
+  const chars = Object.entries(state.characters);
+  if (!chars.length) { el.innerHTML = '<div style="color:var(--text3);font-size:11px">No characters yet. Add some in the Characters tab.</div>'; return; }
+  el.innerHTML = chars.map(([id, c]) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid ${c.isNPC ? 'var(--red)' : 'var(--teal-bright)'}">
+      <div style="flex:1;font-size:13px;font-weight:700">${esc(c.name)}</div>
+      <div style="font-size:10px;color:var(--text2)">${c.isNPC ? 'NPC' : 'PC'}</div>
+      <div style="font-size:11px;color:var(--green-bright)">${c.hp_current ?? c.hp_max}/${c.hp_max} HP</div>
+      <div style="font-size:10px;color:var(--text2)">INI: ${c.initiative ?? 0}</div>
+    </div>`).join('');
+}
+
+function renderCombat() {
+  document.getElementById('round-num').textContent = state.combat.round || 1;
+  const order = state.combat.order || [];
+  const current = state.combat.currentTurn || 0;
+  // Initiative strip
+  document.getElementById('initiative-strip').innerHTML = order.map((id, i) => {
+    const c = state.characters[id]; if (!c) return '';
+    const cls = [
+      'init-chip',
+      c.isNPC ? 'npc' : '',
+      i === current ? 'active-turn' : '',
+      (c.hp_current ?? c.hp_max) <= 0 ? 'dead' : ''
+    ].filter(Boolean).join(' ');
+    return `<div class="${cls}" onclick="scrollToCombatant('${id}')">${esc(c.name)}<br><span style="font-size:9px;color:inherit;opacity:0.7">${c.hp_current ?? c.hp_max}hp</span></div>`;
+  }).join('');
+  // Combatant cards
+  document.getElementById('combatants-list').innerHTML = order.map((id, i) => renderCombatantCard(id, i === current)).join('');
+}
+
+function renderCombatantCard(id, isActive) {
+  const c = state.characters[id]; if (!c) return '';
+  const hpMax = c.hp_max || 1;
+  const hpCur = c.hp_current ?? hpMax;
+  const hpPct = Math.max(0, Math.min(100, (hpCur / hpMax) * 100));
+  const hpClass = hpPct > 60 ? 'healthy' : hpPct > 25 ? 'wounded' : 'critical';
+  const flinkHas = c.has_flink;
+  const flinkUsed = c.flink_used;
+  const effects = c.status_effects || [];
+  const armorBody = c.armor_body;
+  const statusHtml = effects.map(e => `<span class="status-chip status-${e.type}">${esc(e.name)} ${e.rounds > 0 ? e.rounds+'r' : ''}</span>`).join('');
+  const detailId = `detail-${id}`;
+  const staCur = c.stamina_current ?? c.stamina_max ?? 0;
+  const staMax = c.stamina_max ?? 0;
+  return `<div class="combatant-card ${c.isNPC ? 'is-npc' : 'is-pc'} ${isActive ? 'active-turn' : ''} ${hpCur <= 0 ? 'is-dead' : ''}" id="cc-${id}">
+    <div class="combatant-top" onclick="toggleDetail('${id}')">
+      <div>
+        <div class="combatant-name">${esc(c.name)}</div>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:3px">
+          ${statusHtml || '<span style="font-size:9px;color:var(--text3)">No effects</span>'}
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <div class="hp-display">
+          <div class="hp-numbers ${hpClass}">${hpCur}/${hpMax}</div>
+          <div class="hp-bar"><div class="hp-bar-fill ${hpClass}" style="width:${hpPct}%"></div></div>
+        </div>
+        ${flinkHas ? `<span class="flink-badge ${flinkUsed ? 'flink-used' : 'flink-available'}">${flinkUsed ? 'FLINK ✓' : 'FLINK'}</span>` : ''}
+      </div>
+    </div>
+    <div class="combatant-detail" id="${detailId}">
+      <div class="detail-row">
+        <span class="detail-label">HP</span>
+        <div class="adj-group">
+          <button class="adj-btn red" onclick="quickAdj('${id}','hp',-1)">−1</button>
+          <button class="adj-btn red" onclick="openDmgModal('${id}')">DMG</button>
+          <button class="adj-btn green" onclick="openDmgModal('${id}','heal')">HEAL</button>
+          <button class="adj-btn green" onclick="quickAdj('${id}','hp',1)">+1</button>
+        </div>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">STAMINA</span>
+        <div class="adj-group">
+          <button class="adj-btn red" onclick="quickAdj('${id}','stamina',-1)">−1</button>
+          <span style="font-size:12px;padding:0 6px;min-width:40px;text-align:center">${staCur}/${staMax}</span>
+          <button class="adj-btn green" onclick="quickAdj('${id}','stamina',1)">+1</button>
+        </div>
+      </div>
+      ${armorBody?.name ? `<div class="detail-row">
+        <span class="detail-label">ARMOR</span>
+        <div class="adj-group">
+          <span style="font-size:11px;margin-right:4px">${esc(armorBody.name)}</span>
+          <span style="font-size:10px;color:var(--gold-bright)">SP ${armorBody.sp_temp ?? armorBody.sp_base}/${armorBody.sp_base}</span>
+          <button class="adj-btn red btn-small" onclick="quickAdjArmor('${id}',-1)" style="width:24px;height:24px;font-size:12px">−</button>
+          <button class="adj-btn green btn-small" onclick="quickAdjArmor('${id}',1)" style="width:24px;height:24px;font-size:12px">+</button>
+        </div>
+      </div>` : ''}
+      ${flinkHas ? `<div class="detail-row">
+        <span class="detail-label">FLINK</span>
+        <button class="btn ${flinkUsed ? 'btn-danger' : 'btn-ghost'} btn-small" onclick="toggleFlink('${id}')">${flinkUsed ? 'USED — RESET' : 'MARK USED'}</button>
+      </div>` : ''}
+      <div class="detail-row" style="align-items:flex-start">
+        <span class="detail-label" style="margin-top:4px">STATUS</span>
+        <div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">
+            ${effects.map((e, i) => `<span class="status-chip status-${e.type}" style="cursor:pointer" onclick="removeEffect('${id}',${i})" title="Click to remove">${esc(e.name)} ${e.rounds > 0 ? e.rounds+'r' : ''} ✕</span>`).join('')}
+          </div>
+          <div class="status-add">
+            <button class="btn btn-ghost btn-small" onclick="openStatusModal('${id}')">+ ADD EFFECT</button>
+            ${effects.some(e=>e.type==='bleed') ? '' : ''}
+          </div>
+        </div>
+      </div>
+      ${c.loot?.length ? `<div class="detail-row" style="align-items:flex-start">
+        <span class="detail-label" style="margin-top:4px">LOOT</span>
+        <div style="display:flex;flex-direction:column;gap:3px">${c.loot.map(l => `<span style="font-size:10px;color:#9aaa7a">◈ ${esc(l)}</span>`).join('')}</div>
+      </div>` : ''}
+      <div class="detail-row" style="justify-content:flex-end">
+        <button class="btn btn-ghost btn-small" onclick="openCharModal('${id}')">EDIT</button>
+        ${c.isNPC ? `<button class="btn btn-danger btn-small" onclick="removeFromCombat('${id}')">REMOVE</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderCharList() {
+  const el = document.getElementById('char-list');
+  const chars = Object.entries(state.characters);
+  if (!chars.length) { el.innerHTML = '<div style="padding:16px;color:var(--text3);font-size:11px">No characters yet.</div>'; return; }
+  el.innerHTML = chars.map(([id, c]) => `
+    <div class="char-item" onclick="openCharModal('${id}')">
+      <div style="width:8px;height:8px;border-radius:50%;background:${c.isNPC ? 'var(--red-bright)' : 'var(--teal-bright)'}"></div>
+      <div style="flex:1">
+        <div class="char-item-name">${esc(c.name)}</div>
+        <div class="char-item-sub">${c.isNPC ? 'NPC' : 'PC'}${c.pin ? ' · PIN set' : ''} · INI ${c.initiative ?? 0}</div>
+      </div>
+      <div class="char-item-hp">${c.hp_current ?? c.hp_max}/${c.hp_max}</div>
+      <div style="font-size:16px;color:var(--text3)">›</div>
+    </div>`).join('');
+}
+
+function renderEncounterQueue() {
+  const el = document.getElementById('enc-enemy-list');
+  const q = state.encounterQueue || [];
+  if (!q.length) { el.innerHTML = '<div style="color:var(--text3);font-size:11px">No enemies queued.</div>'; return; }
+  el.innerHTML = q.map((e, i) => `
+    <div class="enc-enemy">
+      <div style="font-size:9px;padding:2px 6px;background:var(--red);color:#ffaaaa;letter-spacing:0.1em">${e.tier || 'NPC'}</div>
+      <div class="enc-enemy-name">${esc(e.name)}</div>
+      <div class="enc-enemy-hp">${e.hp_max} HP</div>
+      <button class="btn btn-danger btn-small btn-icon" onclick="removeFromQueue(${i})">✕</button>
+    </div>`).join('');
+}
+
+function renderSettings() {
+  document.getElementById('settings-campaign').value = state.campaignName;
+  const el = document.getElementById('player-pins-list');
+  const pcs = Object.entries(state.characters).filter(([,c]) => !c.isNPC);
+  if (!pcs.length) { el.innerHTML = '<div style="color:var(--text3);font-size:11px">No PC characters yet.</div>'; return; }
+  el.innerHTML = pcs.map(([id, c]) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border:1px solid var(--border)">
+      <div style="flex:1;font-size:12px">${esc(c.name)}</div>
+      <input type="text" value="${esc(c.pin || '')}" placeholder="Set PIN" maxlength="8"
+        style="width:100px" onchange="setPlayerPin('${id}', this.value)">
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER — PLAYER
+// ═══════════════════════════════════════════════════════════════
+function renderPlayerView() {
+  const id = session.charId;
+  const c = state.characters[id]; if (!c) return;
+  document.getElementById('player-char-name').textContent = (c.name || 'CHARACTER').toUpperCase();
+  const hpMax = c.hp_max || 1;
+  const hpCur = c.hp_current ?? hpMax;
+  const pct = Math.max(0, Math.min(100, hpCur / hpMax * 100));
+  const cls = pct > 60 ? 'healthy' : pct > 25 ? 'wounded' : 'critical';
+  document.getElementById('player-hp-val').textContent = hpCur;
+  document.getElementById('player-hp-val').className = 'big-stat-val ' + cls;
+  document.getElementById('player-hp-max').textContent = hpMax;
+  document.getElementById('player-hp-bar').style.width = pct + '%';
+  document.getElementById('player-hp-bar').className = 'hp-bar-fill ' + cls;
+  const wound = hpPct => hpPct > 60 ? '● HEALTHY' : hpPct > 25 ? '⚠ SERIOUSLY WOUNDED (−2 all)' : '☠ MORTALLY WOUNDED';
+  document.getElementById('player-wound-state').textContent = wound(pct);
+  document.getElementById('player-wound-state').style.color = pct > 60 ? 'var(--green-bright)' : pct > 25 ? 'var(--gold-bright)' : 'var(--red-bright)';
+  const staCur = c.stamina_current ?? c.stamina_max ?? 0;
+  const staMax = c.stamina_max ?? 0;
+  document.getElementById('player-sta-val').textContent = staCur;
+  document.getElementById('player-sta-max').textContent = staMax;
+  const dots = document.getElementById('player-stamina-dots');
+  dots.innerHTML = Array.from({length: staMax}, (_, i) =>
+    `<div class="dot ${i < staCur ? 'filled' : 'empty'}" onclick="adjustPlayerStat('stamina', ${i < staCur ? -1 : 1})"></div>`).join('');
+  // Flink
+  const flinkBtn = document.getElementById('player-flink-btn');
+  if (c.has_flink) {
+    flinkBtn.textContent = c.flink_used ? '✓ FLINK USED' : '⚡ FLINK AVAILABLE';
+    flinkBtn.className = 'btn ' + (c.flink_used ? 'flink-used' : 'flink-available');
+    flinkBtn.style.display = 'inline-block';
+  } else { flinkBtn.style.display = 'none'; }
+  // Status
+  const effects = c.status_effects || [];
+  const statusEl = document.getElementById('player-status-chips');
+  statusEl.innerHTML = effects.length ? effects.map(e => `<span class="status-chip status-${e.type}">${esc(e.name)} ${e.rounds > 0 ? e.rounds+'r' : ''}</span>`).join('') : '<span style="font-size:10px;color:var(--text3)">No active effects</span>';
+  // Armor
+  const armorEl = document.getElementById('player-armor');
+  let armorHtml = '';
+  if (c.armor_body?.name) armorHtml += `<div class="armor-piece"><div class="armor-label">BODY</div><div class="armor-sp">${esc(c.armor_body.name)}</div><div class="armor-sp-temp">SP ${c.armor_body.sp_temp ?? c.armor_body.sp_base}/${c.armor_body.sp_base}</div></div>`;
+  if (c.armor_head?.name) armorHtml += `<div class="armor-piece"><div class="armor-label">HEAD</div><div class="armor-sp">${esc(c.armor_head.name)}</div><div class="armor-sp-temp">SP ${c.armor_head.sp_temp ?? c.armor_head.sp_base}/${c.armor_head.sp_base}</div></div>`;
+  armorEl.innerHTML = armorHtml || '<span style="font-size:10px;color:var(--text3)">No armor</span>';
+  // Initiative
+  const order = state.combat?.order || [];
+  const current = state.combat?.currentTurn ?? 0;
+  const isMyCurrent = order[current] === id;
+  document.getElementById('player-turn-indicator').style.display = (state.combat?.active && isMyCurrent) ? 'block' : 'none';
+  const initList = document.getElementById('player-initiative-list');
+  if (!state.combat?.active || !order.length) { initList.innerHTML = '<div style="color:var(--text3);font-size:11px">No active combat</div>'; }
+  else {
+    initList.innerHTML = order.map((cid, i) => {
+      const ch = state.characters[cid]; if (!ch) return '';
+      const isMe = cid === id;
+      return `<div class="init-row ${i === current ? 'current' : ''}">
+        <div class="init-row-name" style="${isMe ? 'font-weight:700;color:var(--teal-bright)' : ''}">${i === current ? '▶ ' : ''}${esc(ch.name)}${isMe ? ' (you)' : ''}</div>
+        ${!ch.isNPC || isMe ? `<div class="init-row-hp" style="color:${(ch.hp_current??ch.hp_max)/(ch.hp_max||1) > 0.5 ? 'var(--green-bright)' : 'var(--red-bright)'}">${ch.hp_current??ch.hp_max}hp</div>` : '<div class="init-row-hp" style="color:var(--text3)">???</div>'}
+      </div>`;
+    }).join('');
+  }
+  // Talents
+  const talentList = document.getElementById('player-talents-list');
+  const talents = c.talents || [];
+  talentList.innerHTML = talents.length ? talents.map((t, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);${t.used ? 'opacity:0.5' : ''}">
+      <button class="talent-toggle ${t.used ? 'used' : 'available'}" onclick="togglePlayerTalent(${i})"></button>
+      <div style="flex:1">
+        <div style="font-size:12px;font-weight:700">${esc(t.name)}</div>
+        ${t.desc ? `<div style="font-size:10px;color:var(--text2)">${esc(t.desc)}</div>` : ''}
+      </div>
+      <div style="font-size:9px;color:var(--text3)">${t.slots || 1} slot${(t.slots||1)>1?'s':''}</div>
+    </div>`).join('') : '<div style="color:var(--text3);font-size:11px">No talents/techniques set.</div>';
+  // Weapons
+  const weapons = c.weapons || [];
+  document.getElementById('player-weapons-list').innerHTML = weapons.length ? weapons.map(w => `
+    <div style="display:flex;gap:8px;align-items:center;padding:8px 10px;background:var(--surface2);border:1px solid var(--border)">
+      <div style="flex:1;font-size:12px">${esc(w.name)}</div>
+      <div style="font-size:11px;color:var(--gold-bright)">${w.bonus ? '+'+w.bonus : ''}</div>
+      <div style="font-size:10px;color:var(--text2)">${esc(w.pw || '')}</div>
+      ${w.tags ? `<div style="font-size:9px;color:var(--text3)">${esc(w.tags)}</div>` : ''}
+    </div>`).join('') : '<div style="color:var(--text3);font-size:11px">No weapons.</div>';
+  // Cyberware
+  const cyberware = c.cyberware || [];
+  document.getElementById('player-cyberware-list').innerHTML = cyberware.length ? cyberware.map(cw => `<div style="font-size:11px;color:#7aafc8;padding:4px 0">⬡ ${esc(cw)}</div>`).join('') : '<div style="color:var(--text3);font-size:11px">No cyberware.</div>';
+  // EB
+  document.getElementById('player-eb').textContent = (c.eurodollar || 0).toLocaleString();
+  // Inventory
+  const inv = c.inventory || [];
+  document.getElementById('player-inventory-list').innerHTML = inv.length ? inv.map(item => `
+    <div style="display:flex;gap:8px;align-items:center;padding:7px 10px;background:var(--surface2);border:1px solid var(--border)">
+      <div style="flex:1;font-size:11px">${esc(item.name)}</div>
+      ${item.qty > 1 ? `<div style="font-size:10px;color:var(--teal-bright)">×${item.qty}</div>` : ''}
+      ${item.slots > 1 ? `<div style="font-size:9px;color:var(--text3)">${item.slots}sl</div>` : ''}
+      ${item.note ? `<div style="font-size:9px;color:var(--text2)">${esc(item.note)}</div>` : ''}
+    </div>`).join('') : '<div style="color:var(--text3);font-size:11px">Empty.</div>';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COMBAT ACTIONS
+// ═══════════════════════════════════════════════════════════════
+async function startCombat() {
+  const chars = Object.entries(state.characters);
+  if (!chars.length) { showToast('Add characters first!'); return; }
+  // Merge encounter queue NPCs
+  const queue = state.encounterQueue || [];
+  for (const npc of queue) {
+    const id = 'npc_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+    state.characters[id] = { ...npc, isNPC: true, hp_current: npc.hp_max, stamina_current: npc.stamina_max || 10, flink_used: false, status_effects: [] };
+    await dbWrite('characters/' + id, state.characters[id]);
+  }
+  // Sort by initiative
+  const order = Object.entries(state.characters)
+    .sort(([,a],[,b]) => (b.initiative || 0) - (a.initiative || 0))
+    .map(([id]) => id);
+  const combat = { active: true, round: 1, currentTurn: 0, order };
+  await dbUpdate({ 'combat': combat, 'encounterQueue': [] });
+  showToast('Combat started!');
+}
+
+async function endCombat() {
+  if (!confirm('End combat? This will remove all NPCs from the tracker.')) return;
+  // Remove NPCs that were added for this encounter
+  const updates = {};
+  for (const id of Object.keys(state.characters)) {
+    if (id.startsWith('npc_')) updates['characters/' + id] = null;
+  }
+  updates['combat'] = { active: false, round: 1, currentTurn: 0, order: [] };
+  // Reset flink and temp SP for PCs
+  for (const [id, c] of Object.entries(state.characters)) {
+    if (!c.isNPC) {
+      updates['characters/' + id + '/flink_used'] = false;
+      updates['characters/' + id + '/status_effects'] = [];
+      if (c.armor_body) updates['characters/' + id + '/armor_body/sp_temp'] = c.armor_body.sp_base;
+      if (c.armor_head) updates['characters/' + id + '/armor_head/sp_temp'] = c.armor_head.sp_base;
+    }
+  }
+  await dbUpdate(updates);
+  showToast('Combat ended. PCs reset.');
+}
+
+async function nextTurn() {
+  const order = state.combat.order || [];
+  if (!order.length) return;
+  let next = ((state.combat.currentTurn || 0) + 1) % order.length;
+  await dbUpdate({ 'combat/currentTurn': next });
+}
+
+async function nextRound() {
+  const order = state.combat.order || [];
+  const round = (state.combat.round || 1) + 1;
+  // Tick status effects for all chars
+  const updates = { 'combat/round': round, 'combat/currentTurn': 0 };
+  for (const id of order) {
+    const c = state.characters[id]; if (!c) continue;
+    const effects = (c.status_effects || [])
+      .map(e => ({ ...e, rounds: e.rounds > 0 ? e.rounds - 1 : e.rounds }))
+      .filter(e => e.rounds !== 0);
+    updates['characters/' + id + '/status_effects'] = effects;
+    // Apply DoT damage
+    let dmg = 0;
+    for (const e of c.status_effects || []) {
+      if (e.rounds > 0 || e.rounds === -1) {
+        if (e.type === 'bleed') dmg += 2;
+        if (e.type === 'burn') dmg += (e.stacks >= 2 ? 4 : 2);
+      }
+    }
+    if (dmg > 0) {
+      const newHp = Math.max(-(c.grit || 0) - 10, (c.hp_current ?? c.hp_max) - dmg);
+      updates['characters/' + id + '/hp_current'] = newHp;
+    }
+  }
+  await dbUpdate(updates);
+  showToast('Round ' + round);
+}
+
+async function quickAdj(id, stat, delta) {
+  const c = state.characters[id]; if (!c) return;
+  if (stat === 'hp') {
+    const val = Math.min(c.hp_max, Math.max(-(c.grit || 0) - 10, (c.hp_current ?? c.hp_max) + delta));
+    await dbWrite('characters/' + id + '/hp_current', val);
+  } else if (stat === 'stamina') {
+    const val = Math.min(c.stamina_max || 0, Math.max(0, (c.stamina_current ?? c.stamina_max ?? 0) + delta));
+    await dbWrite('characters/' + id + '/stamina_current', val);
+  }
+}
+
+async function quickAdjArmor(id, delta) {
+  const c = state.characters[id]; if (!c?.armor_body) return;
+  const cur = c.armor_body.sp_temp ?? c.armor_body.sp_base;
+  const val = Math.max(0, Math.min(c.armor_body.sp_base + 4, cur + delta));
+  await dbWrite('characters/' + id + '/armor_body/sp_temp', val);
+}
+
+async function toggleFlink(id) {
+  const c = state.characters[id]; if (!c) return;
+  await dbWrite('characters/' + id + '/flink_used', !c.flink_used);
+}
+
+async function removeFromCombat(id) {
+  if (!confirm('Remove this NPC from combat?')) return;
+  const order = (state.combat.order || []).filter(x => x !== id);
+  const updates = {};
+  updates['combat/order'] = order;
+  updates['characters/' + id] = null;
+  await dbUpdate(updates);
+}
+
+function scrollToCombatant(id) {
+  const el = document.getElementById('cc-' + id);
+  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); toggleDetail(id, true); }
+}
+
+function toggleDetail(id, forceOpen) {
+  const el = document.getElementById('detail-' + id);
+  if (!el) return;
+  if (forceOpen) el.classList.add('open');
+  else el.classList.toggle('open');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DAMAGE MODAL
+// ═══════════════════════════════════════════════════════════════
+let dmgHealMode = false;
+function openDmgModal(id, mode) {
+  dmgTargetId = id;
+  dmgHealMode = mode === 'heal';
+  const c = state.characters[id];
+  document.getElementById('dmg-modal-title').textContent = (dmgHealMode ? 'HEAL ' : 'DAMAGE ') + (c?.name || '').toUpperCase();
+  document.getElementById('dmg-display').textContent = '0';
+  openModal('dmg-modal');
+}
+
+function dmgKey(k) {
+  let cur = document.getElementById('dmg-display').textContent;
+  if (k === 'C') { cur = '0'; }
+  else if (k === '⌫') { cur = cur.length > 1 ? cur.slice(0,-1) : '0'; }
+  else { cur = cur === '0' ? k : cur + k; }
+  if (cur.length > 4) cur = cur.slice(0,4);
+  document.getElementById('dmg-display').textContent = cur;
+}
+
+async function applyDmg(sign) {
+  const val = parseInt(document.getElementById('dmg-display').textContent) || 0;
+  if (!val) { closeModal('dmg-modal'); return; }
+  const id = dmgTargetId;
+  const c = state.characters[id]; if (!c) return;
+  const delta = sign > 0 ? val : -val;
+  const newHp = Math.min(c.hp_max, Math.max(-(c.grit || 0) - 10, (c.hp_current ?? c.hp_max) + delta));
+  await dbWrite('characters/' + id + '/hp_current', newHp);
+  closeModal('dmg-modal');
+  showToast(`${c.name}: ${delta > 0 ? '+' : ''}${delta} HP → ${newHp}`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STATUS EFFECTS
+// ═══════════════════════════════════════════════════════════════
+function openStatusModal(id) {
+  statusTargetId = id;
+  document.getElementById('status-type').value = 'bleed';
+  document.getElementById('status-custom-field').style.display = 'none';
+  document.getElementById('status-rounds').value = 3;
+  document.getElementById('status-stacks').value = 1;
+  document.getElementById('status-type').onchange = function() {
+    document.getElementById('status-custom-field').style.display = this.value === 'custom' ? 'block' : 'none';
+  };
+  openModal('status-modal');
+}
+
+async function addStatusEffect() {
+  const type = document.getElementById('status-type').value;
+  const rounds = parseInt(document.getElementById('status-rounds').value) || 3;
+  const stacks = parseInt(document.getElementById('status-stacks').value) || 1;
+  const names = { bleed: 'Bleed', burn: 'Burn', malfunction: 'CW Malfunction', stagger: 'Stagger', blind: 'Blind' };
+  const name = type === 'custom' ? (document.getElementById('status-custom-name').value || 'Effect') : names[type];
+  const c = state.characters[statusTargetId]; if (!c) return;
+  const effects = [...(c.status_effects || []), { type, name, rounds, stacks }];
+  await dbWrite('characters/' + statusTargetId + '/status_effects', effects);
+  closeModal('status-modal');
+}
+
+async function removeEffect(charId, idx) {
+  const c = state.characters[charId]; if (!c) return;
+  const effects = (c.status_effects || []).filter((_, i) => i !== idx);
+  await dbWrite('characters/' + charId + '/status_effects', effects);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CHARACTER MODAL
+// ═══════════════════════════════════════════════════════════════
+function openCharModal(id) {
+  editingCharId = id;
+  const isNew = !id;
+  document.getElementById('char-modal-title').textContent = isNew ? 'ADD CHARACTER' : 'EDIT CHARACTER';
+  document.getElementById('cm-delete-btn').style.display = isNew ? 'none' : 'inline-block';
+  const c = id ? (state.characters[id] || {}) : {};
+  document.getElementById('cm-name').value = c.name || '';
+  document.getElementById('cm-type').value = c.isNPC ? 'npc' : 'pc';
+  document.getElementById('cm-hp').value = c.hp_max || '';
+  document.getElementById('cm-sta').value = c.stamina_max || '';
+  document.getElementById('cm-init').value = c.initiative ?? '';
+  document.getElementById('cm-eb').value = c.eurodollar ?? '';
+  document.getElementById('cm-flink').value = c.has_flink ? '1' : '0';
+  document.getElementById('cm-pin').value = c.pin || '';
+  document.getElementById('cm-armor-body-name').value = c.armor_body?.name || '';
+  document.getElementById('cm-armor-body-sp').value = c.armor_body?.sp_base || '';
+  document.getElementById('cm-armor-head-name').value = c.armor_head?.name || '';
+  document.getElementById('cm-armor-head-sp').value = c.armor_head?.sp_base || '';
+  document.getElementById('cm-cyberware').value = (c.cyberware || []).join('\n');
+  // Weapons
+  renderWeaponRows(c.weapons || []);
+  // Talents
+  renderTalentRows(c.talents || []);
+  // Inventory
+  renderInventoryRows(c.inventory || []);
+  openModal('char-modal');
+}
+
+function renderWeaponRows(weapons) {
+  const el = document.getElementById('cm-weapons-list');
+  el.innerHTML = weapons.map((w, i) => weaponRow(i, w)).join('');
+}
+function weaponRow(i, w={}) {
+  return `<div class="inline-row" style="gap:4px" id="wrow-${i}">
+    <input type="text" placeholder="Name" value="${esc(w.name||'')}" style="flex:2" onchange="updateWeaponField(${i},'name',this.value)">
+    <input type="number" placeholder="Bonus" value="${w.bonus||''}" style="width:60px" onchange="updateWeaponField(${i},'bonus',this.value)">
+    <input type="text" placeholder="PW" value="${esc(w.pw||'')}" style="width:80px" onchange="updateWeaponField(${i},'pw',this.value)">
+    <input type="text" placeholder="Tags" value="${esc(w.tags||'')}" style="width:80px" onchange="updateWeaponField(${i},'tags',this.value)">
+    <button class="btn btn-danger btn-icon" onclick="removeWeaponRow(${i})">✕</button>
+  </div>`;
+}
+let weaponData = [];
+function addWeaponRow() {
+  weaponData.push({});
+  renderWeaponRows(weaponData);
+}
+function updateWeaponField(i, field, val) {
+  if (!weaponData[i]) weaponData[i] = {};
+  weaponData[i][field] = field === 'bonus' ? (parseInt(val)||0) : val;
+}
+function removeWeaponRow(i) {
+  weaponData.splice(i, 1);
+  renderWeaponRows(weaponData);
+}
+
+let talentData = [];
+function renderTalentRows(talents) {
+  talentData = [...talents];
+  const el = document.getElementById('cm-talents-list');
+  el.innerHTML = talents.map((t, i) => `<div class="inline-row" style="gap:4px">
+    <input type="text" placeholder="Talent/Technique name" value="${esc(t.name||'')}" style="flex:2" onchange="updateTalentField(${i},'name',this.value)">
+    <input type="text" placeholder="Notes" value="${esc(t.desc||'')}" style="flex:2" onchange="updateTalentField(${i},'desc',this.value)">
+    <input type="number" placeholder="Slots" value="${t.slots||1}" style="width:50px" min="1" max="5" onchange="updateTalentField(${i},'slots',this.value)">
+    <button class="btn btn-danger btn-icon" onclick="removeTalentRow(${i})">✕</button>
+  </div>`).join('');
+}
+function addTalentRow() { talentData.push({name:'',slots:1}); renderTalentRows(talentData); }
+function updateTalentField(i, f, v) { if (!talentData[i]) talentData[i]={}; talentData[i][f] = f==='slots' ? (parseInt(v)||1) : v; }
+function removeTalentRow(i) { talentData.splice(i,1); renderTalentRows(talentData); }
+
+let inventoryData = [];
+function renderInventoryRows(items) {
+  inventoryData = [...items];
+  const el = document.getElementById('cm-inventory-list');
+  el.innerHTML = items.map((item, i) => `<div class="inline-row" style="gap:4px">
+    <input type="text" placeholder="Item name" value="${esc(item.name||'')}" style="flex:3" onchange="updateInvField(${i},'name',this.value)">
+    <input type="number" placeholder="Qty" value="${item.qty||1}" style="width:50px" min="1" onchange="updateInvField(${i},'qty',this.value)">
+    <input type="number" placeholder="Slots" value="${item.slots||1}" style="width:50px" min="1" onchange="updateInvField(${i},'slots',this.value)">
+    <input type="text" placeholder="Note" value="${esc(item.note||'')}" style="flex:2" onchange="updateInvField(${i},'note',this.value)">
+    <button class="btn btn-danger btn-icon" onclick="removeInvRow(${i})">✕</button>
+  </div>`).join('');
+}
+function addInventoryRow() { inventoryData.push({name:'',qty:1,slots:1}); renderInventoryRows(inventoryData); }
+function updateInvField(i, f, v) { if (!inventoryData[i]) inventoryData[i]={}; inventoryData[i][f] = (f==='qty'||f==='slots') ? (parseInt(v)||1) : v; }
+function removeInvRow(i) { inventoryData.splice(i,1); renderInventoryRows(inventoryData); }
+
+async function saveCharacter() {
+  const name = document.getElementById('cm-name').value.trim();
+  if (!name) { showToast('Name required!'); return; }
+  const isNPC = document.getElementById('cm-type').value === 'npc';
+  const hpMax = parseInt(document.getElementById('cm-hp').value) || 10;
+  const staMax = parseInt(document.getElementById('cm-sta').value) || 10;
+  const bodyName = document.getElementById('cm-armor-body-name').value.trim();
+  const bodySP = parseInt(document.getElementById('cm-armor-body-sp').value) || 0;
+  const headName = document.getElementById('cm-armor-head-name').value.trim();
+  const headSP = parseInt(document.getElementById('cm-armor-head-sp').value) || 0;
+  const existing = editingCharId ? (state.characters[editingCharId] || {}) : {};
+  const char = {
+    name, isNPC,
+    hp_max: hpMax,
+    hp_current: existing.hp_current ?? hpMax,
+    stamina_max: staMax,
+    stamina_current: existing.stamina_current ?? staMax,
+    initiative: parseInt(document.getElementById('cm-init').value) || 0,
+    eurodollar: parseInt(document.getElementById('cm-eb').value) || 0,
+    has_flink: document.getElementById('cm-flink').value === '1',
+    flink_used: existing.flink_used ?? false,
+    pin: document.getElementById('cm-pin').value.trim() || null,
+    armor_body: bodyName ? { name: bodyName, sp_base: bodySP, sp_temp: existing.armor_body?.sp_temp ?? bodySP } : null,
+    armor_head: headName ? { name: headName, sp_base: headSP, sp_temp: existing.armor_head?.sp_temp ?? headSP } : null,
+    cyberware: document.getElementById('cm-cyberware').value.trim().split('\n').filter(Boolean),
+    weapons: weaponData.filter(w => w.name),
+    talents: talentData.filter(t => t.name),
+    inventory: inventoryData.filter(i => i.name),
+    status_effects: existing.status_effects || [],
+  };
+  const id = editingCharId || ('char_' + Date.now());
+  await dbWrite('characters/' + id, char);
+  closeModal('char-modal');
+  showToast((editingCharId ? 'Updated: ' : 'Added: ') + name);
+}
+
+async function deleteCharacter() {
+  if (!editingCharId) return;
+  if (!confirm('Delete ' + (state.characters[editingCharId]?.name || 'this character') + '?')) return;
+  await dbWrite('characters/' + editingCharId, null);
+  closeModal('char-modal');
+  showToast('Deleted.');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ENCOUNTER QUEUE
+// ═══════════════════════════════════════════════════════════════
+function openAddNPCModal() { openModal('npc-modal'); }
+
+async function saveNPC() {
+  const name = document.getElementById('npc-name').value.trim();
+  if (!name) { showToast('Name required!'); return; }
+  const hpMax = parseInt(document.getElementById('npc-hp').value) || 10;
+  const staMax = parseInt(document.getElementById('npc-sta').value) || 10;
+  const initVal = parseInt(document.getElementById('npc-init').value) || 8;
+  const armorName = document.getElementById('npc-armor-name').value.trim();
+  const armorSP = parseInt(document.getElementById('npc-armor-sp').value) || 0;
+  const rawWeapons = document.getElementById('npc-weapons').value.trim().split('\n').filter(Boolean);
+  const weapons = rawWeapons.map(line => {
+    const parts = line.split('|');
+    const main = parts[0].trim();
+    const match = main.match(/^(.+?)\s*\+(\d+)$/);
+    return match ? { name: match[1].trim(), bonus: parseInt(match[2]), tags: (parts[1]||'').trim() } : { name: main, bonus: 0 };
+  });
+  const loot = document.getElementById('npc-loot').value.trim().split('\n').filter(Boolean);
+  const npc = {
+    name, isNPC: true,
+    hp_max: hpMax, hp_current: hpMax,
+    stamina_max: staMax, stamina_current: staMax,
+    initiative: initVal,
+    has_flink: document.getElementById('npc-flink').value === '1',
+    flink_used: false,
+    tier: document.getElementById('npc-tier').value,
+    armor_body: armorName ? { name: armorName, sp_base: armorSP, sp_temp: armorSP } : null,
+    weapons, loot,
+    status_effects: [], cyberware: [], talents: [], inventory: [], eurodollar: 0
+  };
+  const queue = [...(state.encounterQueue || []), npc];
+  await dbWrite('encounterQueue', queue);
+  closeModal('npc-modal');
+  showToast('NPC added to encounter.');
+}
+
+async function removeFromQueue(i) {
+  const queue = [...(state.encounterQueue || [])];
+  queue.splice(i, 1);
+  await dbWrite('encounterQueue', queue);
+}
+
+async function clearEncounter() {
+  if (!confirm('Clear encounter queue?')) return;
+  await dbWrite('encounterQueue', []);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PASTE FROM GENERATOR
+// ═══════════════════════════════════════════════════════════════
+function openPasteModal() {
+  document.getElementById('paste-json').value = '';
+  document.getElementById('paste-error').style.display = 'none';
+  openModal('paste-modal');
+}
+
+async function parsePaste() {
+  const raw = document.getElementById('paste-json').value.trim();
+  const errEl = document.getElementById('paste-error');
+  errEl.style.display = 'none';
+  let data;
+  try { data = JSON.parse(raw); } catch(e) { errEl.textContent = 'Invalid JSON: ' + e.message; errEl.style.display = 'block'; return; }
+  const toImport = data.enemies ? data.enemies : [data];
+  const queue = [...(state.encounterQueue || [])];
+  for (const e of toImport) {
+    if (!e.name) continue;
+    const armorSP = e.armor?.SP_body || 0;
+    const initVal = e.stats?.Initiative || 8;
+    const weapons = (e.weapons || []).map(w => ({ name: w.name, bonus: w.bonus, pw: w.pwLabel, tags: (w.tags||[]).join(', ') }));
+    const npc = {
+      name: e.name, isNPC: true,
+      hp_max: e.stats?.HP || 15, hp_current: e.stats?.HP || 15,
+      stamina_max: e.stats?.Stamina || 10, stamina_current: e.stats?.Stamina || 10,
+      initiative: initVal,
+      has_flink: !!e.flink, flink_used: false,
+      tier: e.tier || 'THREAT',
+      armor_body: e.armor?.name ? { name: e.armor.name, sp_base: armorSP, sp_temp: armorSP } : null,
+      armor_head: e.armor?.SP_head ? { name: e.armor.name + ' (head)', sp_base: e.armor.SP_head, sp_temp: e.armor.SP_head } : null,
+      weapons,
+      loot: e.loot || [],
+      cyberware: e.cyberware || [],
+      firewall: e.firewall || null,
+      status_effects: [], talents: [], inventory: [], eurodollar: 0
+    };
+    queue.push(npc);
+  }
+  await dbWrite('encounterQueue', queue);
+  closeModal('paste-modal');
+  showToast(`Imported ${toImport.length} enemy/enemies.`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PLAYER ACTIONS
+// ═══════════════════════════════════════════════════════════════
+async function adjustPlayerStat(stat, delta) {
+  const id = session.charId;
+  const c = state.characters[id]; if (!c) return;
+  if (stat === 'stamina') {
+    const val = Math.min(c.stamina_max || 0, Math.max(0, (c.stamina_current ?? c.stamina_max ?? 0) + delta));
+    await dbWrite('characters/' + id + '/stamina_current', val);
+  }
+}
+
+async function togglePlayerFlink() {
+  const id = session.charId;
+  const c = state.characters[id]; if (!c?.has_flink) return;
+  await dbWrite('characters/' + id + '/flink_used', !c.flink_used);
+}
+
+async function togglePlayerTalent(i) {
+  const id = session.charId;
+  const c = state.characters[id]; if (!c) return;
+  const talents = [...(c.talents || [])];
+  if (!talents[i]) return;
+  talents[i] = { ...talents[i], used: !talents[i].used };
+  await dbWrite('characters/' + id + '/talents', talents);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SETTINGS ACTIONS
+// ═══════════════════════════════════════════════════════════════
+async function updateCampaignName(val) {
+  await dbWrite('campaignName', val);
+  localStorage.setItem('cp_campaign', val);
+}
+
+async function setPlayerPin(charId, pin) {
+  await dbWrite('characters/' + charId + '/pin', pin || null);
+  showToast('PIN updated.');
+}
+
+async function resetAllHP() {
+  const updates = {};
+  for (const [id, c] of Object.entries(state.characters)) {
+    if (!c.isNPC) {
+      updates['characters/' + id + '/hp_current'] = c.hp_max;
+      updates['characters/' + id + '/stamina_current'] = c.stamina_max;
+      updates['characters/' + id + '/flink_used'] = false;
+      updates['characters/' + id + '/status_effects'] = [];
+      if (c.armor_body) updates['characters/' + id + '/armor_body/sp_temp'] = c.armor_body.sp_base;
+      if (c.armor_head) updates['characters/' + id + '/armor_head/sp_temp'] = c.armor_head.sp_base;
+    }
+  }
+  await dbUpdate(updates);
+  showToast('All PCs reset to full HP.');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function esc(str) { return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function showToast(msg, dur=2200) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), dur);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+window.addEventListener('load', () => {
+  const url = localStorage.getItem('cp_db_url');
+  if (url) { initFirebase(url); showLogin(); }
+  else showScreen('screen-setup');
+});
+</script>
+</body>
+</html>
