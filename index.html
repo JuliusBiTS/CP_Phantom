@@ -565,7 +565,6 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   <div class="tabs">
     <button class="tab active" onclick="switchTab('combat')">Combat</button>
     <button class="tab" onclick="switchTab('characters')">Characters</button>
-    <button class="tab" onclick="switchTab('encounter')">Encounter</button>
     <button class="tab" onclick="switchTab('generator')">Generator</button>
     <button class="tab" onclick="switchTab('settings')">Settings</button>
   </div>
@@ -598,22 +597,6 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   <div id="tab-characters" class="tab-content main-scroll">
     <div class="char-list" id="char-list"></div>
     <button class="add-char-btn" onclick="openCharModal(null)">+ ADD CHARACTER / NPC</button>
-  </div>
-
-  <!-- ENCOUNTER TAB -->
-  <div id="tab-encounter" class="tab-content main-scroll">
-    <div class="enc-section">
-      <h2>Build Encounter</h2>
-      <div style="color:var(--text2);font-size:11px;margin-bottom:12px;line-height:1.6">
-        Add NPCs to this encounter. They'll appear in combat when you start it. Paste JSON from the Enemy Generator or add manually.
-      </div>
-      <div class="enc-enemy-list" id="enc-enemy-list"></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-ghost btn-small" onclick="openAddNPCModal()">+ ADD NPC MANUALLY</button>
-        <button class="btn btn-ghost btn-small" onclick="openPasteModal()">⬇ PASTE FROM GENERATOR</button>
-        <button class="btn btn-ghost btn-small" style="color:var(--text3)" onclick="clearEncounter()">CLEAR ALL</button>
-      </div>
-    </div>
   </div>
 
   <!-- SETTINGS TAB -->
@@ -653,6 +636,10 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <div id="gen-no-key" style="display:none;background:rgba(155,28,28,0.12);border:1px solid var(--red);padding:10px 14px;margin-bottom:14px;font-size:11px;line-height:1.6;color:#ffaaaa">
         No API key set. Go to <strong>Settings</strong> and enter your Anthropic API key to use the Generator.
       </div>
+      <!-- Encounter queue: enemies added here are spawned when combat starts -->
+      <div class="section-heading">Encounter Queue</div>
+      <div class="enc-enemy-list" id="enc-enemy-list" style="margin-bottom:8px"></div>
+      <button class="btn btn-ghost btn-small" style="color:var(--text3);margin-bottom:14px" onclick="clearEncounter()">CLEAR QUEUE</button>
       <!-- Mode toggle -->
       <div style="display:flex;gap:0;margin-bottom:12px;border:1px solid var(--border2)">
         <button id="gen-mode-single" style="flex:1;background:var(--surface2);color:var(--cyan);border:none;padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('single')">SINGLE ENEMY</button>
@@ -937,7 +924,8 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <textarea id="cm-notes" placeholder="Session notes, contacts, leads, reminders..." rows="6" style="resize:vertical"></textarea>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-danger btn-small" id="cm-delete-btn" style="display:none;margin-right:auto" onclick="deleteCharacter()">DELETE</button>
+      <button class="btn btn-danger btn-small" id="cm-delete-btn" style="display:none" onclick="deleteCharacter()">DELETE</button>
+      <button class="btn btn-gold btn-small" id="cm-items-btn" style="display:none;margin-right:auto" onclick="closeModal('char-modal'); openLootModal(editingCharId)">🎒 TRANSFER ITEMS</button>
       <button class="btn btn-ghost btn-small" onclick="closeModal('char-modal')">CANCEL</button>
       <button class="btn btn-primary btn-small" onclick="saveCharacter()">SAVE</button>
     </div>
@@ -1009,47 +997,6 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   </div>
 </div>
 
-<!-- Add NPC Modal -->
-<div class="modal-overlay" id="npc-modal">
-  <div class="modal" style="max-width:400px">
-    <div class="modal-header">
-      <span class="modal-title">ADD NPC TO ENCOUNTER</span>
-      <button class="modal-close" onclick="closeModal('npc-modal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="field"><label>Name / Archetype</label><input type="text" id="npc-name" placeholder="e.g. Corpo Guard"></div>
-      <div class="inline-row">
-        <div class="field"><label>HP</label><input type="number" id="npc-hp" placeholder="22" min="1"></div>
-        <div class="field"><label>Stamina</label><input type="number" id="npc-sta" placeholder="15" min="1"></div>
-        <div class="field"><label>Initiative</label><input type="number" id="npc-init" placeholder="12" min="0"></div>
-      </div>
-      <div class="inline-row">
-        <div class="field"><label>Body Armor</label><input type="text" id="npc-armor-name" placeholder="Light Armorjack"></div>
-        <div class="field" style="max-width:70px"><label>SP</label><input type="number" id="npc-armor-sp" placeholder="11" min="0"></div>
-      </div>
-      <div class="field">
-        <label>Weapons (one per line, e.g.: Assault Rifle +11)</label>
-        <textarea id="npc-weapons" rows="3" style="resize:vertical" placeholder="Assault Rifle +11 | Autofire&#10;Heavy Pistol +5"></textarea>
-      </div>
-      <div class="inline-row">
-        <div class="field"><label>Flink?</label>
-          <select id="npc-flink"><option value="0">No</option><option value="1">Yes</option></select>
-        </div>
-        <div class="field"><label>Tier</label>
-          <select id="npc-tier"><option>GRUNT</option><option selected>THREAT</option><option>BOSS</option></select>
-        </div>
-      </div>
-      <div class="field"><label>Loot (one item per line)</label>
-        <textarea id="npc-loot" rows="3" style="resize:vertical" placeholder="Assault Rifle +11&#10;Credchip ~300eb"></textarea>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost btn-small" onclick="closeModal('npc-modal')">CANCEL</button>
-      <button class="btn btn-primary btn-small" onclick="saveNPC()">ADD TO ENCOUNTER</button>
-    </div>
-  </div>
-</div>
-
 <!-- Transfer Item Modal -->
 <div class="modal-overlay" id="transfer-modal">
   <div class="modal" style="max-width:320px">
@@ -1085,27 +1032,6 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
     <div class="modal-body" id="loot-modal-body"></div>
     <div class="modal-footer">
       <button class="btn btn-ghost btn-small" onclick="closeModal('loot-modal')">CLOSE</button>
-    </div>
-  </div>
-</div>
-
-<!-- Paste from Generator Modal -->
-<div class="modal-overlay" id="paste-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <span class="modal-title">PASTE FROM ENEMY GENERATOR</span>
-      <button class="modal-close" onclick="closeModal('paste-modal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div style="color:var(--text2);font-size:11px;margin-bottom:10px;line-height:1.6">
-        Copy the enemy JSON from the Enemy Generator and paste it here. Works for single enemy or full encounter (encounterTitle field detected automatically).
-      </div>
-      <textarea id="paste-json" rows="8" style="resize:vertical;font-size:11px" placeholder='{"name":"Corpo Guard","tier":"THREAT",...}'></textarea>
-      <div id="paste-error" style="color:var(--red-bright);font-size:11px;margin-top:6px;display:none"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost btn-small" onclick="closeModal('paste-modal')">CANCEL</button>
-      <button class="btn btn-primary btn-small" onclick="parsePaste()">IMPORT</button>
     </div>
   </div>
 </div>
@@ -1329,7 +1255,7 @@ function logout() { session = { role: null, charId: null }; if (db) { db.ref(dbP
 // TABS
 // ═══════════════════════════════════════════════════════════════
 function switchTab(name) {
-  const names = ['combat','characters','encounter','generator','settings'];
+  const names = ['combat','characters','generator','settings'];
   document.querySelectorAll('#screen-gm .tab').forEach((t, i) => t.classList.toggle('active', names[i] === name));
   document.querySelectorAll('#screen-gm .tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + name));
   if (name === 'settings') renderSettings();
@@ -1529,7 +1455,7 @@ function renderCharList() {
         <div class="char-item-sub">${c.isNPC ? 'NPC' : 'PC'}${c.pin ? ' · PIN set' : ''} · INI ${c.initiative ?? 0}</div>
       </div>
       <div class="char-item-hp">${c.hp_current ?? c.hp_max}/${c.hp_max}</div>
-      <button class="btn btn-ghost btn-small btn-icon" onclick="event.stopPropagation(); openLootModal('${id}')" title="Inventory & Loot">🎒</button>
+      <button class="btn btn-gold btn-small" style="white-space:nowrap" onclick="event.stopPropagation(); openLootModal('${id}')" title="Give away inventory or loot">🎒 ITEMS</button>
       <div style="font-size:16px;color:var(--text3)">›</div>
     </div>`).join('');
 }
@@ -2089,6 +2015,7 @@ function openCharModal(id) {
   const isNew = !id;
   document.getElementById('char-modal-title').textContent = isNew ? 'ADD CHARACTER' : 'EDIT CHARACTER';
   document.getElementById('cm-delete-btn').style.display = isNew ? 'none' : 'inline-block';
+  document.getElementById('cm-items-btn').style.display = isNew ? 'none' : 'inline-block';
   const c = id ? (state.characters[id] || {}) : {};
   document.getElementById('cm-name').value = c.name || '';
   document.getElementById('cm-type').value = c.isNPC ? 'npc' : 'pc';
@@ -2280,42 +2207,6 @@ async function deleteCharacter() {
 // ═══════════════════════════════════════════════════════════════
 // ENCOUNTER QUEUE
 // ═══════════════════════════════════════════════════════════════
-function openAddNPCModal() { openModal('npc-modal'); }
-
-async function saveNPC() {
-  const name = document.getElementById('npc-name').value.trim();
-  if (!name) { showToast('Name required!'); return; }
-  const hpMax = parseInt(document.getElementById('npc-hp').value) || 10;
-  const staMax = parseInt(document.getElementById('npc-sta').value) || 10;
-  const initVal = parseInt(document.getElementById('npc-init').value) || 8;
-  const armorName = document.getElementById('npc-armor-name').value.trim();
-  const armorSP = parseInt(document.getElementById('npc-armor-sp').value) || 0;
-  const rawWeapons = document.getElementById('npc-weapons').value.trim().split('\n').filter(Boolean);
-  const weapons = rawWeapons.map(line => {
-    const parts = line.split('|');
-    const main = parts[0].trim();
-    const match = main.match(/^(.+?)\s*\+(\d+)$/);
-    return match ? { name: match[1].trim(), bonus: parseInt(match[2]), tags: (parts[1]||'').trim() } : { name: main, bonus: 0 };
-  });
-  const loot = document.getElementById('npc-loot').value.trim().split('\n').filter(Boolean);
-  const npc = {
-    name, isNPC: true,
-    hp_max: hpMax, hp_current: hpMax,
-    stamina_max: staMax, stamina_current: staMax,
-    initiative: initVal,
-    has_flink: document.getElementById('npc-flink').value === '1',
-    flink_used: false,
-    tier: document.getElementById('npc-tier').value,
-    armor_body: armorName ? { name: armorName, sp_base: armorSP, sp_temp: armorSP } : null,
-    weapons, loot,
-    status_effects: [], cyberware: [], talents: [], inventory: [], eurodollar: 0
-  };
-  const queue = [...(state.encounterQueue || []), npc];
-  await dbWrite('encounterQueue', queue);
-  closeModal('npc-modal');
-  showToast('NPC added to encounter.');
-}
-
 async function removeFromQueue(i) {
   const queue = [...(state.encounterQueue || [])];
   queue.splice(i, 1);
@@ -2325,50 +2216,6 @@ async function removeFromQueue(i) {
 async function clearEncounter() {
   if (!confirm('Clear encounter queue?')) return;
   await dbWrite('encounterQueue', []);
-}
-
-// ═══════════════════════════════════════════════════════════════
-// PASTE FROM GENERATOR
-// ═══════════════════════════════════════════════════════════════
-function openPasteModal() {
-  document.getElementById('paste-json').value = '';
-  document.getElementById('paste-error').style.display = 'none';
-  openModal('paste-modal');
-}
-
-async function parsePaste() {
-  const raw = document.getElementById('paste-json').value.trim();
-  const errEl = document.getElementById('paste-error');
-  errEl.style.display = 'none';
-  let data;
-  try { data = JSON.parse(raw); } catch(e) { errEl.textContent = 'Invalid JSON: ' + e.message; errEl.style.display = 'block'; return; }
-  const toImport = data.enemies ? data.enemies : [data];
-  const queue = [...(state.encounterQueue || [])];
-  for (const e of toImport) {
-    if (!e.name) continue;
-    const armorSP = e.armor?.SP_body || 0;
-    const initVal = e.stats?.Initiative || 8;
-    const weapons = (e.weapons || []).map(w => ({ name: w.name, bonus: w.bonus, pw: w.pwLabel, tags: (w.tags||[]).join(', ') }));
-    const npc = {
-      name: e.name, isNPC: true,
-      hp_max: e.stats?.HP || 15, hp_current: e.stats?.HP || 15,
-      stamina_max: e.stats?.Stamina || 10, stamina_current: e.stats?.Stamina || 10,
-      initiative: initVal,
-      has_flink: !!e.flink, flink_used: false,
-      tier: e.tier || 'THREAT',
-      armor_body: e.armor?.name ? { name: e.armor.name, sp_base: armorSP, sp_temp: armorSP } : null,
-      armor_head: e.armor?.SP_head ? { name: e.armor.name + ' (head)', sp_base: e.armor.SP_head, sp_temp: e.armor.SP_head } : null,
-      weapons,
-      loot: e.loot || [],
-      cyberware: e.cyberware || [],
-      firewall: e.firewall || null,
-      status_effects: [], talents: [], inventory: [], eurodollar: 0
-    };
-    queue.push(npc);
-  }
-  await dbWrite('encounterQueue', queue);
-  closeModal('paste-modal');
-  showToast(`Imported ${toImport.length} enemy/enemies.`);
 }
 
 // ═══════════════════════════════════════════════════════════════
