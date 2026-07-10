@@ -353,6 +353,7 @@ h2 { font-size: 11px; letter-spacing: 0.25em; color: var(--text2); text-transfor
     <button class="tab" onclick="switchPlayerTab('talents')">Talents</button>
     <button class="tab" onclick="switchPlayerTab('gear')">Gear</button>
     <button class="tab" onclick="switchPlayerTab('inventory')">Inventory</button>
+    <button class="tab" onclick="switchPlayerTab('notes')">Notes</button>
   </div>
 
   <div id="player-tab-status" class="tab-content active main-scroll">
@@ -440,6 +441,14 @@ h2 { font-size: 11px; letter-spacing: 0.25em; color: var(--text2); text-transfor
       </div>
     </div>
   </div>
+  <div id="player-tab-notes" class="tab-content main-scroll">
+    <div class="player-view">
+      <div class="player-card">
+        <div class="player-card-title">Notes <span style="color:var(--text3);font-weight:400">(shared with GM)</span></div>
+        <textarea id="player-notes" rows="16" style="resize:vertical" placeholder="Session notes, contacts, leads, reminders..." oninput="onNotesInput(this.value)"></textarea>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- MODALS -->
@@ -491,6 +500,8 @@ h2 { font-size: 11px; letter-spacing: 0.25em; color: var(--text2); text-transfor
       <div class="section-heading">Inventory (max 40 slots)</div>
       <div id="cm-inventory-list" style="display:flex;flex-direction:column;gap:4px"></div>
       <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addInventoryRow()">+ ADD ITEM</button>
+      <div class="section-heading">Notes (shared with player)</div>
+      <textarea id="cm-notes" placeholder="Session notes, contacts, leads, reminders..." rows="6" style="resize:vertical"></textarea>
     </div>
     <div class="modal-footer">
       <button class="btn btn-danger btn-small" id="cm-delete-btn" style="display:none;margin-right:auto" onclick="deleteCharacter()">DELETE</button>
@@ -796,7 +807,7 @@ function switchTab(name) {
 
 function switchPlayerTab(name) {
   document.querySelectorAll('#screen-player .tab').forEach((t, i) => {
-    const names = ['status','talents','gear','inventory'];
+    const names = ['status','talents','gear','inventory','notes'];
     t.classList.toggle('active', names[i] === name);
   });
   document.querySelectorAll('#screen-player .tab-content').forEach(c => {
@@ -1078,6 +1089,20 @@ function renderPlayerView() {
       ${item.slots > 1 ? `<div style="font-size:9px;color:var(--text3)">${item.slots}sl</div>` : ''}
       ${item.note ? `<div style="font-size:9px;color:var(--text2)">${esc(item.note)}</div>` : ''}
     </div>`).join('') : '<div style="color:var(--text3);font-size:11px">Empty.</div>';
+  // Notes (skip while the player is actively typing so remote updates don't clobber the cursor)
+  const notesEl = document.getElementById('player-notes');
+  if (notesEl && document.activeElement !== notesEl) notesEl.value = c.notes || '';
+}
+
+let notesSaveTimer = null;
+function onNotesInput(val) {
+  clearTimeout(notesSaveTimer);
+  notesSaveTimer = setTimeout(() => saveNotes(val), 500);
+}
+async function saveNotes(val) {
+  const id = session.charId;
+  if (!id) return;
+  await dbWrite('characters/' + id + '/notes', val);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1291,6 +1316,7 @@ function openCharModal(id) {
   document.getElementById('cm-armor-head-name').value = c.armor_head?.name || '';
   document.getElementById('cm-armor-head-sp').value = c.armor_head?.sp_base || '';
   document.getElementById('cm-cyberware').value = (c.cyberware || []).join('\n');
+  document.getElementById('cm-notes').value = c.notes || '';
   // Weapons
   renderWeaponRows(c.weapons || []);
   // Talents
@@ -1387,6 +1413,7 @@ async function saveCharacter() {
     talents: talentData.filter(t => t.name),
     inventory: inventoryData.filter(i => i.name),
     status_effects: existing.status_effects || [],
+    notes: document.getElementById('cm-notes').value,
   };
   const id = editingCharId || ('char_' + Date.now());
   await dbWrite('characters/' + id, char);
