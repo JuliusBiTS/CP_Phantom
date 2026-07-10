@@ -239,6 +239,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   box-shadow: 0 0 10px var(--gold-glow);
 }
 .init-chip.npc { border-color: var(--red-bright); color: #ff6688; }
+.init-chip.ally { border-color: var(--green-bright); color: var(--green-bright); }
 .init-chip.dead { opacity: 0.25; text-decoration: line-through; }
 .combatants { padding: 8px 12px; display: flex; flex-direction: column; gap: 5px; }
 /* ── COMBATANT CARD ── */
@@ -253,6 +254,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   box-shadow: 0 0 16px var(--gold-glow), inset 0 0 20px rgba(255,170,0,0.03);
 }
 .combatant-card.is-npc { border-left: 3px solid var(--red-bright); }
+.combatant-card.is-ally { border-left: 3px solid var(--green-bright); }
 .combatant-card.is-pc { border-left: 3px solid var(--cyan); }
 .combatant-card.is-dead { opacity: 0.3; filter: grayscale(0.5); }
 .combatant-top { padding: 10px 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
@@ -640,6 +642,11 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <div class="section-heading">Encounter Queue</div>
       <div class="enc-enemy-list" id="enc-enemy-list" style="margin-bottom:8px"></div>
       <button class="btn btn-ghost btn-small" style="color:var(--text3);margin-bottom:14px" onclick="clearEncounter()">CLEAR QUEUE</button>
+      <!-- Faction toggle -->
+      <div style="display:flex;gap:0;margin-bottom:8px;border:1px solid var(--border2)">
+        <button id="gen-faction-enemy" style="flex:1;background:var(--surface2);color:var(--red-bright);border:none;padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenFaction('enemy')">⚔ ENEMY</button>
+        <button id="gen-faction-ally" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenFaction('ally')">🤝 ALLY</button>
+      </div>
       <!-- Mode toggle -->
       <div style="display:flex;gap:0;margin-bottom:12px;border:1px solid var(--border2)">
         <button id="gen-mode-single" style="flex:1;background:var(--surface2);color:var(--cyan);border:none;padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('single')">SINGLE ENEMY</button>
@@ -1297,9 +1304,9 @@ function renderPreCombat() {
   const chars = Object.entries(state.characters);
   if (!chars.length) { el.innerHTML = '<div style="color:var(--text3);font-size:11px">No characters yet. Add some in the Characters tab.</div>'; return; }
   el.innerHTML = chars.map(([id, c]) => `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid ${c.isNPC ? 'var(--red)' : 'var(--cyan)'}">
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid ${c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red)' : 'var(--cyan)')}">
       <div style="flex:1;font-size:13px;font-weight:700">${esc(c.name)}</div>
-      <div style="font-size:10px;color:var(--text2)">${c.isNPC ? 'NPC' : 'PC'}</div>
+      <div style="font-size:10px;color:var(--text2)">${c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC')}</div>
       <div style="font-size:11px;color:var(--green-bright)">${c.hp_current ?? c.hp_max}/${c.hp_max} HP</div>
       <div style="font-size:10px;color:var(--text2)">INI: ${c.initiative ?? 0}</div>
     </div>`).join('');
@@ -1314,7 +1321,7 @@ function renderCombat() {
     const c = state.characters[id]; if (!c) return '';
     const cls = [
       'init-chip',
-      c.isNPC ? 'npc' : '',
+      c.isAlly ? 'ally' : (c.isNPC ? 'npc' : ''),
       i === current ? 'active-turn' : '',
       (c.hp_current ?? c.hp_max) <= 0 ? 'dead' : ''
     ].filter(Boolean).join(' ');
@@ -1367,7 +1374,7 @@ function renderCombatantCard(id, isActive) {
   const staMax = c.stamina_max ?? 0;
   const ipCur = c.ip_current ?? c.ip_max ?? 0;
   const ipMax = c.ip_max ?? 0;
-  return `<div class="combatant-card ${c.isNPC ? 'is-npc' : 'is-pc'} ${isActive ? 'active-turn' : ''} ${hpCur <= 0 ? 'is-dead' : ''}" id="cc-${id}">
+  return `<div class="combatant-card ${c.isAlly ? 'is-ally' : (c.isNPC ? 'is-npc' : 'is-pc')} ${isActive ? 'active-turn' : ''} ${hpCur <= 0 ? 'is-dead' : ''}" id="cc-${id}">
     <div class="combatant-top" onclick="toggleDetail('${id}')">
       <div>
         <div class="combatant-name">${esc(c.name)}</div>
@@ -1449,10 +1456,10 @@ function renderCharList() {
   if (!chars.length) { el.innerHTML = '<div style="padding:16px;color:var(--text3);font-size:11px">No characters yet.</div>'; return; }
   el.innerHTML = chars.map(([id, c]) => `
     <div class="char-item" onclick="openCharModal('${id}')">
-      <div style="width:8px;height:8px;border-radius:50%;background:${c.isNPC ? 'var(--red-bright)' : 'var(--cyan)'}"></div>
+      <div style="width:8px;height:8px;border-radius:50%;background:${c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)')}"></div>
       <div style="flex:1">
         <div class="char-item-name">${esc(c.name)}</div>
-        <div class="char-item-sub">${c.isNPC ? 'NPC' : 'PC'}${c.pin ? ' · PIN set' : ''} · INI ${c.initiative ?? 0}</div>
+        <div class="char-item-sub">${c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC')}${c.pin ? ' · PIN set' : ''} · INI ${c.initiative ?? 0}</div>
       </div>
       <div class="char-item-hp">${c.hp_current ?? c.hp_max}/${c.hp_max}</div>
       <button class="btn btn-gold btn-small" style="white-space:nowrap" onclick="event.stopPropagation(); openLootModal('${id}')" title="Give away inventory or loot">🎒 ITEMS</button>
@@ -1548,7 +1555,7 @@ function renderPlayerView() {
       const isMe = cid === id;
       return `<div class="init-row ${i === current ? 'current' : ''}">
         <div class="init-row-name" style="${isMe ? 'font-weight:700;color:var(--cyan)' : ''}">${i === current ? '▶ ' : ''}${esc(ch.name)}${isMe ? ' (you)' : ''}</div>
-        ${!ch.isNPC || isMe ? `<div class="init-row-hp" style="color:${(ch.hp_current??ch.hp_max)/(ch.hp_max||1) > 0.5 ? 'var(--green-bright)' : 'var(--red-bright)'}">${ch.hp_current??ch.hp_max}hp</div>` : '<div class="init-row-hp" style="color:var(--text3)">???</div>'}
+        ${!ch.isNPC || ch.isAlly || isMe ? `<div class="init-row-hp" style="color:${(ch.hp_current??ch.hp_max)/(ch.hp_max||1) > 0.5 ? 'var(--green-bright)' : 'var(--red-bright)'}">${ch.hp_current??ch.hp_max}hp</div>` : '<div class="init-row-hp" style="color:var(--text3)">???</div>'}
       </div>`;
     }).join('');
   }
@@ -2313,7 +2320,9 @@ function saveApiKey() {
 // ═══════════════════════════════════════════════════════════════
 // GENERATOR
 // ═══════════════════════════════════════════════════════════════
-const GEN_SYSTEM = `You are a Cyberpunk Phantom GM tool that generates enemy stat blocks for the tabletop RPG "Cyberpunk Phantom" — NOT Cyberpunk Red. The rules are different.
+const GEN_SYSTEM = `You are a Cyberpunk Phantom GM tool that generates NPC stat blocks for the tabletop RPG "Cyberpunk Phantom" — NOT Cyberpunk Red. The rules are different. Depending on the request, the NPC is either a hostile ENEMY or a friendly ALLY fighting alongside the party — the user message tells you which.
+
+ALLY GENERATION: When asked for an ALLY, write a character who assists or fights alongside the party — a bodyguard, medic, fixer's muscle, netrunner contact, hired gun, etc. Use the same stat/tier ranges as enemies (tier reflects power level, not allegiance). Frame "flavor" and "tactics" around supporting/protecting the party rather than attacking them (e.g. covering fire, healing, hacking support, intel). "loot" still means gear they're carrying (relevant if they die, or so the GM knows what they have on hand).
 
 CYBERPUNK PHANTOM RULES — WEAPONS (v1.1):
 Medium Pistol: +3 | Heavy Pistol: +5 | Very Heavy Pistol: +8 | SMG: +3 Autofire | Heavy SMG: +5 Autofire | Assault Rifle: +11 Autofire | Sniper Rifle: +14 single-shot | Shotgun: +8 | Knife: +1 | Big Knucks: +3 | Mantis Blades (Cyber): +5 | Rippers (Cyber): +3 | Heavy Melee: +5
@@ -2336,8 +2345,21 @@ LOOT: Always include 3-6 items. Note if weapons/armor are recoverable. Include c
 LARGE ENCOUNTERS (5+ enemies): Keep flavor/tactics/gmNote short (1-2 sentences). JSON must be complete and valid.`;
 
 let genMode = 'single';
+let genFaction = 'enemy';
 let genTier = 'THREAT';
 let genPS = 3;
+
+function setGenFaction(faction) {
+  genFaction = faction;
+  const enemyBtn = document.getElementById('gen-faction-enemy');
+  const allyBtn = document.getElementById('gen-faction-ally');
+  enemyBtn.style.background = faction === 'enemy' ? 'var(--surface2)' : 'transparent';
+  enemyBtn.style.color = faction === 'enemy' ? 'var(--red-bright)' : 'var(--text3)';
+  allyBtn.style.background = faction === 'ally' ? 'var(--surface2)' : 'transparent';
+  allyBtn.style.color = faction === 'ally' ? 'var(--green-bright)' : 'var(--text3)';
+  document.getElementById('gen-mode-single').textContent = faction === 'ally' ? 'SINGLE ALLY' : 'SINGLE ENEMY';
+  document.getElementById('gen-mode-encounter').textContent = faction === 'ally' ? 'ALLY SQUAD' : 'FULL ENCOUNTER';
+}
 
 function setGenMode(mode) {
   genMode = mode;
@@ -2382,9 +2404,10 @@ async function runGenerator() {
   errEl.style.display = 'none';
   loadEl.style.display = 'block';
   btn.textContent = '...'; btn.disabled = true;
+  const factionLabel = genFaction === 'ally' ? 'ally (friendly NPC fighting alongside the party)' : 'enemy';
   const userMsg = genMode === 'single'
-    ? `Generate a Cyberpunk Phantom enemy stat block.\nTier: ${genTier}\nDescription: ${prompt}\nReturn only the JSON object. No preamble, no backticks.`
-    : `Generate a Cyberpunk Phantom encounter for ${genPS} PCs.\nContext: ${prompt}\nUse the ENCOUNTER JSON format. Return only the JSON object. No preamble, no backticks.`;
+    ? `Generate a Cyberpunk Phantom ${factionLabel} stat block.\nTier: ${genTier}\nDescription: ${prompt}\nReturn only the JSON object. No preamble, no backticks.`
+    : `Generate a Cyberpunk Phantom ${genFaction === 'ally' ? 'squad of allies' : 'encounter'} for ${genPS} PCs.\nContext: ${prompt}\nUse the ENCOUNTER JSON format. Return only the JSON object. No preamble, no backticks.`;
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -2396,6 +2419,10 @@ async function runGenerator() {
     const raw = data.content.map(b => b.text || '').join('');
     const clean = raw.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean);
+    // Stamp the faction chosen at generation time onto the result so
+    // "+ ENCOUNTER" carries it through into the character record.
+    if (parsed.enemies) parsed.enemies.forEach(en => en.faction = genFaction);
+    else parsed.faction = genFaction;
     document.getElementById('gen-prompt').value = '';
     const container = document.getElementById('gen-results');
     const div = document.createElement('div');
@@ -2420,10 +2447,12 @@ function renderEnemyResult(e) {
   const cyber = (e.cyberware||[]).map(c=>`<div style="color:#7aafc8;font-size:11px;margin-bottom:2px">⬡ ${esc(c)}</div>`).join('');
   const loot = (e.loot||[]).map(l=>`<div style="color:#9aaa7a;font-size:11px;margin-bottom:2px">◈ ${esc(l)}</div>`).join('');
   const pw2 = e.combat?.secondaryPW ? `<div style="background:rgba(255,255,255,0.04);padding:5px 11px;border:1px solid rgba(255,255,255,0.05)"><span style="color:var(--text3);font-size:9px">${esc(e.combat.secondaryPWLabel)} </span><span style="font-size:14px;font-weight:700">${e.combat.secondaryPW}</span></div>` : '';
-  return `<div style="background:var(--surface);border:1px solid ${tc};overflow:hidden">
+  const isAlly = e.faction === 'ally';
+  return `<div style="background:var(--surface);border:1px solid ${tc};${isAlly ? 'border-left:3px solid var(--green-bright);' : ''}overflow:hidden">
     <div style="background:${tc}22;border-bottom:1px solid ${tc};padding:12px 14px;display:flex;justify-content:space-between;align-items:flex-start">
-      <div><div style="font-size:8px;letter-spacing:0.25em;color:${tc};margin-bottom:3px">${esc(e.tier)}</div><div style="font-size:17px;font-weight:700">${esc(e.name)}</div></div>
+      <div><div style="font-size:8px;letter-spacing:0.25em;color:${tc};margin-bottom:3px">${esc(e.tier)}${isAlly ? ' · ALLY' : ''}</div><div style="font-size:17px;font-weight:700">${esc(e.name)}</div></div>
       <div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap">
+        ${isAlly ? '<span style="background:var(--green-bright);color:#000;font-size:8px;padding:2px 7px;letter-spacing:0.1em;font-weight:700">🤝 ALLY</span>' : ''}
         ${e.flink ? '<span style="background:#e05800;color:#000;font-size:8px;padding:2px 7px;letter-spacing:0.1em;font-weight:700">FLINK</span>' : ''}
         <button onclick="addGenToEncounter(${JSON.stringify(e).replace(/"/g,'&quot;')})" style="background:var(--cyan-dim);border:1px solid var(--cyan);color:var(--cyan);font-size:9px;padding:4px 10px;cursor:pointer;font-family:var(--font);letter-spacing:0.1em">+ ENCOUNTER</button>
       </div>
@@ -2478,7 +2507,7 @@ async function addGenToEncounter(enemy) {
   const armorSP = enemy.armor?.SP_body || 0;
   const weapons = (enemy.weapons || []).map(w => ({ name: w.name, bonus: w.bonus, pw: w.pwLabel, tags: (w.tags||[]).join(', ') }));
   const npc = {
-    name: enemy.name, isNPC: true,
+    name: enemy.name, isNPC: true, isAlly: enemy.faction === 'ally',
     hp_max: hp, hp_current: hp,
     stamina_max: sta, stamina_current: sta,
     initiative: init,
@@ -2503,7 +2532,7 @@ async function addEncounterToQueue(enc) {
     const sta = e.stats?.Stamina || 10;
     const armorSP = e.armor?.SP_body || 0;
     queue.push({
-      name: e.name, isNPC: true,
+      name: e.name, isNPC: true, isAlly: e.faction === 'ally',
       hp_max: hp, hp_current: hp,
       stamina_max: sta, stamina_current: sta,
       initiative: e.stats?.Initiative || 8,
