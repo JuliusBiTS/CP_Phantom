@@ -6,207 +6,496 @@
 <title>Cyberpunk Phantom // Tracker</title>
 <style>
 :root {
-  --bg: #080808;
-  --surface: #111;
-  --surface2: #161616;
-  --border: #1e1e1e;
-  --border2: #2a2a2a;
-  --text: #d8d8d8;
-  --text2: #666;
-  --text3: #3a3a3a;
-  --red: #9b1c1c;
-  --red-bright: #e53e3e;
-  --teal: #1a4a5a;
-  --teal-bright: #2e9ab5;
-  --gold: #b8860b;
-  --gold-bright: #f0c040;
-  --green: #1a4a1a;
-  --green-bright: #4aaa4a;
+  --bg: #03040a;
+  --surface: #080c14;
+  --surface2: #0d1220;
+  --surface3: #111827;
+  --border: #1a2240;
+  --border2: #243060;
+  --text: #c8d8f0;
+  --text2: #4a6080;
+  --text3: #253050;
+  --cyan: #00d4ff;
+  --cyan-dim: #006080;
+  --cyan-glow: rgba(0,212,255,0.15);
+  --red: #8b0020;
+  --red-bright: #ff0040;
+  --red-glow: rgba(255,0,64,0.15);
+  --gold: #cc8800;
+  --gold-bright: #ffaa00;
+  --gold-glow: rgba(255,170,0,0.15);
+  --green-bright: #00ff88;
+  --green-dim: #004428;
+  --green-glow: rgba(0,255,136,0.12);
+  --purple: #8800cc;
+  --purple-bright: #cc44ff;
   --font: 'Courier New', monospace;
-  --radius: 2px;
+  --radius: 1px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; min-height: 100vh; overflow-x: hidden; }
-button { font-family: var(--font); cursor: pointer; border: none; border-radius: var(--radius); transition: all 0.1s; }
-button:active { transform: scale(0.97); }
-input, textarea, select { font-family: var(--font); background: var(--surface); color: var(--text); border: 1px solid var(--border2); border-radius: var(--radius); padding: 8px 10px; width: 100%; font-size: 13px; outline: none; }
-input:focus, textarea:focus, select:focus { border-color: var(--teal-bright); }
-label { font-size: 10px; color: var(--text2); letter-spacing: 0.15em; text-transform: uppercase; display: block; margin-bottom: 4px; }
-h2 { font-size: 11px; letter-spacing: 0.25em; color: var(--text2); text-transform: uppercase; margin-bottom: 12px; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-image:
+    linear-gradient(rgba(0,212,255,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.015) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+/* Scanline overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px);
+}
+button { font-family: var(--font); cursor: pointer; border: none; border-radius: var(--radius); transition: all 0.12s; }
+button:active { transform: scale(0.96); }
+input, textarea, select {
+  font-family: var(--font);
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  width: 100%;
+  font-size: 13px;
+  outline: none;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 1px var(--cyan-dim), 0 0 8px var(--cyan-glow);
+}
+label { font-size: 10px; color: var(--text2); letter-spacing: 0.18em; text-transform: uppercase; display: block; margin-bottom: 4px; }
+h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform: uppercase; margin-bottom: 12px; }
 .screen { display: none; min-height: 100vh; }
 .screen.active { display: flex; flex-direction: column; }
 /* ── SCROLLBAR ── */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: var(--surface); }
-::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--cyan-dim); }
 /* ── SETUP + LOGIN ── */
 .center-screen { align-items: center; justify-content: center; padding: 24px; }
-.card { background: var(--surface); border: 1px solid var(--border2); padding: 28px 24px; width: 100%; max-width: 420px; }
-.brand { font-size: 10px; letter-spacing: 0.35em; color: var(--text3); margin-bottom: 8px; }
-.title-large { font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: 0.04em; margin-bottom: 4px; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-top: 2px solid var(--cyan);
+  padding: 28px 24px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 0 40px rgba(0,212,255,0.06), inset 0 1px 0 rgba(0,212,255,0.1);
+}
+.brand { font-size: 9px; letter-spacing: 0.4em; color: var(--text3); margin-bottom: 8px; text-transform: uppercase; }
+.title-large { font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: 0.06em; margin-bottom: 4px; text-shadow: 0 0 20px rgba(0,212,255,0.3); }
 .subtitle { font-size: 11px; color: var(--text2); margin-bottom: 24px; }
 .field { margin-bottom: 14px; }
-.btn { padding: 11px 20px; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; }
-.btn-primary { background: var(--teal); color: #9ae0f0; border: 1px solid var(--teal-bright); width: 100%; }
-.btn-primary:hover { background: #1e5a6a; }
-.btn-danger { background: var(--red); color: #ffaaaa; border: 1px solid var(--red-bright); }
-.btn-danger:hover { background: #7a1515; }
+.btn { padding: 11px 20px; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; }
+.btn-primary {
+  background: linear-gradient(135deg, #003d50, #005870);
+  color: var(--cyan);
+  border: 1px solid var(--cyan);
+  width: 100%;
+  box-shadow: 0 0 12px var(--cyan-glow);
+}
+.btn-primary:hover { background: linear-gradient(135deg, #004d64, #007090); box-shadow: 0 0 20px rgba(0,212,255,0.3); }
+.btn-danger {
+  background: linear-gradient(135deg, #3a000d, #600018);
+  color: #ff6688;
+  border: 1px solid var(--red-bright);
+  box-shadow: 0 0 8px var(--red-glow);
+}
+.btn-danger:hover { background: linear-gradient(135deg, #500018, #800022); }
 .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border2); }
-.btn-ghost:hover { border-color: var(--text2); color: var(--text); }
-.btn-gold { background: #2a1e00; color: var(--gold-bright); border: 1px solid var(--gold); }
+.btn-ghost:hover { border-color: var(--cyan-dim); color: var(--text); }
+.btn-gold {
+  background: linear-gradient(135deg, #2a1800, #402800);
+  color: var(--gold-bright);
+  border: 1px solid var(--gold);
+  box-shadow: 0 0 8px var(--gold-glow);
+}
 .btn-small { padding: 5px 10px; font-size: 10px; }
 .btn-icon { padding: 6px 10px; font-size: 14px; line-height: 1; }
-.note { font-size: 10px; color: var(--text3); margin-top: 12px; line-height: 1.6; }
-.note a { color: var(--teal-bright); }
-.error-msg { background: rgba(155,28,28,0.15); border: 1px solid var(--red); color: #ffaaaa; padding: 8px 12px; font-size: 11px; margin-bottom: 12px; display: none; }
+.note { font-size: 10px; color: var(--text3); margin-top: 12px; line-height: 1.7; }
+.note a { color: var(--cyan); }
+.error-msg {
+  background: var(--red-glow);
+  border: 1px solid var(--red-bright);
+  border-left: 3px solid var(--red-bright);
+  color: #ff8899;
+  padding: 8px 12px;
+  font-size: 11px;
+  margin-bottom: 12px;
+  display: none;
+}
 .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
 /* ── TOP BAR ── */
-.topbar { background: var(--surface); border-bottom: 1px solid var(--border2); padding: 0 16px; height: 48px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; position: sticky; top: 0; z-index: 100; }
-.topbar-brand { font-size: 9px; letter-spacing: 0.25em; color: var(--text3); white-space: nowrap; }
-.topbar-title { font-size: 13px; font-weight: 700; color: var(--text); flex: 1; }
-.topbar-badge { font-size: 9px; padding: 3px 8px; letter-spacing: 0.1em; border-radius: var(--radius); }
-.badge-gm { background: var(--red); color: #ffaaaa; }
-.badge-player { background: var(--teal); color: #9ae0f0; }
-.badge-combat { background: var(--red); color: #ffaaaa; animation: pulse 1.5s infinite; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
-.topbar-round { font-size: 11px; color: var(--gold-bright); white-space: nowrap; }
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border2);
+  padding: 0 16px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 20px rgba(0,0,0,0.5);
+}
+.topbar::before {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan-dim), transparent);
+}
+.topbar-brand { font-size: 8px; letter-spacing: 0.4em; color: var(--text3); white-space: nowrap; }
+.topbar-title { font-size: 13px; font-weight: 700; color: var(--text); flex: 1; letter-spacing: 0.06em; }
+.topbar-badge { font-size: 8px; padding: 3px 8px; letter-spacing: 0.15em; border-radius: var(--radius); }
+.badge-gm { background: var(--red-glow); color: #ff6688; border: 1px solid var(--red-bright); }
+.badge-player { background: var(--cyan-glow); color: var(--cyan); border: 1px solid var(--cyan); }
+.badge-combat { background: var(--red-glow); color: #ff6688; border: 1px solid var(--red-bright); animation: pulse 1.2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;box-shadow:0 0 6px var(--red-glow)} 50%{opacity:0.7;box-shadow:0 0 12px rgba(255,0,64,0.4)} }
+.topbar-round { font-size: 12px; font-weight: 700; color: var(--gold-bright); white-space: nowrap; text-shadow: 0 0 8px var(--gold-glow); }
 /* ── TABS ── */
-.tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surface); }
-.tab { flex: 1; padding: 10px 8px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; background: transparent; color: var(--text2); border: none; border-bottom: 2px solid transparent; cursor: pointer; font-family: var(--font); transition: all 0.15s; }
-.tab.active { color: var(--teal-bright); border-bottom-color: var(--teal-bright); }
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border2);
+  flex-shrink: 0;
+  background: var(--surface);
+  overflow-x: auto;
+}
+.tabs::-webkit-scrollbar { height: 0; }
+.tab {
+  flex: 1;
+  min-width: 60px;
+  padding: 10px 6px;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: transparent;
+  color: var(--text3);
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.tab.active { color: var(--cyan); border-bottom-color: var(--cyan); text-shadow: 0 0 8px var(--cyan-glow); }
+.tab:hover:not(.active) { color: var(--text2); }
 .tab-content { display: none; flex: 1; overflow-y: auto; }
 .tab-content.active { display: block; }
 /* ── COMBAT VIEW ── */
-.combat-header { padding: 12px 16px; display: flex; gap: 8px; align-items: center; border-bottom: 1px solid var(--border); background: var(--surface2); }
-.round-display { font-size: 20px; font-weight: 700; color: var(--gold-bright); min-width: 60px; }
-.round-label { font-size: 9px; color: var(--text3); letter-spacing: 0.2em; }
-.initiative-strip { display: flex; gap: 6px; overflow-x: auto; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
-.init-chip { padding: 6px 10px; border: 1px solid var(--border2); background: var(--surface2); font-size: 10px; white-space: nowrap; cursor: pointer; transition: all 0.1s; border-radius: var(--radius); min-width: 64px; text-align: center; }
-.init-chip.active-turn { border-color: var(--gold-bright); color: var(--gold-bright); background: rgba(176,130,0,0.1); }
-.init-chip.npc { border-color: var(--red); color: #ffaaaa; }
-.init-chip.dead { opacity: 0.3; text-decoration: line-through; }
-.combatants { padding: 8px 16px; display: flex; flex-direction: column; gap: 6px; }
+.combat-header {
+  padding: 12px 16px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid var(--border2);
+  background: linear-gradient(180deg, var(--surface2) 0%, var(--surface) 100%);
+}
+.round-display {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--gold-bright);
+  min-width: 60px;
+  text-shadow: 0 0 16px var(--gold-glow);
+  font-variant-numeric: tabular-nums;
+}
+.round-label { font-size: 8px; color: var(--text3); letter-spacing: 0.3em; text-transform: uppercase; }
+.initiative-strip {
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+.initiative-strip::-webkit-scrollbar { height: 2px; }
+.init-chip {
+  padding: 6px 10px;
+  border: 1px solid var(--border2);
+  background: var(--surface);
+  font-size: 9px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.12s;
+  min-width: 64px;
+  text-align: center;
+  letter-spacing: 0.06em;
+}
+.init-chip.active-turn {
+  border-color: var(--gold-bright);
+  color: var(--gold-bright);
+  background: var(--gold-glow);
+  box-shadow: 0 0 10px var(--gold-glow);
+}
+.init-chip.npc { border-color: var(--red-bright); color: #ff6688; }
+.init-chip.dead { opacity: 0.25; text-decoration: line-through; }
+.combatants { padding: 8px 12px; display: flex; flex-direction: column; gap: 5px; }
 /* ── COMBATANT CARD ── */
-.combatant-card { background: var(--surface); border: 1px solid var(--border); overflow: hidden; transition: border-color 0.1s; }
-.combatant-card.active-turn { border-color: var(--gold-bright); }
-.combatant-card.is-npc { border-left: 3px solid var(--red); }
-.combatant-card.is-pc { border-left: 3px solid var(--teal-bright); }
-.combatant-card.is-dead { opacity: 0.4; }
+.combatant-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.combatant-card.active-turn {
+  border-color: var(--gold-bright);
+  box-shadow: 0 0 16px var(--gold-glow), inset 0 0 20px rgba(255,170,0,0.03);
+}
+.combatant-card.is-npc { border-left: 3px solid var(--red-bright); }
+.combatant-card.is-pc { border-left: 3px solid var(--cyan); }
+.combatant-card.is-dead { opacity: 0.3; filter: grayscale(0.5); }
 .combatant-top { padding: 10px 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
-.combatant-name { font-size: 13px; font-weight: 700; flex: 1; }
-.combatant-init { font-size: 10px; color: var(--text3); min-width: 28px; }
+.combatant-name { font-size: 13px; font-weight: 700; flex: 1; letter-spacing: 0.04em; }
 .hp-display { display: flex; flex-direction: column; align-items: flex-end; }
-.hp-numbers { font-size: 13px; font-weight: 700; }
-.hp-numbers.critical { color: var(--red-bright); }
+.hp-numbers { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hp-numbers.critical { color: var(--red-bright); text-shadow: 0 0 8px var(--red-glow); animation: critical-pulse 0.8s infinite; }
 .hp-numbers.wounded { color: var(--gold-bright); }
 .hp-numbers.healthy { color: var(--green-bright); }
-.hp-bar { width: 80px; height: 4px; background: var(--border); border-radius: 2px; margin-top: 3px; overflow: hidden; }
-.hp-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
-.hp-bar-fill.healthy { background: var(--green-bright); }
-.hp-bar-fill.wounded { background: var(--gold-bright); }
-.hp-bar-fill.critical { background: var(--red-bright); }
-.flink-badge { font-size: 8px; padding: 2px 6px; letter-spacing: 0.1em; border-radius: var(--radius); }
-.flink-available { background: rgba(46,154,181,0.2); color: var(--teal-bright); border: 1px solid var(--teal-bright); }
-.flink-used { background: rgba(60,60,60,0.3); color: var(--text3); border: 1px solid var(--border); text-decoration: line-through; }
+@keyframes critical-pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+.hp-bar { width: 80px; height: 3px; background: var(--border); margin-top: 4px; overflow: hidden; }
+.hp-bar-fill { height: 100%; transition: width 0.4s ease; }
+.hp-bar-fill.healthy { background: var(--green-bright); box-shadow: 0 0 4px var(--green-glow); }
+.hp-bar-fill.wounded { background: var(--gold-bright); box-shadow: 0 0 4px var(--gold-glow); }
+.hp-bar-fill.critical { background: var(--red-bright); box-shadow: 0 0 6px var(--red-glow); }
+.flink-badge { font-size: 8px; padding: 2px 7px; letter-spacing: 0.12em; }
+.flink-available { background: var(--cyan-glow); color: var(--cyan); border: 1px solid var(--cyan); box-shadow: 0 0 6px var(--cyan-glow); }
+.flink-used { background: transparent; color: var(--text3); border: 1px solid var(--border); text-decoration: line-through; }
 .status-chips { display: flex; gap: 4px; flex-wrap: wrap; }
-.status-chip { font-size: 9px; padding: 2px 6px; border-radius: var(--radius); letter-spacing: 0.08em; }
-.status-bleed { background: rgba(155,28,28,0.3); color: #ffaaaa; border: 1px solid var(--red); }
-.status-burn { background: rgba(180,100,0,0.3); color: #ffcc88; border: 1px solid #cc6600; }
-.status-malfunction { background: rgba(60,0,80,0.3); color: #dd88ff; border: 1px solid #880088; }
-.status-stagger { background: rgba(30,60,80,0.3); color: #88bbdd; border: 1px solid #446688; }
-.status-custom { background: rgba(50,50,50,0.5); color: var(--text2); border: 1px solid var(--border2); }
-.combatant-detail { display: none; border-top: 1px solid var(--border); padding: 12px; background: var(--surface2); }
+.status-chip { font-size: 9px; padding: 2px 6px; letter-spacing: 0.08em; border: 1px solid; }
+.status-bleed { background: var(--red-glow); color: #ff8899; border-color: var(--red-bright); }
+.status-burn { background: rgba(255,100,0,0.1); color: #ffaa66; border-color: #ff6600; }
+.status-malfunction { background: rgba(136,0,204,0.15); color: var(--purple-bright); border-color: var(--purple); }
+.status-stagger { background: rgba(0,150,200,0.1); color: #66ccff; border-color: #0099cc; }
+.status-custom { background: rgba(100,100,150,0.1); color: var(--text2); border-color: var(--border2); }
+.combatant-detail { display: none; border-top: 1px solid var(--border2); padding: 12px; background: var(--surface2); }
 .combatant-detail.open { display: block; }
 .detail-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
-.detail-label { font-size: 9px; color: var(--text3); letter-spacing: 0.15em; min-width: 52px; }
+.detail-label { font-size: 9px; color: var(--text3); letter-spacing: 0.18em; min-width: 52px; text-transform: uppercase; }
 .adj-group { display: flex; gap: 4px; align-items: center; }
-.adj-btn { width: 32px; height: 32px; font-size: 16px; font-weight: 700; background: var(--surface); border: 1px solid var(--border2); color: var(--text); display: flex; align-items: center; justify-content: center; border-radius: var(--radius); }
-.adj-btn:hover { border-color: var(--text2); }
-.adj-btn.red { border-color: var(--red); color: var(--red-bright); background: rgba(155,28,28,0.1); }
-.adj-btn.red:hover { background: rgba(155,28,28,0.2); }
-.adj-btn.green { border-color: var(--green-bright); color: var(--green-bright); background: rgba(26,74,26,0.15); }
-.adj-btn.green:hover { background: rgba(26,74,26,0.3); }
-.adj-input { width: 56px; height: 32px; text-align: center; border: 1px solid var(--border2); padding: 4px; }
-.stamina-dots { display: flex; gap: 3px; flex-wrap: wrap; }
-.dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border2); cursor: pointer; transition: all 0.1s; }
-.dot.filled { background: var(--teal-bright); border-color: var(--teal-bright); }
+.adj-btn {
+  width: 34px; height: 34px; font-size: 16px; font-weight: 700;
+  background: var(--surface3); border: 1px solid var(--border2);
+  color: var(--text); display: flex; align-items: center; justify-content: center;
+}
+.adj-btn.red { border-color: var(--red-bright); color: #ff6688; background: var(--red-glow); }
+.adj-btn.red:hover { box-shadow: 0 0 10px var(--red-glow); }
+.adj-btn.green { border-color: var(--green-bright); color: var(--green-bright); background: var(--green-glow); }
+.adj-btn.green:hover { box-shadow: 0 0 10px var(--green-glow); }
+.adj-input { width: 56px; height: 34px; text-align: center; }
+.stamina-dots { display: flex; gap: 4px; flex-wrap: wrap; }
+.dot { width: 14px; height: 14px; border: 1px solid var(--border2); cursor: pointer; transition: all 0.1s; }
+.dot.filled { background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 4px var(--cyan-glow); }
 .dot.empty { background: transparent; }
 .armor-display { display: flex; gap: 8px; }
-.armor-piece { background: var(--surface); border: 1px solid var(--border); padding: 6px 10px; font-size: 11px; }
-.armor-label { font-size: 9px; color: var(--text3); }
+.armor-piece { background: var(--surface3); border: 1px solid var(--border2); padding: 6px 10px; font-size: 11px; }
+.armor-label { font-size: 9px; color: var(--text3); letter-spacing: 0.1em; }
 .armor-sp { font-size: 13px; font-weight: 700; }
 .armor-sp-temp { font-size: 10px; color: var(--gold-bright); }
 .status-add { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 /* ── MAIN CONTENT SCROLLABLE ── */
 .main-scroll { flex: 1; overflow-y: auto; }
 /* ── CHARACTERS TAB ── */
-.char-list { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
-.char-item { background: var(--surface); border: 1px solid var(--border); padding: 12px 14px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
-.char-item:hover { border-color: var(--border2); }
+.char-list { padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; }
+.char-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border2);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+.char-item:hover { border-color: var(--border2); border-left-color: var(--cyan-dim); }
 .char-item-name { flex: 1; font-size: 14px; font-weight: 700; }
 .char-item-sub { font-size: 10px; color: var(--text2); }
 .char-item-hp { font-size: 12px; color: var(--green-bright); }
-.add-char-btn { margin: 0 16px 16px; display: flex; align-items: center; gap: 8px; background: transparent; border: 1px dashed var(--border2); color: var(--text2); padding: 12px; font-family: var(--font); font-size: 11px; letter-spacing: 0.1em; width: calc(100% - 32px); justify-content: center; cursor: pointer; }
-.add-char-btn:hover { border-color: var(--teal-bright); color: var(--teal-bright); }
+.add-char-btn {
+  margin: 0 16px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px dashed var(--border2);
+  color: var(--text3);
+  padding: 12px;
+  font-family: var(--font);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  width: calc(100% - 32px);
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.add-char-btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 10px var(--cyan-glow); }
 /* ── MODAL ── */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 200; display: none; align-items: flex-start; justify-content: center; padding: 16px; overflow-y: auto; }
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,4,12,0.92);
+  z-index: 200; display: none;
+  align-items: flex-start; justify-content: center;
+  padding: 16px; overflow-y: auto;
+}
 .modal-overlay.open { display: flex; }
-.modal { background: var(--surface); border: 1px solid var(--border2); width: 100%; max-width: 560px; margin: auto; }
-.modal-header { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-.modal-title { font-size: 12px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text); }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-top: 2px solid var(--cyan);
+  width: 100%;
+  max-width: 560px;
+  margin: auto;
+  box-shadow: 0 0 40px rgba(0,212,255,0.08);
+}
+.modal-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border2);
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--surface2);
+}
+.modal-title { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
 .modal-close { background: transparent; color: var(--text2); border: none; font-size: 18px; cursor: pointer; padding: 0 4px; }
 .modal-body { padding: 16px; max-height: 75vh; overflow-y: auto; }
-.modal-footer { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
-.section-heading { font-size: 9px; letter-spacing: 0.2em; color: var(--text3); text-transform: uppercase; margin: 16px 0 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.modal-footer { padding: 12px 16px; border-top: 1px solid var(--border2); display: flex; gap: 8px; justify-content: flex-end; background: var(--surface2); }
+.section-heading {
+  font-size: 9px;
+  letter-spacing: 0.25em;
+  color: var(--cyan-dim);
+  text-transform: uppercase;
+  margin: 16px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.section-heading::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; left: 0;
+  width: 32px; height: 1px;
+  background: var(--cyan);
+}
 .slot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .slot-item { background: var(--surface2); border: 1px solid var(--border); padding: 8px 10px; display: flex; align-items: center; gap: 8px; min-height: 40px; }
 .slot-empty { border-style: dashed; cursor: pointer; justify-content: center; color: var(--text3); font-size: 10px; }
-.slot-empty:hover { border-color: var(--teal-bright); color: var(--teal-bright); }
-.slot-filled { cursor: pointer; }
+.slot-empty:hover { border-color: var(--cyan); color: var(--cyan); }
 .slot-name { font-size: 11px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .slot-bonus { font-size: 10px; color: var(--gold-bright); white-space: nowrap; }
 .slot-size { font-size: 9px; color: var(--text3); }
-.talent-used { opacity: 0.4; }
-.talent-toggle { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border2); background: transparent; cursor: pointer; flex-shrink: 0; }
-.talent-toggle.used { background: var(--red); border-color: var(--red-bright); }
-.talent-toggle.available { background: var(--teal); border-color: var(--teal-bright); }
+.talent-used { opacity: 0.35; }
+.talent-toggle { width: 20px; height: 20px; border: 1px solid var(--border2); background: transparent; cursor: pointer; flex-shrink: 0; transition: all 0.1s; }
+.talent-toggle.used { background: var(--red); border-color: var(--red-bright); box-shadow: 0 0 6px var(--red-glow); }
+.talent-toggle.available { background: var(--cyan-dim); border-color: var(--cyan); box-shadow: 0 0 6px var(--cyan-glow); }
 .inline-row { display: flex; gap: 8px; }
 .inline-row .field { flex: 1; }
 /* ── ENCOUNTER BUILDER ── */
 .enc-section { padding: 12px 16px; }
-.enc-enemy-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
-.enc-enemy { background: var(--surface); border: 1px solid var(--red); padding: 10px 12px; display: flex; align-items: center; gap: 10px; }
+.enc-enemy-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+.enc-enemy {
+  background: var(--surface);
+  border: 1px solid var(--red-bright);
+  border-left: 3px solid var(--red-bright);
+  padding: 10px 12px;
+  display: flex; align-items: center; gap: 10px;
+  box-shadow: inset 0 0 20px var(--red-glow);
+}
 .enc-enemy-name { flex: 1; font-size: 13px; }
 .enc-enemy-hp { font-size: 11px; color: var(--gold-bright); }
 /* ── PLAYER VIEW ── */
-.player-view { padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
-.player-card { background: var(--surface); border: 1px solid var(--border2); padding: 14px; }
-.player-card-title { font-size: 9px; letter-spacing: 0.2em; color: var(--text3); margin-bottom: 10px; text-transform: uppercase; }
+.player-view { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+.player-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--cyan-dim);
+  padding: 14px;
+}
+.player-card-title {
+  font-size: 8px;
+  letter-spacing: 0.25em;
+  color: var(--cyan-dim);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  position: relative;
+}
+.player-card-title::before { content: '//'; margin-right: 6px; opacity: 0.5; }
 .big-stat { display: flex; align-items: baseline; gap: 6px; }
-.big-stat-val { font-size: 32px; font-weight: 700; }
-.big-stat-max { font-size: 16px; color: var(--text2); }
+.big-stat-val { font-size: 36px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.big-stat-max { font-size: 18px; color: var(--text2); }
 .big-stat-label { font-size: 9px; color: var(--text3); letter-spacing: 0.15em; }
-.turn-indicator { background: rgba(176,130,0,0.1); border: 1px solid var(--gold-bright); padding: 10px 14px; color: var(--gold-bright); font-size: 12px; text-align: center; letter-spacing: 0.1em; }
-.initiative-list { display: flex; flex-direction: column; gap: 4px; }
+.turn-indicator {
+  background: var(--gold-glow);
+  border: 1px solid var(--gold-bright);
+  padding: 10px 14px;
+  color: var(--gold-bright);
+  font-size: 12px;
+  text-align: center;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  box-shadow: 0 0 20px var(--gold-glow);
+  animation: pulse 1s infinite;
+}
+.initiative-list { display: flex; flex-direction: column; gap: 3px; }
 .init-row { display: flex; gap: 8px; align-items: center; padding: 6px 10px; background: var(--surface2); }
-.init-row.current { background: rgba(176,130,0,0.1); border-left: 2px solid var(--gold-bright); }
+.init-row.current { background: var(--gold-glow); border-left: 2px solid var(--gold-bright); }
 .init-row-name { flex: 1; font-size: 12px; }
 .init-row-hp { font-size: 11px; }
 /* ── DAMAGE INPUT MODAL ── */
 .dmg-modal { max-width: 300px; }
-.dmg-keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 12px 0; }
-.dmg-key { padding: 14px; font-size: 18px; font-weight: 700; background: var(--surface2); border: 1px solid var(--border2); color: var(--text); border-radius: var(--radius); }
-.dmg-key:hover { border-color: var(--teal-bright); }
-.dmg-key.action { font-size: 12px; }
-.dmg-display { background: var(--surface2); border: 1px solid var(--border2); padding: 10px; text-align: right; font-size: 24px; font-weight: 700; color: var(--teal-bright); min-height: 50px; margin-bottom: 8px; }
+.dmg-keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin: 12px 0; }
+.dmg-key {
+  padding: 14px; font-size: 20px; font-weight: 700;
+  background: var(--surface2); border: 1px solid var(--border2);
+  color: var(--text); transition: all 0.1s;
+}
+.dmg-key:hover { border-color: var(--cyan); box-shadow: 0 0 8px var(--cyan-glow); color: var(--cyan); }
+.dmg-key.action { font-size: 11px; letter-spacing: 0.1em; }
+.dmg-display {
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-bottom: 2px solid var(--cyan);
+  padding: 10px 14px;
+  text-align: right;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--cyan);
+  min-height: 54px;
+  margin-bottom: 8px;
+  text-shadow: 0 0 12px var(--cyan-glow);
+  font-variant-numeric: tabular-nums;
+}
 /* ── TOAST ── */
-.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--teal-bright); color: var(--teal-bright); padding: 8px 16px; font-size: 11px; letter-spacing: 0.1em; z-index: 500; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--surface2);
+  border: 1px solid var(--cyan);
+  border-left: 3px solid var(--cyan);
+  color: var(--cyan);
+  padding: 8px 18px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  z-index: 500;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 0 20px var(--cyan-glow);
+}
 .toast.show { opacity: 1; }
 /* ── RESPONSIVE ── */
 @media (min-width: 768px) {
   .slot-grid { grid-template-columns: 1fr 1fr 1fr; }
   .combatants { padding: 8px 20px; }
-  .initiative-strip { padding: 10px 20px; }
+  .initiative-strip { padding: 8px 20px; }
 }
 </style>
 </head>
@@ -249,13 +538,17 @@ h2 { font-size: 11px; letter-spacing: 0.25em; color: var(--text2); text-transfor
     <div class="title-large" id="login-campaign-name">CAMPAIGN</div>
     <div class="subtitle">Enter your PIN to connect</div>
     <div class="error-msg" id="login-error">Wrong PIN. Try again.</div>
+    <div class="field" id="login-db-field" style="display:none">
+      <label>Database URL (first time on this device)</label>
+      <input type="text" id="login-db-url" placeholder="https://your-project.firebaseio.com">
+    </div>
     <div class="field">
       <label>PIN</label>
       <input type="password" id="login-pin" placeholder="Your PIN" maxlength="8" onkeydown="if(event.key==='Enter')doLogin()">
     </div>
     <button class="btn btn-primary" onclick="doLogin()">CONNECT</button>
     <hr class="divider">
-    <p class="note">GM: Use your GM PIN for full access.<br>Players: Use the PIN your GM gave you.</p>
+    <p class="note">GM: Use your GM PIN for full access.<br>Players: Use the PIN your GM gave you.<br>First time on this device? Ask your GM for the Database URL.</p>
   </div>
 </div>
 
@@ -272,6 +565,7 @@ h2 { font-size: 11px; letter-spacing: 0.25em; color: var(--text2); text-transfor
     <button class="tab active" onclick="switchTab('combat')">Combat</button>
     <button class="tab" onclick="switchTab('characters')">Characters</button>
     <button class="tab" onclick="switchTab('encounter')">Encounter</button>
+    <button class="tab" onclick="switchTab('generator')">Generator</button>
     <button class="tab" onclick="switchTab('settings')">Settings</button>
   </div>
 
@@ -329,14 +623,67 @@ h2 { font-size: 11px; letter-spacing: 0.25em; color: var(--text2); text-transfor
         <label>Campaign Name</label>
         <input type="text" id="settings-campaign" oninput="updateCampaignName(this.value)">
       </div>
+      <div class="section-heading">Anthropic API Key (Enemy Generator)</div>
+      <div style="color:var(--text2);font-size:11px;margin-bottom:8px;line-height:1.6">Required for the Generator tab. Get a free key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--cyan)">console.anthropic.com</a>. Stored only in your browser.</div>
+      <div class="inline-row">
+        <div class="field" style="flex:1">
+          <label>API Key</label>
+          <input type="password" id="settings-api-key" placeholder="sk-ant-...">
+        </div>
+        <button class="btn btn-ghost btn-small" style="align-self:flex-end;height:36px" onclick="saveApiKey()">SAVE</button>
+      </div>
       <div class="section-heading">Player PINs</div>
-      <div style="color:var(--text2);font-size:11px;margin-bottom:10px;line-height:1.6">Assign a PIN to each PC character. Players use this PIN to access their character on their phone.</div>
+      <div style="color:var(--text2);font-size:11px;margin-bottom:8px;line-height:1.6">Assign a PIN to each PC character. Players use this PIN to access their character on their phone.</div>
+      <button class="btn btn-ghost btn-small" style="margin-bottom:10px" onclick="copyPlayerLink()">⎘ COPY PLAYER LINK</button>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Share this link with players — it includes the database URL so they connect automatically.</div>
       <div id="player-pins-list" style="display:flex;flex-direction:column;gap:6px"></div>
       <hr class="divider">
       <div class="section-heading">Reset Combat</div>
       <button class="btn btn-danger btn-small" onclick="if(confirm('Reset all HP to max and clear status effects?'))resetAllHP()">RESET ALL HP & STATUS</button>
       <hr class="divider">
       <button class="btn btn-ghost btn-small" onclick="logout()">LOGOUT</button>
+    </div>
+  </div>
+
+  <!-- GENERATOR TAB -->
+  <div id="tab-generator" class="tab-content main-scroll">
+    <div style="padding:12px 16px">
+      <!-- API key missing warning -->
+      <div id="gen-no-key" style="display:none;background:rgba(155,28,28,0.12);border:1px solid var(--red);padding:10px 14px;margin-bottom:14px;font-size:11px;line-height:1.6;color:#ffaaaa">
+        No API key set. Go to <strong>Settings</strong> and enter your Anthropic API key to use the Generator.
+      </div>
+      <!-- Mode toggle -->
+      <div style="display:flex;gap:0;margin-bottom:12px;border:1px solid var(--border2)">
+        <button id="gen-mode-single" style="flex:1;background:var(--surface2);color:var(--cyan);border:none;padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('single')">SINGLE ENEMY</button>
+        <button id="gen-mode-encounter" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('encounter')">FULL ENCOUNTER</button>
+      </div>
+      <!-- Controls -->
+      <div id="gen-single-controls">
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <button class="gen-tier-btn" id="gtier-GRUNT" onclick="setGenTier('GRUNT')" style="flex:1;padding:6px;font-size:9px;letter-spacing:0.12em;background:transparent;border:1px solid var(--border2);color:var(--text3);cursor:pointer;font-family:var(--font)">▸ GRUNT</button>
+          <button class="gen-tier-btn" id="gtier-THREAT" onclick="setGenTier('THREAT')" style="flex:1;padding:6px;font-size:9px;letter-spacing:0.12em;background:var(--cyan-dim);border:1px solid var(--cyan);color:var(--cyan);cursor:pointer;font-family:var(--font)">◆ THREAT</button>
+          <button class="gen-tier-btn" id="gtier-BOSS" onclick="setGenTier('BOSS')" style="flex:1;padding:6px;font-size:9px;letter-spacing:0.12em;background:transparent;border:1px solid var(--border2);color:var(--text3);cursor:pointer;font-family:var(--font)">★ BOSS</button>
+        </div>
+      </div>
+      <div id="gen-encounter-controls" style="display:none;margin-bottom:10px">
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="font-size:9px;color:var(--text3);letter-spacing:0.14em">PARTY SIZE</span>
+          <div style="display:flex;gap:4px">
+            <button class="gen-ps-btn" id="gps-2" onclick="setGenPS(2)" style="padding:4px 10px;font-size:11px;background:transparent;border:1px solid var(--border2);color:var(--text3);cursor:pointer;font-family:var(--font)">2</button>
+            <button class="gen-ps-btn" id="gps-3" onclick="setGenPS(3)" style="padding:4px 10px;font-size:11px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);cursor:pointer;font-family:var(--font)">3</button>
+            <button class="gen-ps-btn" id="gps-4" onclick="setGenPS(4)" style="padding:4px 10px;font-size:11px;background:transparent;border:1px solid var(--border2);color:var(--text3);cursor:pointer;font-family:var(--font)">4</button>
+            <button class="gen-ps-btn" id="gps-5" onclick="setGenPS(5)" style="padding:4px 10px;font-size:11px;background:transparent;border:1px solid var(--border2);color:var(--text3);cursor:pointer;font-family:var(--font)">5</button>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <textarea id="gen-prompt" placeholder="Describe the enemy or scenario..." rows="3" style="flex:1;resize:none;font-size:12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();runGenerator()}"></textarea>
+        <button id="gen-btn" style="background:var(--surface);border:1px solid var(--border2);color:var(--text2);padding:0 14px;font-size:9px;letter-spacing:0.12em;cursor:pointer;font-family:var(--font);white-space:nowrap;align-self:stretch" onclick="runGenerator()">GEN</button>
+      </div>
+      <div style="font-size:9px;color:var(--text3);margin-bottom:14px">Enter = generate · Shift+Enter = newline</div>
+      <div id="gen-loading" style="display:none;font-size:10px;color:var(--text3);letter-spacing:0.2em;text-align:center;padding:24px">SCANNING THREAT DATABASE...</div>
+      <div id="gen-error" style="display:none;color:var(--red-bright);font-size:11px;margin-bottom:10px"></div>
+      <div id="gen-results" style="display:flex;flex-direction:column;gap:16px"></div>
     </div>
   </div>
 </div>
@@ -350,6 +697,7 @@ h2 { font-size: 11px; letter-spacing: 0.25em; color: var(--text2); text-transfor
   </div>
   <div class="tabs">
     <button class="tab active" onclick="switchPlayerTab('status')">Status</button>
+    <button class="tab" onclick="switchPlayerTab('stats')">Stats</button>
     <button class="tab" onclick="switchPlayerTab('talents')">Talents</button>
     <button class="tab" onclick="switchPlayerTab('gear')">Gear</button>
     <button class="tab" onclick="switchPlayerTab('inventory')">Inventory</button>
@@ -359,7 +707,7 @@ h2 { font-size: 11px; letter-spacing: 0.25em; color: var(--text2); text-transfor
   <div id="player-tab-status" class="tab-content active main-scroll">
     <div class="player-view">
       <div id="player-turn-indicator" style="display:none" class="turn-indicator">⚡ YOUR TURN</div>
-      <div class="player-card" style="border-left:3px solid var(--teal-bright)">
+      <div class="player-card" style="border-left:3px solid var(--cyan)">
         <div class="player-card-title">Hit Points</div>
         <div class="big-stat">
           <div class="big-stat-val healthy" id="player-hp-val">0</div>
@@ -378,7 +726,7 @@ h2 { font-size: 11px; letter-spacing: 0.25em; color: var(--text2); text-transfor
         <div class="player-card-title">Stamina</div>
         <div style="display:flex;align-items:center;gap:10px">
           <div class="big-stat">
-            <div class="big-stat-val" id="player-sta-val" style="color:var(--teal-bright)">0</div>
+            <div class="big-stat-val" id="player-sta-val" style="color:var(--cyan)">0</div>
             <div class="big-stat-max">/ <span id="player-sta-max">0</span></div>
           </div>
           <div style="display:flex;gap:6px">
@@ -407,6 +755,30 @@ h2 { font-size: 11px; letter-spacing: 0.25em; color: var(--text2); text-transfor
       <div class="player-card">
         <div class="player-card-title">Initiative Order</div>
         <div class="initiative-list" id="player-initiative-list"></div>
+      </div>
+    </div>
+  </div>
+  <div id="player-tab-stats" class="tab-content main-scroll">
+    <div class="player-view">
+      <div class="player-card">
+        <div class="player-card-title">Derived Values</div>
+        <div id="player-derived" style="display:grid;grid-template-columns:1fr 1fr;gap:6px"></div>
+      </div>
+      <div class="player-card">
+        <div class="player-card-title">POWER Tree</div>
+        <div id="player-stats-power" style="display:grid;grid-template-columns:1fr 1fr;gap:4px"></div>
+      </div>
+      <div class="player-card">
+        <div class="player-card-title">MOBILITY Tree</div>
+        <div id="player-stats-mobility" style="display:grid;grid-template-columns:1fr 1fr;gap:4px"></div>
+      </div>
+      <div class="player-card">
+        <div class="player-card-title">MIND Tree</div>
+        <div id="player-stats-mind" style="display:grid;grid-template-columns:1fr 1fr;gap:4px"></div>
+      </div>
+      <div class="player-card">
+        <div class="player-card-title">Special Stats</div>
+        <div id="player-stats-special" style="display:grid;grid-template-columns:1fr 1fr;gap:4px"></div>
       </div>
     </div>
   </div>
@@ -467,18 +839,64 @@ h2 { font-size: 11px; letter-spacing: 0.25em; color: var(--text2); text-transfor
         </div>
       </div>
       <div class="inline-row">
-        <div class="field"><label>HP Max</label><input type="number" id="cm-hp" placeholder="19" min="1"></div>
-        <div class="field"><label>Stamina Max</label><input type="number" id="cm-sta" placeholder="19" min="1"></div>
-      </div>
-      <div class="inline-row">
-        <div class="field"><label>Initiative</label><input type="number" id="cm-init" placeholder="10" min="0"></div>
         <div class="field"><label>Eurodollar (eb)</label><input type="number" id="cm-eb" placeholder="700" min="0"></div>
       </div>
       <div class="inline-row">
-        <div class="field"><label>Flink?</label>
+        <div class="field">
+          <label>Flink?</label>
           <select id="cm-flink"><option value="1">Yes</option><option value="0">No</option></select>
         </div>
         <div class="field"><label>Player PIN (PCs only)</label><input type="text" id="cm-pin" placeholder="Optional" maxlength="8"></div>
+      </div>
+
+      <div class="section-heading">Stats — POWER Tree</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px" id="cm-power-grid">
+        <div class="field"><label>Strength</label><input type="number" id="cs-strength" min="0" max="25" placeholder="4" oninput="recalcDerived()"></div>
+        <div class="field"><label>Dexterity</label><input type="number" id="cs-dexterity" min="0" max="25" placeholder="9" oninput="recalcDerived()"></div>
+        <div class="field"><label>Grit</label><input type="number" id="cs-grit" min="0" max="25" placeholder="4" oninput="recalcDerived()"></div>
+        <div class="field"><label>Drive</label><input type="number" id="cs-drive" min="0" max="25" placeholder="4" oninput="recalcDerived()"></div>
+        <div class="field"><label>Core</label><input type="number" id="cs-core" min="0" max="25" placeholder="5" oninput="recalcDerived()"></div>
+      </div>
+
+      <div class="section-heading">Stats — MOBILITY Tree</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        <div class="field"><label>Speed</label><input type="number" id="cs-speed" min="0" max="25" placeholder="6" oninput="recalcDerived()"></div>
+        <div class="field"><label>Agility</label><input type="number" id="cs-agility" min="0" max="25" placeholder="5" oninput="recalcDerived()"></div>
+        <div class="field"><label>Reflexes</label><input type="number" id="cs-reflexes" min="0" max="25" placeholder="4" oninput="recalcDerived()"></div>
+        <div class="field"><label>Stealth</label><input type="number" id="cs-stealth" min="0" max="25" placeholder="4" oninput="recalcDerived()"></div>
+        <div class="field"><label>Senses</label><input type="number" id="cs-senses" min="0" max="25" placeholder="5" oninput="recalcDerived()"></div>
+      </div>
+
+      <div class="section-heading">Stats — MIND Tree</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        <div class="field"><label>Intelligence</label><input type="number" id="cs-intelligence" min="0" max="25" placeholder="12" oninput="recalcDerived()"></div>
+        <div class="field"><label>Focus</label><input type="number" id="cs-focus" min="0" max="25" placeholder="6" oninput="recalcDerived()"></div>
+        <div class="field"><label>Creativity</label><input type="number" id="cs-creativity" min="0" max="25" placeholder="4" oninput="recalcDerived()"></div>
+        <div class="field"><label>Will</label><input type="number" id="cs-will" min="0" max="25" placeholder="4" oninput="recalcDerived()"></div>
+        <div class="field"><label>Cool</label><input type="number" id="cs-cool" min="0" max="25" placeholder="7" oninput="recalcDerived()"></div>
+        <div class="field"><label>Rep</label><input type="number" id="cs-rep" min="0" max="25" placeholder="6" oninput="recalcDerived()"></div>
+      </div>
+
+      <div class="section-heading">Special Stats</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        <div class="field"><label>EMP</label><input type="number" id="cs-emp" min="0" max="25" placeholder="4" oninput="recalcDerived()"></div>
+        <div class="field"><label>Luck</label><input type="number" id="cs-luck" min="0" max="10" placeholder="0"></div>
+      </div>
+
+      <div class="section-heading">Origin Bonuses (from Ursprung)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        <div class="field"><label>HP Bonus</label><input type="number" id="cs-hp-bonus" min="0" placeholder="10" oninput="recalcDerived()"></div>
+        <div class="field"><label>Stamina Bonus</label><input type="number" id="cs-sta-bonus" min="0" placeholder="10" oninput="recalcDerived()"></div>
+        <div class="field"><label>IP Bonus</label><input type="number" id="cs-ip-bonus" min="0" placeholder="0" oninput="recalcDerived()"></div>
+      </div>
+
+      <div class="section-heading">Derived Values (auto-calculated)</div>
+      <div id="cm-derived" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:4px"></div>
+      <div style="font-size:9px;color:var(--text3);margin-bottom:4px">HP Max and Stamina Max are synced from stats. Override below only if needed (NPCs without full stats).</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        <div class="field"><label>HP Max (override)</label><input type="number" id="cm-hp" placeholder="auto" min="1"></div>
+        <div class="field"><label>Stamina Max (override)</label><input type="number" id="cm-sta" placeholder="auto" min="1"></div>
+        <div class="field"><label>Initiative (override)</label><input type="number" id="cm-init" placeholder="auto" min="0"></div>
       </div>
       <div class="section-heading">Armor</div>
       <div class="inline-row">
@@ -725,9 +1143,22 @@ async function doLogin() {
   const pin = document.getElementById('login-pin').value.trim();
   const err = document.getElementById('login-error');
   err.style.display = 'none';
+  // If db not initialized yet, try the URL field
+  if (!db) {
+    const urlInput = document.getElementById('login-db-url').value.trim();
+    if (!urlInput) {
+      document.getElementById('login-db-field').style.display = 'block';
+      showError(err, 'Enter the Database URL to connect for the first time.');
+      return;
+    }
+    if (!initFirebase(urlInput)) { showError(err, 'Invalid Database URL.'); return; }
+    localStorage.setItem('cp_db_url', urlInput);
+  }
   try {
     const data = await dbRead();
-    if (!data) { showError(err, 'No campaign data found.'); return; }
+    if (!data) { showError(err, 'No campaign data found. Check the Database URL.'); return; }
+    // Store campaign name
+    if (data.campaignName) { localStorage.setItem('cp_campaign', data.campaignName); document.getElementById('login-campaign-name').textContent = data.campaignName.toUpperCase(); }
     // Check GM
     if (data.gmPin && atob(data.gmPin) === pin) {
       session = { role: 'gm', charId: null, gmPin: pin };
@@ -772,6 +1203,9 @@ function showLogin() {
   const name = localStorage.getItem('cp_campaign');
   if (url && !db) initFirebase(url);
   if (name) document.getElementById('login-campaign-name').textContent = name.toUpperCase();
+  // Show DB URL field only if db still not initialized
+  const needsUrl = !db;
+  document.getElementById('login-db-field').style.display = needsUrl ? 'block' : 'none';
   document.getElementById('login-pin').value = '';
   document.getElementById('login-error').style.display = 'none';
   showScreen('screen-login');
@@ -795,24 +1229,21 @@ function logout() { session = { role: null, charId: null }; if (db) { db.ref(dbP
 // TABS
 // ═══════════════════════════════════════════════════════════════
 function switchTab(name) {
-  document.querySelectorAll('#screen-gm .tab').forEach((t, i) => {
-    const names = ['combat','characters','encounter','settings'];
-    t.classList.toggle('active', names[i] === name);
-  });
-  document.querySelectorAll('#screen-gm .tab-content').forEach(c => {
-    c.classList.toggle('active', c.id === 'tab-' + name);
-  });
+  const names = ['combat','characters','encounter','generator','settings'];
+  document.querySelectorAll('#screen-gm .tab').forEach((t, i) => t.classList.toggle('active', names[i] === name));
+  document.querySelectorAll('#screen-gm .tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + name));
   if (name === 'settings') renderSettings();
+  if (name === 'generator') {
+    const key = localStorage.getItem('cp_api_key');
+    document.getElementById('gen-no-key').style.display = key ? 'none' : 'block';
+    if (key) document.getElementById('settings-api-key').value = key;
+  }
 }
 
 function switchPlayerTab(name) {
-  document.querySelectorAll('#screen-player .tab').forEach((t, i) => {
-    const names = ['status','talents','gear','inventory','notes'];
-    t.classList.toggle('active', names[i] === name);
-  });
-  document.querySelectorAll('#screen-player .tab-content').forEach(c => {
-    c.classList.toggle('active', c.id === 'player-tab-' + name);
-  });
+  const names = ['status','stats','talents','gear','inventory','notes'];
+  document.querySelectorAll('#screen-player .tab').forEach((t, i) => t.classList.toggle('active', names[i] === name));
+  document.querySelectorAll('#screen-player .tab-content').forEach(c => c.classList.toggle('active', c.id === 'player-tab-' + name));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -840,7 +1271,7 @@ function renderPreCombat() {
   const chars = Object.entries(state.characters);
   if (!chars.length) { el.innerHTML = '<div style="color:var(--text3);font-size:11px">No characters yet. Add some in the Characters tab.</div>'; return; }
   el.innerHTML = chars.map(([id, c]) => `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid ${c.isNPC ? 'var(--red)' : 'var(--teal-bright)'}">
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid ${c.isNPC ? 'var(--red)' : 'var(--cyan)'}">
       <div style="flex:1;font-size:13px;font-weight:700">${esc(c.name)}</div>
       <div style="font-size:10px;color:var(--text2)">${c.isNPC ? 'NPC' : 'PC'}</div>
       <div style="font-size:11px;color:var(--green-bright)">${c.hp_current ?? c.hp_max}/${c.hp_max} HP</div>
@@ -958,7 +1389,7 @@ function renderCharList() {
   if (!chars.length) { el.innerHTML = '<div style="padding:16px;color:var(--text3);font-size:11px">No characters yet.</div>'; return; }
   el.innerHTML = chars.map(([id, c]) => `
     <div class="char-item" onclick="openCharModal('${id}')">
-      <div style="width:8px;height:8px;border-radius:50%;background:${c.isNPC ? 'var(--red-bright)' : 'var(--teal-bright)'}"></div>
+      <div style="width:8px;height:8px;border-radius:50%;background:${c.isNPC ? 'var(--red-bright)' : 'var(--cyan)'}"></div>
       <div style="flex:1">
         <div class="char-item-name">${esc(c.name)}</div>
         <div class="char-item-sub">${c.isNPC ? 'NPC' : 'PC'}${c.pin ? ' · PIN set' : ''} · INI ${c.initiative ?? 0}</div>
@@ -1049,7 +1480,7 @@ function renderPlayerView() {
       const ch = state.characters[cid]; if (!ch) return '';
       const isMe = cid === id;
       return `<div class="init-row ${i === current ? 'current' : ''}">
-        <div class="init-row-name" style="${isMe ? 'font-weight:700;color:var(--teal-bright)' : ''}">${i === current ? '▶ ' : ''}${esc(ch.name)}${isMe ? ' (you)' : ''}</div>
+        <div class="init-row-name" style="${isMe ? 'font-weight:700;color:var(--cyan)' : ''}">${i === current ? '▶ ' : ''}${esc(ch.name)}${isMe ? ' (you)' : ''}</div>
         ${!ch.isNPC || isMe ? `<div class="init-row-hp" style="color:${(ch.hp_current??ch.hp_max)/(ch.hp_max||1) > 0.5 ? 'var(--green-bright)' : 'var(--red-bright)'}">${ch.hp_current??ch.hp_max}hp</div>` : '<div class="init-row-hp" style="color:var(--text3)">???</div>'}
       </div>`;
     }).join('');
@@ -1085,10 +1516,38 @@ function renderPlayerView() {
   document.getElementById('player-inventory-list').innerHTML = inv.length ? inv.map(item => `
     <div style="display:flex;gap:8px;align-items:center;padding:7px 10px;background:var(--surface2);border:1px solid var(--border)">
       <div style="flex:1;font-size:11px">${esc(item.name)}</div>
-      ${item.qty > 1 ? `<div style="font-size:10px;color:var(--teal-bright)">×${item.qty}</div>` : ''}
+      ${item.qty > 1 ? `<div style="font-size:10px;color:var(--cyan)">×${item.qty}</div>` : ''}
       ${item.slots > 1 ? `<div style="font-size:9px;color:var(--text3)">${item.slots}sl</div>` : ''}
       ${item.note ? `<div style="font-size:9px;color:var(--text2)">${esc(item.note)}</div>` : ''}
     </div>`).join('') : '<div style="color:var(--text3);font-size:11px">Empty.</div>';
+  // ── Stats tab ─────────────────────────────────────────────────
+  const st = c.stats;
+  if (st) {
+    const hpB = c.origin_hp_bonus || 0, staB = c.origin_sta_bonus || 0, ipB = c.origin_ip_bonus || 0;
+    const d = calcDerived(st, hpB, staB, ipB);
+    document.getElementById('player-derived').innerHTML = d ? Object.entries(d).map(([k,v]) => `
+      <div style="background:var(--surface2);border:1px solid var(--border);padding:7px 10px">
+        <div style="font-size:9px;color:var(--text3);letter-spacing:0.1em;margin-bottom:2px">${k}</div>
+        <div style="font-size:12px;color:var(--cyan)">${v.split('=').pop().trim()}</div>
+      </div>`).join('') : '<div style="color:var(--text3);font-size:11px">No data</div>';
+    const statRow = (label, val) => `
+      <div style="background:var(--surface2);border:1px solid var(--border);padding:7px 10px;display:flex;align-items:center;gap:6px">
+        <div style="font-size:10px;color:var(--text2);flex:1;letter-spacing:0.06em">${label}</div>
+        <div style="font-size:16px;font-weight:700;color:var(--text)">${val}</div>
+      </div>`;
+    document.getElementById('player-stats-power').innerHTML = STAT_KEYS.power.map(k => statRow(k.charAt(0).toUpperCase()+k.slice(1), st[k]??'—')).join('');
+    document.getElementById('player-stats-mobility').innerHTML = STAT_KEYS.mobility.map(k => statRow(k.charAt(0).toUpperCase()+k.slice(1), st[k]??'—')).join('');
+    document.getElementById('player-stats-mind').innerHTML = STAT_KEYS.mind.map(k => statRow(k.charAt(0).toUpperCase()+k.slice(1), st[k]??'—')).join('');
+    document.getElementById('player-stats-special').innerHTML = [
+      statRow('EMP', st.emp??'—'),
+      statRow('Luck', st.luck??'—'),
+      statRow('Humanity', (st.emp||0)*10),
+    ].join('');
+  } else {
+    ['player-derived','player-stats-power','player-stats-mobility','player-stats-mind','player-stats-special'].forEach(id => {
+      document.getElementById(id).innerHTML = '<div style="color:var(--text3);font-size:11px">No stats set — ask your GM.</div>';
+    });
+  }
   // Notes (skip while the player is actively typing so remote updates don't clobber the cursor)
   const notesEl = document.getElementById('player-notes');
   if (notesEl && document.activeElement !== notesEl) notesEl.value = c.notes || '';
@@ -1295,6 +1754,64 @@ async function removeEffect(charId, idx) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// STATS & DERIVED VALUES
+// ═══════════════════════════════════════════════════════════════
+const STAT_KEYS = {
+  power:   ['strength','dexterity','grit','drive','core'],
+  mobility:['speed','agility','reflexes','stealth','senses'],
+  mind:    ['intelligence','focus','creativity','will','cool','rep'],
+  special: ['emp','luck']
+};
+
+function calcDerived(s, hpBonus=0, staBonus=0, ipBonus=0) {
+  if (!s) return null;
+  const g = v => parseInt(s[v]) || 0;
+  const mindSum = ['intelligence','focus','creativity','will','cool','rep'].reduce((a,k) => a + g(k), 0);
+  return {
+    'HP Max':     `${g('grit')}+${g('core')}+${hpBonus} = ${g('grit')+g('core')+hpBonus}`,
+    'Stamina Max':`${g('drive')}+${g('core')}+${staBonus} = ${g('drive')+g('core')+staBonus}`,
+    'Initiative': `${g('speed')}+${g('reflexes')} = ${g('speed')+g('reflexes')}`,
+    'RW':         `${g('speed')}+${g('reflexes')} = ${g('speed')+g('reflexes')}`,
+    'Humanity':   `${g('emp')}×10 = ${g('emp')*10}`,
+    'Capacity':   `${g('grit')}×5 = ${g('grit')*5}`,
+    'IP':         `floor(${mindSum}/5)×2+${ipBonus} = ${Math.floor(mindSum/5)*2+ipBonus}`,
+    'POWER Lv':   `${['strength','dexterity','grit','drive','core'].reduce((a,k)=>a+g(k),0)}/2 = ${Math.floor(['strength','dexterity','grit','drive','core'].reduce((a,k)=>a+g(k),0)/2)}`,
+    'MOBILITY Lv':`${['speed','agility','reflexes','stealth','senses'].reduce((a,k)=>a+g(k),0)}/2 = ${Math.floor(['speed','agility','reflexes','stealth','senses'].reduce((a,k)=>a+g(k),0)/2)}`,
+    'MIND Lv':    `${mindSum}/2 = ${Math.floor(mindSum/2)}`,
+  };
+}
+
+function getModalStats() {
+  const s = {};
+  [...STAT_KEYS.power, ...STAT_KEYS.mobility, ...STAT_KEYS.mind, ...STAT_KEYS.special].forEach(k => {
+    s[k] = parseInt(document.getElementById('cs-' + k)?.value) || 0;
+  });
+  return s;
+}
+
+function recalcDerived() {
+  const s = getModalStats();
+  const hpB = parseInt(document.getElementById('cs-hp-bonus').value) || 0;
+  const staB = parseInt(document.getElementById('cs-sta-bonus').value) || 0;
+  const ipB = parseInt(document.getElementById('cs-ip-bonus').value) || 0;
+  const d = calcDerived(s, hpB, staB, ipB);
+  if (!d) return;
+  document.getElementById('cm-derived').innerHTML = Object.entries(d).map(([k,v]) => `
+    <div style="background:var(--surface2);border:1px solid var(--border);padding:6px 8px">
+      <div style="font-size:9px;color:var(--text3);letter-spacing:0.1em">${k}</div>
+      <div style="font-size:11px;color:var(--cyan)">${v}</div>
+    </div>`).join('');
+  // Auto-fill override fields if empty
+  const g = k => s[k] || 0;
+  const hpCalc = g('grit') + g('core') + hpB;
+  const staCalc = g('drive') + g('core') + staB;
+  const initCalc = g('speed') + g('reflexes');
+  if (!document.getElementById('cm-hp').value) document.getElementById('cm-hp').placeholder = hpCalc || 'auto';
+  if (!document.getElementById('cm-sta').value) document.getElementById('cm-sta').placeholder = staCalc || 'auto';
+  if (!document.getElementById('cm-init').value) document.getElementById('cm-init').placeholder = initCalc || 'auto';
+}
+
+// ═══════════════════════════════════════════════════════════════
 // CHARACTER MODAL
 // ═══════════════════════════════════════════════════════════════
 function openCharModal(id) {
@@ -1305,9 +1822,9 @@ function openCharModal(id) {
   const c = id ? (state.characters[id] || {}) : {};
   document.getElementById('cm-name').value = c.name || '';
   document.getElementById('cm-type').value = c.isNPC ? 'npc' : 'pc';
-  document.getElementById('cm-hp').value = c.hp_max || '';
-  document.getElementById('cm-sta').value = c.stamina_max || '';
-  document.getElementById('cm-init').value = c.initiative ?? '';
+  document.getElementById('cm-hp').value = '';
+  document.getElementById('cm-sta').value = '';
+  document.getElementById('cm-init').value = '';
   document.getElementById('cm-eb').value = c.eurodollar ?? '';
   document.getElementById('cm-flink').value = c.has_flink ? '1' : '0';
   document.getElementById('cm-pin').value = c.pin || '';
@@ -1315,6 +1832,21 @@ function openCharModal(id) {
   document.getElementById('cm-armor-body-sp').value = c.armor_body?.sp_base || '';
   document.getElementById('cm-armor-head-name').value = c.armor_head?.name || '';
   document.getElementById('cm-armor-head-sp').value = c.armor_head?.sp_base || '';
+  document.getElementById('cm-cyberware').value = (c.cyberware || []).join('\n');
+  // Load stats
+  const st = c.stats || {};
+  [...STAT_KEYS.power, ...STAT_KEYS.mobility, ...STAT_KEYS.mind, ...STAT_KEYS.special].forEach(k => {
+    const el = document.getElementById('cs-' + k);
+    if (el) el.value = st[k] !== undefined ? st[k] : '';
+  });
+  document.getElementById('cs-hp-bonus').value = c.origin_hp_bonus ?? '';
+  document.getElementById('cs-sta-bonus').value = c.origin_sta_bonus ?? '';
+  document.getElementById('cs-ip-bonus').value = c.origin_ip_bonus ?? '';
+  // Show overrides if manually set
+  if (c.hp_override) document.getElementById('cm-hp').value = c.hp_max;
+  if (c.sta_override) document.getElementById('cm-sta').value = c.stamina_max;
+  if (c.init_override) document.getElementById('cm-init').value = c.initiative;
+  recalcDerived();
   document.getElementById('cm-cyberware').value = (c.cyberware || []).join('\n');
   document.getElementById('cm-notes').value = c.notes || '';
   // Weapons
@@ -1388,20 +1920,41 @@ async function saveCharacter() {
   const name = document.getElementById('cm-name').value.trim();
   if (!name) { showToast('Name required!'); return; }
   const isNPC = document.getElementById('cm-type').value === 'npc';
-  const hpMax = parseInt(document.getElementById('cm-hp').value) || 10;
-  const staMax = parseInt(document.getElementById('cm-sta').value) || 10;
+  const existing = editingCharId ? (state.characters[editingCharId] || {}) : {};
+  // Collect stats
+  const stats = {};
+  [...STAT_KEYS.power, ...STAT_KEYS.mobility, ...STAT_KEYS.mind, ...STAT_KEYS.special].forEach(k => {
+    const val = parseInt(document.getElementById('cs-' + k)?.value);
+    if (!isNaN(val)) stats[k] = val;
+  });
+  const hpBonus = parseInt(document.getElementById('cs-hp-bonus').value) || 0;
+  const staBonus = parseInt(document.getElementById('cs-sta-bonus').value) || 0;
+  const ipBonus = parseInt(document.getElementById('cs-ip-bonus').value) || 0;
+  const hasStats = Object.keys(stats).length > 0;
+  // Derive or override HP/Stamina/Initiative
+  const hpOverrideVal = parseInt(document.getElementById('cm-hp').value);
+  const staOverrideVal = parseInt(document.getElementById('cm-sta').value);
+  const initOverrideVal = parseInt(document.getElementById('cm-init').value);
+  const hpMax = !isNaN(hpOverrideVal) ? hpOverrideVal
+    : hasStats ? (stats.grit||0) + (stats.core||0) + hpBonus : 10;
+  const staMax = !isNaN(staOverrideVal) ? staOverrideVal
+    : hasStats ? (stats.drive||0) + (stats.core||0) + staBonus : 10;
+  const initiative = !isNaN(initOverrideVal) ? initOverrideVal
+    : hasStats ? (stats.speed||0) + (stats.reflexes||0) : 0;
   const bodyName = document.getElementById('cm-armor-body-name').value.trim();
   const bodySP = parseInt(document.getElementById('cm-armor-body-sp').value) || 0;
   const headName = document.getElementById('cm-armor-head-name').value.trim();
   const headSP = parseInt(document.getElementById('cm-armor-head-sp').value) || 0;
-  const existing = editingCharId ? (state.characters[editingCharId] || {}) : {};
   const char = {
     name, isNPC,
+    stats: hasStats ? stats : (existing.stats || null),
+    origin_hp_bonus: hpBonus, origin_sta_bonus: staBonus, origin_ip_bonus: ipBonus,
+    hp_override: !isNaN(hpOverrideVal), sta_override: !isNaN(staOverrideVal), init_override: !isNaN(initOverrideVal),
     hp_max: hpMax,
     hp_current: existing.hp_current ?? hpMax,
     stamina_max: staMax,
     stamina_current: existing.stamina_current ?? staMax,
-    initiative: parseInt(document.getElementById('cm-init').value) || 0,
+    initiative,
     eurodollar: parseInt(document.getElementById('cm-eb').value) || 0,
     has_flink: document.getElementById('cm-flink').value === '1',
     flink_used: existing.flink_used ?? false,
@@ -1591,10 +2144,249 @@ function showToast(msg, dur=2200) {
   setTimeout(() => el.classList.remove('show'), dur);
 }
 
+function copyPlayerLink() {
+  const url = localStorage.getItem('cp_db_url');
+  if (!url) { showToast('No database URL found.'); return; }
+  const link = window.location.origin + window.location.pathname + '#db=' + encodeURIComponent(url);
+  navigator.clipboard.writeText(link).then(() => showToast('Player link copied!')).catch(() => {
+    prompt('Copy this link and send to players:', link);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SETTINGS — API KEY
+// ═══════════════════════════════════════════════════════════════
+function saveApiKey() {
+  const key = document.getElementById('settings-api-key').value.trim();
+  if (!key) { showToast('No key entered.'); return; }
+  localStorage.setItem('cp_api_key', key);
+  showToast('API key saved.');
+  document.getElementById('gen-no-key').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GENERATOR
+// ═══════════════════════════════════════════════════════════════
+const GEN_SYSTEM = `You are a Cyberpunk Phantom GM tool that generates enemy stat blocks for the tabletop RPG "Cyberpunk Phantom" — NOT Cyberpunk Red. The rules are different.
+
+CYBERPUNK PHANTOM RULES — WEAPONS (v1.1):
+Medium Pistol: +3 | Heavy Pistol: +5 | Very Heavy Pistol: +8 | SMG: +3 Autofire | Heavy SMG: +5 Autofire | Assault Rifle: +11 Autofire | Sniper Rifle: +14 single-shot | Shotgun: +8 | Knife: +1 | Big Knucks: +3 | Mantis Blades (Cyber): +5 | Rippers (Cyber): +3 | Heavy Melee: +5
+
+ARMOR SP: Leathers 4 | Kevlar Vest 7 | Light Armorjack 11 | Medium Armorjack 13 | Heavy Armorjack 15 | MetalGear 18 | Subdermal (Cyber stacks): +4
+
+DAMAGE: Roll result + Weapon Bonus - Target SP = Damage. Minimum 1 damage always.
+ARMOR ABLATION: Every hit reduces Temporary SP by 1. Resets after combat.
+
+PC BASELINE (Lena +30%): HP ~25 | Combat PW ~17 | Initiative ~13 | Armor SP 11-13
+TIERS: GRUNT: HP 8-14, PW 8-12, SP 4-11, no Flink | THREAT: HP 18-26, PW 14-18, SP 11-15, Flink sometimes | BOSS: HP 32-55+, PW 20-28, SP 15-18 stacked, always Flink
+
+SINGLE ENEMY JSON (respond ONLY with this, no backticks, no extra text):
+{"name":"string","tier":"GRUNT|THREAT|BOSS","flavor":"2-3 sentences noir","stats":{"HP":number,"Stamina":number,"Initiative":number,"ReactionValue":number},"combat":{"primaryPW":number,"primaryPWLabel":"Dex+Ref","secondaryPW":null,"secondaryPWLabel":null},"armor":{"name":"string","SP_body":number,"SP_head":null,"note":null},"weapons":[{"name":"string","bonus":number,"pwLabel":"string","tags":["Autofire"]}],"cyberware":["string"],"firewall":null,"flink":false,"tactics":"string","loot":["string"],"gmNote":null}
+
+ENCOUNTER JSON (respond ONLY with this when asked for encounter, no backticks):
+{"encounterTitle":"string","encounterSummary":"string","partySize":number,"difficulty":"EASY|BALANCED|BRUTAL","enemies":[...same format as single enemy...],"encounterTactics":"string","gmNote":null}
+
+LOOT: Always include 3-6 items. Note if weapons/armor are recoverable. Include credchips, ammo, cyberware (needs Chirurgie roll to harvest), narrative items.
+LARGE ENCOUNTERS (5+ enemies): Keep flavor/tactics/gmNote short (1-2 sentences). JSON must be complete and valid.`;
+
+let genMode = 'single';
+let genTier = 'THREAT';
+let genPS = 3;
+
+function setGenMode(mode) {
+  genMode = mode;
+  document.getElementById('gen-mode-single').style.background = mode === 'single' ? 'var(--surface2)' : 'transparent';
+  document.getElementById('gen-mode-single').style.color = mode === 'single' ? 'var(--cyan)' : 'var(--text3)';
+  document.getElementById('gen-mode-encounter').style.background = mode === 'encounter' ? 'var(--surface2)' : 'transparent';
+  document.getElementById('gen-mode-encounter').style.color = mode === 'encounter' ? 'var(--cyan)' : 'var(--text3)';
+  document.getElementById('gen-single-controls').style.display = mode === 'single' ? 'block' : 'none';
+  document.getElementById('gen-encounter-controls').style.display = mode === 'encounter' ? 'block' : 'none';
+}
+
+function setGenTier(tier) {
+  genTier = tier;
+  const colors = { GRUNT: ['#333','#aaa'], THREAT: ['var(--cyan-dim)','var(--cyan)'], BOSS: ['#3a0000','#ff6666'] };
+  const borders = { GRUNT: 'var(--border2)', THREAT: 'var(--cyan)', BOSS: 'var(--red-bright)' };
+  ['GRUNT','THREAT','BOSS'].forEach(t => {
+    const btn = document.getElementById('gtier-' + t);
+    const active = t === tier;
+    btn.style.background = active ? colors[t][0] : 'transparent';
+    btn.style.color = active ? colors[t][1] : 'var(--text3)';
+    btn.style.borderColor = active ? borders[t] : 'var(--border2)';
+  });
+}
+
+function setGenPS(n) {
+  genPS = n;
+  [2,3,4,5].forEach(x => {
+    const btn = document.getElementById('gps-' + x);
+    btn.style.background = x === n ? 'var(--surface2)' : 'transparent';
+    btn.style.color = x === n ? 'var(--text)' : 'var(--text3)';
+  });
+}
+
+async function runGenerator() {
+  const key = localStorage.getItem('cp_api_key');
+  if (!key) { showToast('Set API key in Settings first!'); switchTab('settings'); return; }
+  const prompt = document.getElementById('gen-prompt').value.trim();
+  if (!prompt) return;
+  const loadEl = document.getElementById('gen-loading');
+  const errEl = document.getElementById('gen-error');
+  const btn = document.getElementById('gen-btn');
+  errEl.style.display = 'none';
+  loadEl.style.display = 'block';
+  btn.textContent = '...'; btn.disabled = true;
+  const userMsg = genMode === 'single'
+    ? `Generate a Cyberpunk Phantom enemy stat block.\nTier: ${genTier}\nDescription: ${prompt}\nReturn only the JSON object. No preamble, no backticks.`
+    : `Generate a Cyberpunk Phantom encounter for ${genPS} PCs.\nContext: ${prompt}\nUse the ENCOUNTER JSON format. Return only the JSON object. No preamble, no backticks.`;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: genMode === 'encounter' ? 8000 : 1200, system: GEN_SYSTEM, messages: [{ role: 'user', content: userMsg }] })
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || res.statusText); }
+    const data = await res.json();
+    const raw = data.content.map(b => b.text || '').join('');
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+    document.getElementById('gen-prompt').value = '';
+    const container = document.getElementById('gen-results');
+    const div = document.createElement('div');
+    div.innerHTML = parsed.enemies ? renderEncounterResult(parsed) : renderEnemyResult(parsed);
+    container.insertBefore(div, container.firstChild);
+  } catch(e) {
+    errEl.textContent = 'Error: ' + e.message;
+    errEl.style.display = 'block';
+  } finally {
+    loadEl.style.display = 'none';
+    btn.textContent = 'GEN'; btn.disabled = false;
+  }
+}
+
+function tierColor(tier) {
+  return { GRUNT: '#555', THREAT: '#c8a200', BOSS: '#c82020' }[tier] || '#555';
+}
+
+function renderEnemyResult(e) {
+  const tc = tierColor(e.tier);
+  const wpns = (e.weapons || []).map(w => `<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px"><span style="flex:1;font-size:11px">${esc(w.name)}</span><span style="color:${tc};font-weight:700">+${w.bonus}</span><span style="font-size:9px;color:var(--text3)">${esc(w.pwLabel||'')}</span>${(w.tags||[]).map(t=>`<span style="font-size:9px;background:var(--surface);border:1px solid var(--border2);padding:1px 5px">${esc(t)}</span>`).join('')}</div>`).join('');
+  const cyber = (e.cyberware||[]).map(c=>`<div style="color:#7aafc8;font-size:11px;margin-bottom:2px">⬡ ${esc(c)}</div>`).join('');
+  const loot = (e.loot||[]).map(l=>`<div style="color:#9aaa7a;font-size:11px;margin-bottom:2px">◈ ${esc(l)}</div>`).join('');
+  const pw2 = e.combat?.secondaryPW ? `<div style="background:rgba(255,255,255,0.04);padding:5px 11px;border:1px solid rgba(255,255,255,0.05)"><span style="color:var(--text3);font-size:9px">${esc(e.combat.secondaryPWLabel)} </span><span style="font-size:14px;font-weight:700">${e.combat.secondaryPW}</span></div>` : '';
+  return `<div style="background:var(--surface);border:1px solid ${tc};overflow:hidden">
+    <div style="background:${tc}22;border-bottom:1px solid ${tc};padding:12px 14px;display:flex;justify-content:space-between;align-items:flex-start">
+      <div><div style="font-size:8px;letter-spacing:0.25em;color:${tc};margin-bottom:3px">${esc(e.tier)}</div><div style="font-size:17px;font-weight:700">${esc(e.name)}</div></div>
+      <div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap">
+        ${e.flink ? '<span style="background:#e05800;color:#000;font-size:8px;padding:2px 7px;letter-spacing:0.1em;font-weight:700">FLINK</span>' : ''}
+        <button onclick="addGenToEncounter(${JSON.stringify(e).replace(/"/g,'&quot;')})" style="background:var(--cyan-dim);border:1px solid var(--cyan);color:var(--cyan);font-size:9px;padding:4px 10px;cursor:pointer;font-family:var(--font);letter-spacing:0.1em">+ ENCOUNTER</button>
+      </div>
+    </div>
+    <div style="padding:14px">
+      <p style="color:#666;font-size:11px;line-height:1.65;margin-bottom:12px;border-left:2px solid ${tc};padding-left:10px;font-style:italic">${esc(e.flavor)}</p>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px">
+        ${['HP','Stamina','Initiative','ReactionValue'].map(k=>`<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);padding:8px 12px;text-align:center;min-width:60px"><div style="font-size:9px;color:#484848;letter-spacing:0.12em;margin-bottom:2px">${k==='ReactionValue'?'RW':k.toUpperCase()}</div><div style="font-size:18px;font-weight:700">${e.stats?.[k]??'—'}</div></div>`).join('')}
+        ${e.firewall ? `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);padding:8px 12px;text-align:center;min-width:60px"><div style="font-size:9px;color:#484848;letter-spacing:0.12em;margin-bottom:2px">FW</div><div style="font-size:18px;font-weight:700">${e.firewall}</div></div>` : ''}
+      </div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px">
+        <div style="background:rgba(255,255,255,0.04);padding:5px 11px;border:1px solid rgba(255,255,255,0.05)"><span style="color:var(--text3);font-size:9px">${esc(e.combat?.primaryPWLabel||'')} </span><span style="font-size:14px;font-weight:700">${e.combat?.primaryPW??'—'}</span></div>
+        ${pw2}
+      </div>
+      <div style="margin-bottom:10px"><div style="font-size:9px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">ARMOR</div>
+        <div style="font-size:12px">${esc(e.armor?.name||'—')} <span style="color:var(--text2);font-size:10px">SP ${e.armor?.SP_body??0}${e.armor?.SP_head?' / '+e.armor.SP_head+' head':''}</span>${e.armor?.note?` <span style="color:var(--text3);font-size:10px">${esc(e.armor.note)}</span>`:''}</div>
+      </div>
+      ${wpns ? `<div style="margin-bottom:10px"><div style="font-size:9px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">WEAPONS</div>${wpns}</div>` : ''}
+      ${cyber ? `<div style="margin-bottom:10px"><div style="font-size:9px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">CYBERWARE</div>${cyber}</div>` : ''}
+      <div style="margin-bottom:10px"><div style="font-size:9px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">TACTICS</div><p style="font-size:11px;color:#777;line-height:1.65">${esc(e.tactics||'')}</p></div>
+      ${loot ? `<div style="margin-bottom:10px"><div style="font-size:9px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">LOOT</div>${loot}</div>` : ''}
+      ${e.gmNote ? `<div style="background:rgba(255,140,0,0.05);border:1px solid rgba(255,140,0,0.18);padding:7px 11px"><span style="color:#dd8800;font-size:9px">GM // </span><span style="color:#aa7700;font-size:11px">${esc(e.gmNote)}</span></div>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderEncounterResult(enc) {
+  const dc = { EASY: '#4a8a4a', BALANCED: '#c8a200', BRUTAL: '#c82020' }[enc.difficulty] || '#888';
+  const enemyCards = (enc.enemies || []).map(e => renderEnemyResult(e)).join('');
+  return `<div>
+    <div style="background:var(--surface);border:1px solid var(--border2);padding:14px 16px;margin-bottom:0">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+        <div><div style="font-size:8px;color:var(--text3);letter-spacing:0.25em;margin-bottom:3px">ENCOUNTER · ${enc.partySize} PCS</div><div style="font-size:17px;font-weight:700">${esc(enc.encounterTitle||'')}</div></div>
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          <div style="background:${dc}18;border:1px solid ${dc}55;color:${dc};font-size:9px;padding:3px 10px;letter-spacing:0.15em">${enc.difficulty}</div>
+          <button onclick="addEncounterToQueue(${JSON.stringify(enc).replace(/"/g,'&quot;')})" style="background:var(--cyan-dim);border:1px solid var(--cyan);color:var(--cyan);font-size:9px;padding:4px 10px;cursor:pointer;font-family:var(--font);letter-spacing:0.1em">+ ALL TO ENCOUNTER</button>
+        </div>
+      </div>
+      <p style="font-size:11px;color:#666;line-height:1.65;margin-bottom:10px;border-left:2px solid var(--border2);padding-left:10px">${esc(enc.encounterSummary||'')}</p>
+      <div style="font-size:9px;color:var(--text3);letter-spacing:0.15em;margin-bottom:5px">GROUP TACTICS</div>
+      <p style="font-size:11px;color:#555;line-height:1.65;margin-bottom:${enc.gmNote?'10px':'0'}">${esc(enc.encounterTactics||'')}</p>
+      ${enc.gmNote ? `<div style="margin-top:10px;background:rgba(255,140,0,0.04);border:1px solid rgba(255,140,0,0.14);padding:7px 11px"><span style="color:#dd8800;font-size:9px">GM // </span><span style="color:#886600;font-size:11px">${esc(enc.gmNote)}</span></div>` : ''}
+    </div>
+    <div style="display:flex;flex-direction:column;gap:0">${enemyCards}</div>
+  </div>`;
+}
+
+async function addGenToEncounter(enemy) {
+  const hp = enemy.stats?.HP || 15;
+  const sta = enemy.stats?.Stamina || 10;
+  const init = enemy.stats?.Initiative || 8;
+  const armorSP = enemy.armor?.SP_body || 0;
+  const weapons = (enemy.weapons || []).map(w => ({ name: w.name, bonus: w.bonus, pw: w.pwLabel, tags: (w.tags||[]).join(', ') }));
+  const npc = {
+    name: enemy.name, isNPC: true,
+    hp_max: hp, hp_current: hp,
+    stamina_max: sta, stamina_current: sta,
+    initiative: init,
+    has_flink: !!enemy.flink, flink_used: false,
+    tier: enemy.tier || 'THREAT',
+    armor_body: enemy.armor?.name ? { name: enemy.armor.name, sp_base: armorSP, sp_temp: armorSP } : null,
+    armor_head: enemy.armor?.SP_head ? { name: enemy.armor.name + ' (head)', sp_base: enemy.armor.SP_head, sp_temp: enemy.armor.SP_head } : null,
+    weapons, loot: enemy.loot || [],
+    cyberware: enemy.cyberware || [],
+    firewall: enemy.firewall || null,
+    status_effects: [], talents: [], inventory: [], eurodollar: 0
+  };
+  const queue = [...(state.encounterQueue || []), npc];
+  await dbWrite('encounterQueue', queue);
+  showToast(enemy.name + ' added to encounter queue!');
+}
+
+async function addEncounterToQueue(enc) {
+  const queue = [...(state.encounterQueue || [])];
+  for (const e of (enc.enemies || [])) {
+    const hp = e.stats?.HP || 15;
+    const sta = e.stats?.Stamina || 10;
+    const armorSP = e.armor?.SP_body || 0;
+    queue.push({
+      name: e.name, isNPC: true,
+      hp_max: hp, hp_current: hp,
+      stamina_max: sta, stamina_current: sta,
+      initiative: e.stats?.Initiative || 8,
+      has_flink: !!e.flink, flink_used: false,
+      tier: e.tier || 'THREAT',
+      armor_body: e.armor?.name ? { name: e.armor.name, sp_base: armorSP, sp_temp: armorSP } : null,
+      weapons: (e.weapons||[]).map(w=>({name:w.name,bonus:w.bonus,pw:w.pwLabel,tags:(w.tags||[]).join(', ')})),
+      loot: e.loot||[], cyberware: e.cyberware||[], firewall: e.firewall||null,
+      status_effects: [], talents: [], inventory: [], eurodollar: 0
+    });
+  }
+  await dbWrite('encounterQueue', queue);
+  showToast((enc.enemies||[]).length + ' enemies added to encounter!');
+}
+
 // ═══════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════
 window.addEventListener('load', () => {
+  // Support sharing via URL hash: tracker.html#db=https://...firebaseio.com
+  const hash = window.location.hash;
+  if (hash.startsWith('#db=')) {
+    const urlFromHash = decodeURIComponent(hash.slice(4));
+    if (urlFromHash) {
+      localStorage.setItem('cp_db_url', urlFromHash);
+      // Clean up the URL so the hash doesn't show
+      history.replaceState(null, '', window.location.pathname);
+    }
+  }
   const url = localStorage.getItem('cp_db_url');
   if (url) { initFirebase(url); showLogin(); }
   else showScreen('screen-setup');
