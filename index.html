@@ -1043,6 +1043,7 @@ let db = null;
 let session = { role: null, charId: null, gmPin: null };
 let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [] };
 let editingCharId = null;
+let loadedCharNotes = '';
 let dmgTargetId = null;
 let statusTargetId = null;
 let pollTimer = null;
@@ -2062,7 +2063,8 @@ function openCharModal(id) {
   if (c.ip_override) document.getElementById('cm-ip').value = c.ip_max;
   recalcDerived();
   document.getElementById('cm-cyberware').value = (c.cyberware || []).join('\n');
-  document.getElementById('cm-notes').value = c.notes || '';
+  loadedCharNotes = c.notes || '';
+  document.getElementById('cm-notes').value = loadedCharNotes;
   // Weapons
   renderWeaponRows(c.weapons || []);
   // Talents
@@ -2203,7 +2205,12 @@ async function saveCharacter() {
     talents: talentData.filter(t => t.name),
     inventory: inventoryData.filter(i => i.name),
     status_effects: existing.status_effects || [],
-    notes: document.getElementById('cm-notes').value,
+    // If the GM didn't touch the notes field, keep whatever's freshest in
+    // local state (a player may have typed a note while this modal was
+    // open) rather than the stale value the textarea loaded at open-time.
+    notes: document.getElementById('cm-notes').value !== loadedCharNotes
+      ? document.getElementById('cm-notes').value
+      : (existing.notes ?? ''),
   };
   const id = editingCharId || ('char_' + Date.now());
   await dbWrite('characters/' + id, char);
