@@ -242,6 +242,24 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .init-chip.ally { border-color: var(--green-bright); color: var(--green-bright); }
 .init-chip.dead { opacity: 0.25; text-decoration: line-through; }
 .combatants { padding: 8px 12px; display: flex; flex-direction: column; gap: 5px; }
+/* ── COMBAT MAP ── */
+.map-token {
+  position: absolute;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: 3px solid;
+  transform: translate(-50%, -50%);
+  background-size: cover;
+  background-position: center;
+  background-color: var(--surface2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff;
+  cursor: grab;
+  touch-action: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+  user-select: none;
+}
+.map-token:active { cursor: grabbing; }
 /* ── COMBATANT CARD ── */
 .combatant-card {
   background: var(--surface);
@@ -581,7 +599,12 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         </div>
       </div>
       <div class="initiative-strip" id="initiative-strip"></div>
+      <div style="display:flex;gap:0;border-bottom:1px solid var(--border2)">
+        <button id="combat-view-list-btn" style="flex:1;background:var(--surface2);color:var(--cyan);border:none;padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setCombatView('list')">LIST</button>
+        <button id="combat-view-map-btn" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setCombatView('map')">MAP</button>
+      </div>
       <div class="combatants" id="combatants-list"></div>
+      <div id="combat-map-view" style="display:none;padding:12px 16px"></div>
     </div>
   </div>
 
@@ -827,6 +850,14 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <button class="modal-close" onclick="closeModal('char-modal')">✕</button>
     </div>
     <div class="modal-body">
+      <div class="inline-row" id="cm-portrait-row" style="display:none;align-items:center;gap:10px">
+        <div id="cm-portrait-preview" style="width:56px;height:56px;border-radius:50%;background-size:cover;background-position:center;background-color:var(--surface2);border:2px solid var(--border2);flex-shrink:0"></div>
+        <div style="flex:1;display:flex;gap:6px;flex-wrap:wrap">
+          <input type="file" accept="image/*" id="cm-portrait-file" style="display:none" onchange="handlePortraitUpload(event)">
+          <button class="btn btn-ghost btn-small" onclick="document.getElementById('cm-portrait-file').click()">UPLOAD PORTRAIT</button>
+          <button class="btn btn-danger btn-small" onclick="removePortrait()">REMOVE</button>
+        </div>
+      </div>
       <div class="inline-row">
         <div class="field"><label>Name</label><input type="text" id="cm-name" placeholder="Character name"></div>
         <div class="field" style="max-width:80px"><label>Type</label>
@@ -1046,7 +1077,11 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 // ═══════════════════════════════════════════════════════════════
 let db = null;
 let session = { role: null, charId: null, gmPin: null };
-let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [] };
+let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} } };
+let combatViewMode = 'list';
+let mapImage = null;       // fetched from a Firebase path OUTSIDE 'campaign' — kept separate from `state`
+let portraits = {};        // { charId: dataUrl }, each fetched from its own sibling path, outside 'campaign'
+const portraitListeners = new Set();
 let editingCharId = null;
 let loadedCharNotes = '';
 let dmgTargetId = null;
@@ -1141,7 +1176,28 @@ function startSync() {
     state.combat = data.combat || { active: false, round: 1, currentTurn: 0, order: [] };
     state.campaignName = data.campaignName || 'Campaign';
     state.encounterQueue = data.encounterQueue || [];
+    state.map = data.map || { tokens: {} };
     renderAll();
+  });
+  // Map image and portraits live OUTSIDE the 'campaign' tree on purpose — see
+  // the comment above the `mapImage`/`portraits` declarations. This keeps
+  // large image blobs from being re-sent on every unrelated combat update.
+  if (session.role === 'gm') {
+    db.ref('mapImage').on('value', snap => {
+      mapImage = snap.exists() ? snap.val() : null;
+      if (combatViewMode === 'map') renderMapView();
+    });
+  }
+}
+
+function ensurePortraitListener(id) {
+  if (!db || portraitListeners.has(id)) return;
+  portraitListeners.add(id);
+  db.ref('portraits/' + id).on('value', snap => {
+    portraits[id] = snap.exists() ? snap.val() : null;
+    renderCharList();
+    if (combatViewMode === 'map') renderMapView();
+    if (editingCharId === id) updatePortraitPreview(id);
   });
 }
 
@@ -1327,6 +1383,195 @@ function renderCombat() {
   }).join('');
   // Combatant cards
   document.getElementById('combatants-list').innerHTML = order.map((id, i) => renderCombatantCard(id, i === current)).join('');
+  if (combatViewMode === 'map') renderMapView();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COMBAT MAP
+// ═══════════════════════════════════════════════════════════════
+function setCombatView(mode) {
+  combatViewMode = mode;
+  document.getElementById('combatants-list').style.display = mode === 'list' ? 'flex' : 'none';
+  document.getElementById('combat-map-view').style.display = mode === 'map' ? 'block' : 'none';
+  const listBtn = document.getElementById('combat-view-list-btn');
+  const mapBtn = document.getElementById('combat-view-map-btn');
+  listBtn.style.background = mode === 'list' ? 'var(--surface2)' : 'transparent';
+  listBtn.style.color = mode === 'list' ? 'var(--cyan)' : 'var(--text3)';
+  mapBtn.style.background = mode === 'map' ? 'var(--surface2)' : 'transparent';
+  mapBtn.style.color = mode === 'map' ? 'var(--cyan)' : 'var(--text3)';
+  if (mode === 'map') renderMapView();
+}
+
+function renderMapView() {
+  const el = document.getElementById('combat-map-view');
+  if (!el) return;
+  if (!mapImage) {
+    el.innerHTML = `
+      <div style="text-align:center;padding:30px 16px;color:var(--text3);font-size:11px">
+        No map uploaded yet.<br><br>
+        <input type="file" accept="image/*" id="map-upload-input" style="display:none" onchange="handleMapUpload(event)">
+        <button class="btn btn-primary btn-small" onclick="document.getElementById('map-upload-input').click()">UPLOAD MAP</button>
+      </div>`;
+    return;
+  }
+  const order = state.combat?.order || [];
+  const tokensHtml = order.map(id => {
+    const c = state.characters[id]; if (!c) return '';
+    ensurePortraitListener(id);
+    const portrait = portraits[id];
+    const color = c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)');
+    const pos = state.map?.tokens?.[id] || { x: 50, y: 50 };
+    const bg = portrait ? `background-image:url('${portrait}');` : '';
+    const initials = esc(c.name.slice(0, 2).toUpperCase());
+    return `<div class="map-token" data-id="${id}" title="${esc(c.name)}"
+      style="left:${pos.x}%;top:${pos.y}%;border-color:${color};${bg}"
+      onpointerdown="startTokenDrag(event,'${id}')">${portrait ? '' : initials}</div>`;
+  }).join('');
+  el.innerHTML = `
+    <div id="map-container" style="position:relative;width:100%;overflow:hidden;border:1px solid var(--border2);background:#000">
+      <img src="${mapImage}" style="display:block;width:100%;height:auto;user-select:none;pointer-events:none" draggable="false">
+      ${tokensHtml}
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <input type="file" accept="image/*" id="map-upload-input" style="display:none" onchange="handleMapUpload(event)">
+      <button class="btn btn-ghost btn-small" onclick="document.getElementById('map-upload-input').click()">CHANGE MAP</button>
+      <button class="btn btn-danger btn-small" onclick="removeMap()">REMOVE MAP</button>
+    </div>`;
+}
+
+let mapDragState = null;
+function startTokenDrag(e, id) {
+  e.preventDefault();
+  const mapEl = document.getElementById('map-container');
+  if (!mapEl) return;
+  mapDragState = { id, mapEl, x: undefined, y: undefined };
+  document.addEventListener('pointermove', onTokenDragMove);
+  document.addEventListener('pointerup', onTokenDragEnd);
+}
+function onTokenDragMove(e) {
+  if (!mapDragState) return;
+  const rect = mapDragState.mapEl.getBoundingClientRect();
+  const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+  const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+  mapDragState.x = x; mapDragState.y = y;
+  const tokenEl = mapDragState.mapEl.querySelector(`.map-token[data-id="${mapDragState.id}"]`);
+  if (tokenEl) { tokenEl.style.left = x + '%'; tokenEl.style.top = y + '%'; }
+}
+async function onTokenDragEnd() {
+  document.removeEventListener('pointermove', onTokenDragMove);
+  document.removeEventListener('pointerup', onTokenDragEnd);
+  if (mapDragState && mapDragState.x !== undefined) {
+    const { id, x, y } = mapDragState;
+    await dbWrite('map/tokens/' + id, { x, y });
+  }
+  mapDragState = null;
+}
+
+async function handleMapUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  showToast('Compressing & uploading map...');
+  try {
+    const dataUrl = await compressImageFit(file, 1600, 0.8);
+    await db.ref('mapImage').set(dataUrl);
+    mapImage = dataUrl;
+    renderMapView();
+    showToast('Map updated!');
+  } catch (e) {
+    showToast('Could not process that image.');
+  }
+}
+
+async function removeMap() {
+  if (!confirm('Remove the map image?')) return;
+  await db.ref('mapImage').set(null);
+  mapImage = null;
+  renderMapView();
+  showToast('Map removed.');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// IMAGE COMPRESSION (client-side, no external tools needed)
+// ═══════════════════════════════════════════════════════════════
+function compressImageFit(file, maxDim, quality) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) { height = Math.round(height * maxDim / width); width = maxDim; }
+          else { width = Math.round(width * maxDim / height); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('Invalid image'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function compressImageSquare(file, size, quality) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side) / 2;
+        const sy = (img.height - side) / 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        canvas.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('Invalid image'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CHARACTER PORTRAITS
+// ═══════════════════════════════════════════════════════════════
+function updatePortraitPreview(id) {
+  const el = document.getElementById('cm-portrait-preview');
+  if (!el) return;
+  const portrait = portraits[id];
+  el.style.backgroundImage = portrait ? `url('${portrait}')` : 'none';
+}
+
+async function handlePortraitUpload(event) {
+  const file = event.target.files[0];
+  if (!file || !editingCharId) return;
+  showToast('Compressing & uploading portrait...');
+  try {
+    const dataUrl = await compressImageSquare(file, 200, 0.75);
+    await db.ref('portraits/' + editingCharId).set(dataUrl);
+    portraits[editingCharId] = dataUrl;
+    updatePortraitPreview(editingCharId);
+    renderCharList();
+    showToast('Portrait updated!');
+  } catch (e) {
+    showToast('Could not process that image.');
+  }
+}
+
+async function removePortrait() {
+  if (!editingCharId) return;
+  await db.ref('portraits/' + editingCharId).set(null);
+  portraits[editingCharId] = null;
+  updatePortraitPreview(editingCharId);
+  renderCharList();
+  showToast('Portrait removed.');
 }
 
 function renderLootAndItems(c, id) {
@@ -1465,9 +1710,16 @@ function renderCharList() {
   const el = document.getElementById('char-list');
   const chars = Object.entries(state.characters);
   if (!chars.length) { el.innerHTML = '<div style="padding:16px;color:var(--text3);font-size:11px">No characters yet.</div>'; return; }
-  el.innerHTML = chars.map(([id, c]) => `
+  chars.forEach(([id]) => ensurePortraitListener(id));
+  el.innerHTML = chars.map(([id, c]) => {
+    const color = c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)');
+    const portrait = portraits[id];
+    const avatar = portrait
+      ? `<div style="width:32px;height:32px;border-radius:50%;background-image:url('${portrait}');background-size:cover;background-position:center;border:2px solid ${color};flex-shrink:0"></div>`
+      : `<div style="width:8px;height:8px;border-radius:50%;background:${color}"></div>`;
+    return `
     <div class="char-item" onclick="openCharModal('${id}')">
-      <div style="width:8px;height:8px;border-radius:50%;background:${c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)')}"></div>
+      ${avatar}
       <div style="flex:1">
         <div class="char-item-name">${esc(c.name)}</div>
         <div class="char-item-sub">${c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC')}${c.pin ? ' · PIN set' : ''} · INI ${c.initiative ?? 0}</div>
@@ -1476,7 +1728,8 @@ function renderCharList() {
       ${combatToggleButtonHtml(id)}
       <button class="btn btn-gold btn-small" style="white-space:nowrap" onclick="event.stopPropagation(); openLootModal('${id}')" title="Give away inventory or loot">🎒 ITEMS</button>
       <div style="font-size:16px;color:var(--text3)">›</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function renderSettings() {
@@ -2037,6 +2290,8 @@ function openCharModal(id) {
   document.getElementById('char-modal-title').textContent = isNew ? 'ADD CHARACTER' : 'EDIT CHARACTER';
   document.getElementById('cm-delete-btn').style.display = isNew ? 'none' : 'inline-block';
   document.getElementById('cm-items-btn').style.display = isNew ? 'none' : 'inline-block';
+  document.getElementById('cm-portrait-row').style.display = isNew ? 'none' : 'flex';
+  if (!isNew) { ensurePortraitListener(id); updatePortraitPreview(id); }
   const c = id ? (state.characters[id] || {}) : {};
   document.getElementById('cm-name').value = c.name || '';
   document.getElementById('cm-type').value = c.isNPC ? 'npc' : 'pc';
