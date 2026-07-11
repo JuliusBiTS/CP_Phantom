@@ -707,6 +707,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
     <button class="tab" onclick="switchPlayerTab('gear')">Gear</button>
     <button class="tab" onclick="switchPlayerTab('inventory')">Inventory</button>
     <button class="tab" onclick="switchPlayerTab('notes')">Notes</button>
+    <button class="tab" onclick="switchPlayerTab('map')">Map</button>
   </div>
 
   <div id="player-tab-status" class="tab-content active main-scroll">
@@ -836,6 +837,14 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <div class="player-card">
         <div class="player-card-title">Notes <span style="color:var(--text3);font-weight:400">(shared with GM)</span></div>
         <textarea id="player-notes" rows="16" style="resize:vertical" placeholder="Session notes, contacts, leads, reminders..." oninput="onNotesInput(this.value)"></textarea>
+      </div>
+    </div>
+  </div>
+  <div id="player-tab-map" class="tab-content main-scroll">
+    <div class="player-view">
+      <div class="player-card">
+        <div class="player-card-title">Combat Map <span style="color:var(--text3);font-weight:400">(view only)</span></div>
+        <div id="player-map-view"></div>
       </div>
     </div>
   </div>
@@ -1182,12 +1191,13 @@ function startSync() {
   // Map image and portraits live OUTSIDE the 'campaign' tree on purpose — see
   // the comment above the `mapImage`/`portraits` declarations. This keeps
   // large image blobs from being re-sent on every unrelated combat update.
-  if (session.role === 'gm') {
-    db.ref('mapImage').on('value', snap => {
-      mapImage = snap.exists() ? snap.val() : null;
-      if (combatViewMode === 'map') renderMapView();
-    });
-  }
+  // Both GM and players listen here so the map stays live for everyone;
+  // only the GM's view (renderMapView) renders draggable tokens.
+  db.ref('mapImage').on('value', snap => {
+    mapImage = snap.exists() ? snap.val() : null;
+    if (session.role === 'gm' && combatViewMode === 'map') renderMapView();
+    if (session.role === 'player') renderPlayerMapView();
+  });
 }
 
 function ensurePortraitListener(id) {
@@ -1323,7 +1333,7 @@ function switchTab(name) {
 }
 
 function switchPlayerTab(name) {
-  const names = ['status','stats','talents','gear','inventory','notes'];
+  const names = ['status','stats','talents','gear','inventory','notes','map'];
   document.querySelectorAll('#screen-player .tab').forEach((t, i) => t.classList.toggle('active', names[i] === name));
   document.querySelectorAll('#screen-player .tab-content').forEach(c => c.classList.toggle('active', c.id === 'player-tab-' + name));
 }
@@ -1402,6 +1412,23 @@ function setCombatView(mode) {
   if (mode === 'map') renderMapView();
 }
 
+function buildMapTokensHtml(interactive) {
+  const order = state.combat?.order || [];
+  return order.map(id => {
+    const c = state.characters[id]; if (!c) return '';
+    ensurePortraitListener(id);
+    const portrait = portraits[id];
+    const color = c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)');
+    const pos = state.map?.tokens?.[id] || { x: 50, y: 50 };
+    const bg = portrait ? `background-image:url('${portrait}');` : '';
+    const initials = esc(c.name.slice(0, 2).toUpperCase());
+    const dragAttr = interactive ? ` onpointerdown="startTokenDrag(event,'${id}')"` : '';
+    const cursorStyle = interactive ? '' : 'cursor:default;';
+    return `<div class="map-token" data-id="${id}" title="${esc(c.name)}"
+      style="left:${pos.x}%;top:${pos.y}%;border-color:${color};${bg}${cursorStyle}"${dragAttr}>${portrait ? '' : initials}</div>`;
+  }).join('');
+}
+
 function renderMapView() {
   const el = document.getElementById('combat-map-view');
   if (!el) return;
@@ -1414,28 +1441,29 @@ function renderMapView() {
       </div>`;
     return;
   }
-  const order = state.combat?.order || [];
-  const tokensHtml = order.map(id => {
-    const c = state.characters[id]; if (!c) return '';
-    ensurePortraitListener(id);
-    const portrait = portraits[id];
-    const color = c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)');
-    const pos = state.map?.tokens?.[id] || { x: 50, y: 50 };
-    const bg = portrait ? `background-image:url('${portrait}');` : '';
-    const initials = esc(c.name.slice(0, 2).toUpperCase());
-    return `<div class="map-token" data-id="${id}" title="${esc(c.name)}"
-      style="left:${pos.x}%;top:${pos.y}%;border-color:${color};${bg}"
-      onpointerdown="startTokenDrag(event,'${id}')">${portrait ? '' : initials}</div>`;
-  }).join('');
   el.innerHTML = `
     <div id="map-container" style="position:relative;width:100%;overflow:hidden;border:1px solid var(--border2);background:#000">
       <img src="${mapImage}" style="display:block;width:100%;height:auto;user-select:none;pointer-events:none" draggable="false">
-      ${tokensHtml}
+      ${buildMapTokensHtml(true)}
     </div>
     <div style="display:flex;gap:8px;margin-top:8px">
       <input type="file" accept="image/*" id="map-upload-input" style="display:none" onchange="handleMapUpload(event)">
       <button class="btn btn-ghost btn-small" onclick="document.getElementById('map-upload-input').click()">CHANGE MAP</button>
       <button class="btn btn-danger btn-small" onclick="removeMap()">REMOVE MAP</button>
+    </div>`;
+}
+
+function renderPlayerMapView() {
+  const el = document.getElementById('player-map-view');
+  if (!el) return;
+  if (!mapImage) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:11px">GM hasn\'t uploaded a map yet.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div style="position:relative;width:100%;overflow:hidden;border:1px solid var(--border2);background:#000">
+      <img src="${mapImage}" style="display:block;width:100%;height:auto;user-select:none;pointer-events:none" draggable="false">
+      ${buildMapTokensHtml(false)}
     </div>`;
 }
 
@@ -1877,6 +1905,8 @@ function renderPlayerView() {
   // Notes (skip while the player is actively typing so remote updates don't clobber the cursor)
   const notesEl = document.getElementById('player-notes');
   if (notesEl && document.activeElement !== notesEl) notesEl.value = c.notes || '';
+  // Map (view-only)
+  renderPlayerMapView();
 }
 
 let notesSaveTimer = null;
