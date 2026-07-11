@@ -830,7 +830,12 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <div class="inline-row">
         <div class="field"><label>Name</label><input type="text" id="cm-name" placeholder="Character name"></div>
         <div class="field" style="max-width:80px"><label>Type</label>
-          <select id="cm-type"><option value="pc">PC</option><option value="npc">NPC</option></select>
+          <select id="cm-type" onchange="onCmTypeChange()"><option value="pc">PC</option><option value="npc">NPC</option></select>
+        </div>
+      </div>
+      <div class="inline-row" id="cm-allegiance-row" style="display:none">
+        <div class="field"><label>Allegiance</label>
+          <select id="cm-allegiance"><option value="enemy">⚔ Enemy</option><option value="ally">🤝 Ally</option></select>
         </div>
       </div>
       <div class="inline-row">
@@ -2035,6 +2040,8 @@ function openCharModal(id) {
   const c = id ? (state.characters[id] || {}) : {};
   document.getElementById('cm-name').value = c.name || '';
   document.getElementById('cm-type').value = c.isNPC ? 'npc' : 'pc';
+  document.getElementById('cm-allegiance').value = c.isAlly ? 'ally' : 'enemy';
+  onCmTypeChange();
   document.getElementById('cm-hp').value = '';
   document.getElementById('cm-sta').value = '';
   document.getElementById('cm-init').value = '';
@@ -2072,6 +2079,11 @@ function openCharModal(id) {
   // Inventory
   renderInventoryRows(c.inventory || []);
   openModal('char-modal');
+}
+
+function onCmTypeChange() {
+  const isNPC = document.getElementById('cm-type').value === 'npc';
+  document.getElementById('cm-allegiance-row').style.display = isNPC ? 'flex' : 'none';
 }
 
 function renderWeaponRows(weapons) {
@@ -2153,6 +2165,7 @@ async function saveCharacter() {
   const name = document.getElementById('cm-name').value.trim();
   if (!name) { showToast('Name required!'); return; }
   const isNPC = document.getElementById('cm-type').value === 'npc';
+  const isAlly = isNPC && document.getElementById('cm-allegiance').value === 'ally';
   const existing = editingCharId ? (state.characters[editingCharId] || {}) : {};
   // Collect stats
   const stats = {};
@@ -2183,7 +2196,7 @@ async function saveCharacter() {
   const headName = document.getElementById('cm-armor-head-name').value.trim();
   const headSP = parseInt(document.getElementById('cm-armor-head-sp').value) || 0;
   const char = {
-    name, isNPC,
+    name, isNPC, isAlly,
     stats: hasStats ? stats : (existing.stats || null),
     origin_hp_bonus: hpBonus, origin_sta_bonus: staBonus, origin_ip_bonus: ipBonus,
     hp_override: !isNaN(hpOverrideVal), sta_override: !isNaN(staOverrideVal), init_override: !isNaN(initOverrideVal), ip_override: !isNaN(ipOverrideVal),
