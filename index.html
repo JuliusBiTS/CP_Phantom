@@ -2623,6 +2623,7 @@ function openCharModal(id) {
   document.getElementById('cm-notes').value = loadedCharNotes;
   document.getElementById('cm-image-prompt').value = c.image_prompt || '';
   // Weapons
+  weaponFamilySelection = {};
   renderWeaponRows(c.weapons || []);
   // Talents
   renderTalentRows(c.talents || []);
@@ -2653,7 +2654,19 @@ function weaponRow(i, w={}) {
     <input type="text" placeholder="Special effect" value="${esc(a.special||'')}" style="flex:2;font-size:11px" onchange="updateAttachmentField(${i},${ai},'special',this.value)">
     <button class="btn btn-danger btn-icon" onclick="removeAttachmentRow(${i},${ai})">✕</button>
   </div>`).join('');
+  const selFamily = weaponFamilySelection[i] || '';
+  const specificOptions = WEAPON_SPECIFIC_OPTIONS[selFamily] || [];
   return `<div style="border:1px solid var(--border);padding:4px;margin-bottom:2px">
+    <div class="inline-row" style="gap:4px;margin-bottom:4px">
+      <select style="flex:1" onchange="onWeaponFamilyChange(${i},this.value)">
+        <option value="">— Family... —</option>
+        ${Object.keys(WEAPON_SPECIFIC_OPTIONS).map(fam => `<option value="${esc(fam)}" ${selFamily===fam?'selected':''}>${esc(fam)}</option>`).join('')}
+      </select>
+      <select style="flex:1" onchange="onWeaponSpecificChange(${i},this.value)" ${!selFamily?'disabled':''}>
+        <option value="">— Specific... —</option>
+        ${specificOptions.map(opt => `<option value="${esc(opt.label)}">${esc(opt.label)}</option>`).join('')}
+      </select>
+    </div>
     <div class="inline-row" style="gap:4px;margin-bottom:4px">
       <input type="text" placeholder="Name" value="${esc(w.name||'')}" style="flex:2" onchange="updateWeaponField(${i},'name',this.value)">
       <input type="number" placeholder="Bonus" value="${w.bonus||''}" style="width:60px" onchange="updateWeaponField(${i},'bonus',this.value)">
@@ -2679,6 +2692,25 @@ function weaponRow(i, w={}) {
   </div>`;
 }
 let weaponData = [];
+// Transient UI-only state for the family/specific weapon picker — keyed by
+// weapon index, never saved to the character (reset when the modal opens).
+let weaponFamilySelection = {};
+function onWeaponFamilyChange(i, family) {
+  weaponFamilySelection[i] = family;
+  renderWeaponRows(weaponData);
+}
+function onWeaponSpecificChange(i, label) {
+  if (!label) return;
+  const family = weaponFamilySelection[i];
+  const opt = (WEAPON_SPECIFIC_OPTIONS[family] || []).find(o => o.label === label);
+  if (!opt) return;
+  const entry = WEAPON_TABLE[opt.canonical];
+  weaponData[i].name = opt.label;
+  weaponData[i].bonus = entry.bonus;
+  weaponData[i].pw = entry.label;
+  weaponData[i].tags = (entry.tags || []).join(', ');
+  renderWeaponRows(weaponData);
+}
 function addWeaponRow() {
   weaponData.push({});
   renderWeaponRows(weaponData);
@@ -3235,6 +3267,69 @@ function matchWeaponName(name) {
   const canonical = WEAPON_ALIASES[norm];
   return canonical ? WEAPON_TABLE[canonical] : null;
 }
+
+// Curated family -> specific-weapon list for the two-dropdown weapon
+// picker in the character modal. Each option's `canonical` key looks up
+// real bonus/PW/tags from WEAPON_TABLE; `label` becomes the weapon's
+// displayed name (so picking "Katana" keeps it named "Katana", not
+// renamed to the generic "Medium Melee" catalog entry it computes from).
+const WEAPON_SPECIFIC_OPTIONS = {
+  'Pistols': [
+    {label:'Medium Pistol', canonical:'Medium Pistol'},
+    {label:'Heavy Pistol', canonical:'Heavy Pistol'},
+    {label:'Revolver', canonical:'Heavy Pistol'},
+    {label:'Desert Eagle', canonical:'Heavy Pistol'},
+    {label:'Very Heavy Pistol', canonical:'Very Heavy Pistol'},
+    {label:'Malorian Arms 3516', canonical:'Malorian Arms 3516'},
+  ],
+  'SMGs': [
+    {label:'SMG', canonical:'SMG'},
+    {label:'Uzi', canonical:'SMG'},
+    {label:'MP5', canonical:'SMG'},
+    {label:'Heavy SMG', canonical:'Heavy SMG'},
+    {label:'Machine Pistol', canonical:'Heavy SMG'},
+  ],
+  'Rifles': [
+    {label:'Assault Rifle', canonical:'Assault Rifle'},
+    {label:'AK-47', canonical:'Assault Rifle'},
+    {label:'M16', canonical:'Assault Rifle'},
+    {label:'Carbine', canonical:'Assault Rifle'},
+    {label:'Sniper Rifle', canonical:'Sniper Rifle'},
+    {label:'Marksman Rifle', canonical:'Sniper Rifle'},
+  ],
+  'Shotguns': [
+    {label:'Shotgun', canonical:'Shotgun'},
+    {label:'Sawed-off', canonical:'Shotgun'},
+    {label:'Combat Shotgun', canonical:'Shotgun'},
+  ],
+  'Light Melee': [
+    {label:'Knife', canonical:'Knife'},
+    {label:'Combat Knife', canonical:'Knife'},
+    {label:'Switchblade', canonical:'Knife'},
+    {label:'Big Knucks', canonical:'Big Knucks'},
+    {label:'Brass Knuckles', canonical:'Big Knucks'},
+    {label:'Mono-Filament Wire', canonical:'Mono-Filament Wire'},
+    {label:'Monowire', canonical:'Mono-Filament Wire'},
+  ],
+  'Medium Melee': [
+    {label:'Medium Melee (generic)', canonical:'Medium Melee'},
+    {label:'Katana', canonical:'Medium Melee'},
+    {label:'Sword', canonical:'Medium Melee'},
+    {label:'Machete', canonical:'Medium Melee'},
+    {label:'Baseball Bat', canonical:'Medium Melee'},
+    {label:'Tomahawk', canonical:'Medium Melee'},
+    {label:'Rippers (Cyberware)', canonical:'Rippers'},
+    {label:'Mantis Blades (Cyberware)', canonical:'Mantis Blades'},
+  ],
+  'Heavy Melee': [
+    {label:'Heavy Melee (generic)', canonical:'Heavy Melee'},
+    {label:'Sledgehammer', canonical:'Heavy Melee'},
+    {label:'Greatsword', canonical:'Heavy Melee'},
+    {label:'Chainsaw', canonical:'Heavy Melee'},
+    {label:'Kendachi Mono-Three', canonical:'Kendachi Mono-Three'},
+    {label:'Monosword', canonical:'Kendachi Mono-Three'},
+  ],
+};
 
 // Number of d20s to roll for a given PW, per the PW-bracket table
 // (1-20: 1 die | 21-40: 2 dice | 41-60: 3 dice | +1 die per further 20).
