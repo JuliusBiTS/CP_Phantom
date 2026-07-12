@@ -959,7 +959,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         <div class="field"><label>Head Armor</label><input type="text" id="cm-armor-head-name" placeholder="None"></div>
         <div class="field" style="max-width:70px"><label>SP</label><input type="number" id="cm-armor-head-sp" placeholder="0" min="0"></div>
       </div>
-      <div class="section-heading">Weapons (max 5 slots)</div>
+      <div class="section-heading">Weapons</div>
       <div id="cm-weapons-list" style="display:flex;flex-direction:column;gap:4px"></div>
       <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addWeaponRow()">+ ADD WEAPON</button>
       <div class="section-heading">Talents & Techniques (max 10 slots)</div>
@@ -1998,13 +1998,21 @@ function renderPlayerView() {
     </div>`).join('') : '<div style="color:var(--text3);font-size:11px">No talents/techniques set.</div>';
   // Weapons
   const weapons = c.weapons || [];
-  document.getElementById('player-weapons-list').innerHTML = weapons.length ? weapons.map(w => `
-    <div style="display:flex;gap:8px;align-items:center;padding:8px 10px;background:var(--surface2);border:1px solid var(--border)">
-      <div style="flex:1;font-size:12px">${esc(w.name)}</div>
-      <div style="font-size:11px;color:var(--gold-bright)">${w.bonus ? '+'+w.bonus : ''}</div>
-      <div style="font-size:10px;color:var(--text2)">${esc(w.pw || '')}</div>
-      ${w.tags ? `<div style="font-size:9px;color:var(--text3)">${esc(w.tags)}</div>` : ''}
-    </div>`).join('') : '<div style="color:var(--text3);font-size:11px">No weapons.</div>';
+  document.getElementById('player-weapons-list').innerHTML = weapons.length ? weapons.map(w => {
+    const techColor = TECH_BADGE_COLOR[w.tech] || '#888';
+    const techBadge = (w.tech && w.tech !== 'base') ? `<span style="font-size:8px;padding:1px 6px;background:${techColor}33;border:1px solid ${techColor};color:${techColor};letter-spacing:0.1em">⚙ ${w.tech.toUpperCase()}${w.tech==='smart'&&w.techLevel?' '+w.techLevel:''}</span>` : '';
+    const attachList = (w.attachments||[]).map(a => `<div style="font-size:9px;color:var(--text3);padding-left:10px;margin-top:1px">↳ ${esc(a.name)}${a.effect?': '+esc(a.effect):''}</div>`).join('');
+    return `<div style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border)">
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="flex:1;font-size:12px">${esc(w.name)}</div>
+        <div style="font-size:11px;color:var(--gold-bright)">${w.bonus ? '+'+w.bonus : ''}</div>
+        <div style="font-size:10px;color:var(--text2)">${esc(w.pw || '')}</div>
+        ${w.tags ? `<div style="font-size:9px;color:var(--text3)">${esc(w.tags)}</div>` : ''}
+        ${techBadge}
+      </div>
+      ${attachList}
+    </div>`;
+  }).join('') : '<div style="color:var(--text3);font-size:11px">No weapons.</div>';
   // Cyberware
   const cyberware = c.cyberware || [];
   document.getElementById('player-cyberware-list').innerHTML = cyberware.length ? cyberware.map(cw => `<div style="font-size:11px;color:#7aafc8;padding:4px 0">⬡ ${esc(cw)}</div>`).join('') : '<div style="color:var(--text3);font-size:11px">No cyberware.</div>';
@@ -2518,16 +2526,45 @@ function onCmTypeChange() {
 }
 
 function renderWeaponRows(weapons) {
+  // Re-sync weaponData from the source every render (matches the
+  // talentData/inventoryData pattern below) — without this, opening a
+  // character whose weapons weren't touched last session leaves
+  // weaponData stale, and editing any field silently drops the rest.
+  weaponData = weapons.map(w => ({ ...w, attachments: (w.attachments || []).map(a => ({ ...a })) }));
   const el = document.getElementById('cm-weapons-list');
-  el.innerHTML = weapons.map((w, i) => weaponRow(i, w)).join('');
+  el.innerHTML = weaponData.map((w, i) => weaponRow(i, w)).join('');
 }
 function weaponRow(i, w={}) {
-  return `<div class="inline-row" style="gap:4px" id="wrow-${i}">
-    <input type="text" placeholder="Name" value="${esc(w.name||'')}" style="flex:2" onchange="updateWeaponField(${i},'name',this.value)">
-    <input type="number" placeholder="Bonus" value="${w.bonus||''}" style="width:60px" onchange="updateWeaponField(${i},'bonus',this.value)">
-    <input type="text" placeholder="PW" value="${esc(w.pw||'')}" style="width:80px" onchange="updateWeaponField(${i},'pw',this.value)">
-    <input type="text" placeholder="Tags" value="${esc(w.tags||'')}" style="width:80px" onchange="updateWeaponField(${i},'tags',this.value)">
-    <button class="btn btn-danger btn-icon" onclick="removeWeaponRow(${i})">✕</button>
+  const tech = w.tech || 'base';
+  const attachRows = (w.attachments || []).map((a, ai) => `<div class="inline-row" style="gap:4px;margin-top:3px">
+    <input type="text" placeholder="Attachment name" value="${esc(a.name||'')}" style="flex:1.5;font-size:11px" onchange="updateAttachmentField(${i},${ai},'name',this.value)">
+    <input type="text" placeholder="Stat effect" value="${esc(a.effect||'')}" style="flex:2;font-size:11px" onchange="updateAttachmentField(${i},${ai},'effect',this.value)">
+    <input type="text" placeholder="Special effect" value="${esc(a.special||'')}" style="flex:2;font-size:11px" onchange="updateAttachmentField(${i},${ai},'special',this.value)">
+    <button class="btn btn-danger btn-icon" onclick="removeAttachmentRow(${i},${ai})">✕</button>
+  </div>`).join('');
+  return `<div style="border:1px solid var(--border);padding:4px;margin-bottom:2px">
+    <div class="inline-row" style="gap:4px;margin-bottom:4px">
+      <input type="text" placeholder="Name" value="${esc(w.name||'')}" style="flex:2" onchange="updateWeaponField(${i},'name',this.value)">
+      <input type="number" placeholder="Bonus" value="${w.bonus||''}" style="width:60px" onchange="updateWeaponField(${i},'bonus',this.value)">
+      <input type="text" placeholder="PW" value="${esc(w.pw||'')}" style="width:80px" onchange="updateWeaponField(${i},'pw',this.value)">
+      <input type="text" placeholder="Tags" value="${esc(w.tags||'')}" style="width:80px" onchange="updateWeaponField(${i},'tags',this.value)">
+      <button class="btn btn-danger btn-icon" onclick="removeWeaponRow(${i})">✕</button>
+    </div>
+    <div class="inline-row" style="gap:4px;align-items:center;margin-bottom:4px">
+      <span style="font-size:9px;color:var(--text3);letter-spacing:0.1em;white-space:nowrap">TECH</span>
+      <select style="width:90px" onchange="updateWeaponTech(${i},'tech',this.value)">
+        <option value="base" ${tech==='base'?'selected':''}>Base</option>
+        <option value="power" ${tech==='power'?'selected':''}>Power</option>
+        <option value="tech" ${tech==='tech'?'selected':''}>Tech</option>
+        <option value="smart" ${tech==='smart'?'selected':''}>Smart</option>
+      </select>
+      ${tech==='smart' ? `<select style="width:75px" onchange="updateWeaponTech(${i},'techLevel',this.value)">
+        ${[1,2,3,4,5].map(l=>`<option value="${l}" ${(w.techLevel||1)==l?'selected':''}>Smart ${l}</option>`).join('')}
+      </select>` : ''}
+    </div>
+    <div style="font-size:9px;color:var(--text3);letter-spacing:0.1em;margin-bottom:2px">ATTACHMENTS</div>
+    ${attachRows}
+    <button class="btn btn-ghost btn-small" style="margin-top:4px;font-size:9px;padding:2px 8px" onclick="addAttachmentRow(${i})">+ ADD ATTACHMENT</button>
   </div>`;
 }
 let weaponData = [];
@@ -2541,6 +2578,22 @@ function updateWeaponField(i, field, val) {
 }
 function removeWeaponRow(i) {
   weaponData.splice(i, 1);
+  renderWeaponRows(weaponData);
+}
+function updateWeaponTech(i, field, val) {
+  weaponData[i][field] = field === 'techLevel' ? (parseInt(val)||1) : val;
+  renderWeaponRows(weaponData);
+}
+function addAttachmentRow(wi) {
+  if (!weaponData[wi].attachments) weaponData[wi].attachments = [];
+  weaponData[wi].attachments.push({});
+  renderWeaponRows(weaponData);
+}
+function updateAttachmentField(wi, ai, field, val) {
+  weaponData[wi].attachments[ai][field] = val;
+}
+function removeAttachmentRow(wi, ai) {
+  weaponData[wi].attachments.splice(ai, 1);
   renderWeaponRows(weaponData);
 }
 
@@ -2885,6 +2938,95 @@ const CYBERWARE_STAT_BONUS = {
 const FALLBACK_WEAPON_BONUS = { GRUNT:3, THREAT:8, BOSS:12 };
 const FALLBACK_ARMOR_SP = { GRUNT:6, THREAT:12, BOSS:16 };
 
+// ═══════════════════════════════════════════════════════════════
+// WEAPON ATTACHMENTS & TECHNOLOGY — rulebook §7a/§8. Power/Tech stay
+// flat single variants (no levels) per the rulebook; only Smart has
+// real tiers. Attachment/tech rolling for generated NPCs is scaled by
+// tier so stronger enemies are more likely to be better equipped.
+// ═══════════════════════════════════════════════════════════════
+const ATTACHMENT_CATALOG = [
+  {name:'Iron Sights Upgrade', effect:'+2 weapon bonus at medium range (13-50m)', costTier:'guenstig'},
+  {name:'2.5x Scope', effect:'+4 weapon bonus medium range, -2 PW on Autofire', costTier:'normal'},
+  {name:'Sniper Scope', effect:'+6 weapon bonus long range (50m+), no Autofire', costTier:'teuer'},
+  {name:'Thermal Scope', effect:'Sees through smoke/darkness, +2 weapon bonus at night', costTier:'teuer'},
+  {name:'Smart Scope', effect:'Requires Neural Link. +1 weapon bonus always.', costTier:'sehr teuer'},
+  {name:'Suppressor', effect:'Shot inaudible beyond 15m, -1 weapon bonus', costTier:'normal'},
+  {name:'Muzzle Brake', effect:'-2 Autofire PW penalty', costTier:'normal'},
+  {name:'Extended Barrel', effect:'+2 weapon bonus long range, no longer concealable', costTier:'normal'},
+  {name:'Compensator', effect:'Blindfire: 1/4 PW instead of 1/2 PW penalty', costTier:'teuer'},
+  {name:'Laser Sight', effect:'Darkness PW penalty reduced by 4', costTier:'normal'},
+  {name:'UV Laser Sight', effect:'Like Laser Sight, only visible with Cyberoptics', costTier:'teuer'},
+  {name:'Foregrip', effect:'+1 weapon bonus while standing', costTier:'guenstig'},
+  {name:'Bipod', effect:'+4 PW while prone/braced, no movement', costTier:'normal'},
+  {name:'Grenade Launcher', effect:'1x/combat: Focus+Strength, +14 in 3m radius', costTier:'sehr teuer'},
+  {name:'Flashlight', effect:'Eliminates darkness penalty, but reveals position', costTier:'guenstig'},
+  {name:'Extended Magazine', effect:'+2 magazine ticks', costTier:'normal'},
+  {name:'Drum Magazine', effect:'Doubles magazine, -1 Speed', costTier:'teuer'},
+  {name:'Quick-Release Mag', effect:'Reload as a free action, once per combat', costTier:'teuer'},
+];
+const WEAPON_TECH_EFFECTS = {
+  power: 'Power weapon: shots ricochet off hard cover (up to 2 bounces, -2 weapon bonus per bounce).',
+  tech:  'Tech weapon: chargeable via Nebenaktion — Half=ignores half target SP, Full=ignores all SP + shoots through light cover, Overcharge=ignores SP + pierces 2 targets.',
+};
+const SMART_TIERS = {
+  1: { pwBonus:4,  wbPenalty:0, effect:'Weak tracking, light curve-flight.' },
+  2: { pwBonus:6,  wbPenalty:1, effect:'Medium tracking, shoots around light cover.' },
+  3: { pwBonus:8,  wbPenalty:2, effect:'Strong tracking, ignores darkness/smoke penalties.' },
+  4: { pwBonus:10, wbPenalty:3, effect:'Can shoot around cover if target is Ping-tagged.' },
+  5: { pwBonus:null, wbPenalty:4, autoHit:true, effect:'Absolute targeting — automatic hit, no PW roll. Damage = weapon bonus - SP, no Crit.' },
+};
+const TECH_CHANCE = { GRUNT:0.05, THREAT:0.25, BOSS:0.70 };
+const TECH_TYPE_WEIGHTS = {
+  GRUNT:  [['power',1.0]],
+  THREAT: [['power',0.5],['tech',0.2],['smart',0.3]],
+  BOSS:   [['power',0.15],['tech',0.35],['smart',0.5]],
+};
+const SMART_LEVEL_WEIGHTS = {
+  GRUNT:  [[1,1.0]],
+  THREAT: [[1,0.5],[2,0.35],[3,0.15]],
+  BOSS:   [[1,0.05],[2,0.15],[3,0.30],[4,0.30],[5,0.20]],
+};
+const ATTACHMENT_COUNT_WEIGHTS = {
+  GRUNT:  [[0,0.85],[1,0.15]],
+  THREAT: [[0,0.35],[1,0.40],[2,0.25]],
+  BOSS:   [[0,0.05],[1,0.15],[2,0.35],[3,0.30],[4,0.15]],
+};
+const ATTACHMENT_QUALITY_WEIGHTS = {
+  GRUNT:  [['guenstig',0.6],['normal',0.4]],
+  THREAT: [['guenstig',0.15],['normal',0.55],['teuer',0.25],['sehr teuer',0.05]],
+  BOSS:   [['guenstig',0.05],['normal',0.25],['teuer',0.45],['sehr teuer',0.25]],
+};
+function weightedPick(weights) {
+  const r = Math.random();
+  let acc = 0;
+  for (const [val, p] of weights) { acc += p; if (r <= acc) return val; }
+  return weights[weights.length-1][0];
+}
+function rollAttachments(tier) {
+  const count = weightedPick(ATTACHMENT_COUNT_WEIGHTS[tier] || ATTACHMENT_COUNT_WEIGHTS.THREAT);
+  const picked = [];
+  const usedNames = new Set();
+  for (let i = 0; i < count; i++) {
+    const quality = weightedPick(ATTACHMENT_QUALITY_WEIGHTS[tier] || ATTACHMENT_QUALITY_WEIGHTS.THREAT);
+    const pool = ATTACHMENT_CATALOG.filter(a => a.costTier === quality && !usedNames.has(a.name));
+    const choices = pool.length ? pool : ATTACHMENT_CATALOG.filter(a => !usedNames.has(a.name));
+    if (!choices.length) break;
+    const entry = choices[Math.floor(Math.random() * choices.length)];
+    usedNames.add(entry.name);
+    picked.push({ name: entry.name, effect: entry.effect, special: '' });
+  }
+  return picked;
+}
+function rollWeaponTech(tier) {
+  if (Math.random() >= (TECH_CHANCE[tier] ?? TECH_CHANCE.THREAT)) return { tech: 'base', techLevel: null };
+  const type = weightedPick(TECH_TYPE_WEIGHTS[tier] || TECH_TYPE_WEIGHTS.THREAT);
+  if (type === 'smart') {
+    const level = weightedPick(SMART_LEVEL_WEIGHTS[tier] || SMART_LEVEL_WEIGHTS.THREAT);
+    return { tech: 'smart', techLevel: level };
+  }
+  return { tech: type, techLevel: null };
+}
+
 function distribute(pool, weights, cap) {
   const keys = Object.keys(weights);
   const raw = keys.map(k => pool * weights[k]);
@@ -2955,16 +3097,51 @@ function processGeneratedEnemy(e) {
     };
     e.ip_max = Math.floor((attrs.intelligence + attrs.focus + attrs.creativity + attrs.will + attrs.cool) / 5) * 2;
 
-    // Weapons: resolve real bonus/PW from attributes, with a graceful fallback for unrecognized names.
+    // Weapons: resolve real bonus/PW from attributes (graceful fallback for
+    // unrecognized names), then roll weapon tech (Power/Tech/Smart) and
+    // attachments, tier-scaled. Smart's PW/bonus tradeoff is unconditional
+    // per the rulebook so it's folded into the numbers here; Power/Tech and
+    // all attachments are situational, so they stay descriptive-only.
+    let neuralLinkNeeded = false;
     e.weapons = (e.weapons || []).map(w => {
       const match = matchCatalogName(w.name, WEAPON_TABLE);
+      let bonus, pwLabel, tags, pw;
       if (match) {
-        const pw = attrs[match.pw[0]] + attrs[match.pw[1]];
-        return { name: w.name, bonus: match.bonus, pwLabel: `${match.label} · ${pw}`, tags: match.tags || [], _pw: pw };
+        pw = attrs[match.pw[0]] + attrs[match.pw[1]];
+        bonus = match.bonus; tags = match.tags || []; pwLabel = `${match.label} · ${pw}`;
+      } else {
+        pw = attrs.dexterity + attrs.reflexes;
+        bonus = FALLBACK_WEAPON_BONUS[tier]; tags = []; pwLabel = `Dex+Ref · ${pw}`;
       }
-      const fallbackPW = attrs.dexterity + attrs.reflexes;
-      return { name: w.name || 'Unknown Weapon', bonus: FALLBACK_WEAPON_BONUS[tier], pwLabel: `Dex+Ref · ${fallbackPW}`, tags: [], _pw: fallbackPW };
+      const { tech, techLevel } = rollWeaponTech(tier);
+      let finalPW = pw;
+      if (tech === 'smart') {
+        const smart = SMART_TIERS[techLevel];
+        bonus = Math.max(0, bonus - smart.wbPenalty);
+        if (smart.autoHit) {
+          pwLabel = `AUTO-HIT (Smart ${techLevel})`;
+          finalPW = null;
+        } else {
+          finalPW = pw + smart.pwBonus;
+          pwLabel = `${pwLabel.split(' · ')[0]} · ${finalPW} (Smart ${techLevel})`;
+        }
+        neuralLinkNeeded = true; // RAW requires Smart Link (Neural Link) cyberware
+      }
+      return {
+        name: w.name || 'Unknown Weapon', bonus, pwLabel, tags,
+        tech, techLevel, attachments: rollAttachments(tier),
+        _pw: finalPW,
+      };
     });
+    // Neural Link push runs after the cyberware-stat-bonus loop above, which
+    // is fine today since Neural Link has no entry in CYBERWARE_STAT_BONUS —
+    // but revisit the ordering if that ever changes.
+    if (neuralLinkNeeded) {
+      e.cyberware = e.cyberware || [];
+      if (!e.cyberware.some(cw => String(cw).trim().toLowerCase() === 'neural link')) {
+        e.cyberware.push('Neural Link');
+      }
+    }
     if (e.weapons.length) {
       e.combat = { primaryPW: e.weapons[0]._pw, primaryPWLabel: e.weapons[0].pwLabel.split(' · ')[0], secondaryPW: null, secondaryPWLabel: null };
       e.weapons.forEach(w => delete w._pw);
@@ -3090,9 +3267,18 @@ function tierColor(tier) {
   return { GRUNT: '#555', THREAT: '#c8a200', BOSS: '#c82020' }[tier] || '#555';
 }
 
+const TECH_BADGE_COLOR = { power:'#c88a20', tech:'#20a8c8', smart:'#c820a0' };
 function renderEnemyResult(e) {
   const tc = tierColor(e.tier);
-  const wpns = (e.weapons || []).map(w => `<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px"><span style="flex:1;font-size:11px">${esc(w.name)}</span><span style="color:${tc};font-weight:700">+${w.bonus}</span><span style="font-size:9px;color:var(--text3)">${esc(w.pwLabel||'')}</span>${(w.tags||[]).map(t=>`<span style="font-size:9px;background:var(--surface);border:1px solid var(--border2);padding:1px 5px">${esc(t)}</span>`).join('')}</div>`).join('');
+  const wpns = (e.weapons || []).map(w => {
+    const techColor = TECH_BADGE_COLOR[w.tech] || '#888';
+    const techBadge = (w.tech && w.tech !== 'base') ? `<div style="margin-top:2px"><span style="font-size:8px;padding:1px 6px;background:${techColor}33;border:1px solid ${techColor};color:${techColor};letter-spacing:0.1em">⚙ ${w.tech.toUpperCase()}${w.tech==='smart'&&w.techLevel?' '+w.techLevel:''}</span></div>` : '';
+    const attachList = (w.attachments||[]).map(a => `<div style="font-size:9px;color:var(--text3);padding-left:10px;margin-top:1px">↳ ${esc(a.name)}${a.effect?': '+esc(a.effect):''}</div>`).join('');
+    return `<div style="margin-bottom:6px">
+      <div style="display:flex;gap:8px;align-items:center"><span style="flex:1;font-size:11px">${esc(w.name)}</span><span style="color:${tc};font-weight:700">+${w.bonus}</span><span style="font-size:9px;color:var(--text3)">${esc(w.pwLabel||'')}</span>${(w.tags||[]).map(t=>`<span style="font-size:9px;background:var(--surface);border:1px solid var(--border2);padding:1px 5px">${esc(t)}</span>`).join('')}</div>
+      ${techBadge}${attachList}
+    </div>`;
+  }).join('');
   const cyber = (e.cyberware||[]).map(c=>`<div style="color:#7aafc8;font-size:11px;margin-bottom:2px">⬡ ${esc(c)}</div>`).join('');
   const loot = (e.loot||[]).map(l=>`<div style="color:#9aaa7a;font-size:11px;margin-bottom:2px">◈ ${esc(l)}</div>`).join('');
   const pw2 = e.combat?.secondaryPW ? `<div style="background:rgba(255,255,255,0.04);padding:5px 11px;border:1px solid rgba(255,255,255,0.05)"><span style="color:var(--text3);font-size:9px">${esc(e.combat.secondaryPWLabel)} </span><span style="font-size:14px;font-weight:700">${e.combat.secondaryPW}</span></div>` : '';
@@ -3172,7 +3358,10 @@ function genResultToCharacter(enemy) {
     tier: enemy.tier || 'THREAT',
     armor_body: enemy.armor?.name ? { name: enemy.armor.name, sp_base: armorSP, sp_temp: armorSP } : null,
     armor_head: enemy.armor?.SP_head ? { name: enemy.armor.name + ' (head)', sp_base: enemy.armor.SP_head, sp_temp: enemy.armor.SP_head } : null,
-    weapons: (enemy.weapons || []).map(w => ({ name: w.name, bonus: w.bonus, pw: w.pwLabel, tags: (w.tags||[]).join(', ') })),
+    weapons: (enemy.weapons || []).map(w => ({
+      name: w.name, bonus: w.bonus, pw: w.pwLabel, tags: (w.tags||[]).join(', '),
+      attachments: w.attachments || [], tech: w.tech || 'base', techLevel: w.techLevel ?? null,
+    })),
     loot: enemy.loot || [],
     cyberware: enemy.cyberware || [],
     firewall: enemy.firewall || null,
