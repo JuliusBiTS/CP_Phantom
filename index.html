@@ -157,6 +157,17 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 }
 .topbar-brand { font-size: 8px; letter-spacing: 0.4em; color: var(--text3); white-space: nowrap; }
 .topbar-title { font-size: 13px; font-weight: 700; color: var(--text); flex: 1; letter-spacing: 0.06em; }
+.topbar-avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--surface2);
+  border: 2px solid var(--cyan);
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; color: var(--cyan);
+}
 .topbar-badge { font-size: 8px; padding: 3px 8px; letter-spacing: 0.15em; border-radius: var(--radius); }
 .badge-gm { background: var(--red-glow); color: #ff6688; border: 1px solid var(--red-bright); }
 .badge-player { background: var(--cyan-glow); color: var(--cyan); border: 1px solid var(--cyan); }
@@ -697,6 +708,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 <div id="screen-player" class="screen">
   <div class="topbar">
     <span class="topbar-brand">CP //</span>
+    <div id="player-avatar" class="topbar-avatar"></div>
     <span class="topbar-title" id="player-char-name">CHARACTER</span>
     <span class="topbar-badge badge-player">PLAYER</span>
   </div>
@@ -1208,7 +1220,26 @@ function ensurePortraitListener(id) {
     renderCharList();
     if (combatViewMode === 'map') renderMapView();
     if (editingCharId === id) updatePortraitPreview(id);
+    if (session.role === 'player') {
+      renderPlayerMapView();
+      if (session.charId === id) updatePlayerAvatar();
+    }
   });
+}
+
+function updatePlayerAvatar() {
+  const el = document.getElementById('player-avatar');
+  if (!el) return;
+  const id = session.charId;
+  const c = state.characters[id];
+  const portrait = portraits[id];
+  if (portrait) {
+    el.style.backgroundImage = `url('${portrait}')`;
+    el.textContent = '';
+  } else {
+    el.style.backgroundImage = 'none';
+    el.textContent = c ? c.name.slice(0, 2).toUpperCase() : '';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1311,6 +1342,8 @@ function showGM() {
 
 function showPlayer() {
   document.getElementById('player-char-name').textContent = (state.characters[session.charId]?.name || 'CHARACTER').toUpperCase();
+  ensurePortraitListener(session.charId);
+  updatePlayerAvatar();
   renderPlayerView();
   showScreen('screen-player');
 }
@@ -1780,6 +1813,8 @@ function renderPlayerView() {
   const id = session.charId;
   const c = state.characters[id]; if (!c) return;
   document.getElementById('player-char-name').textContent = (c.name || 'CHARACTER').toUpperCase();
+  ensurePortraitListener(id);
+  updatePlayerAvatar();
   const hpMax = c.hp_max || 1;
   const hpCur = c.hp_current ?? hpMax;
   const pct = Math.max(0, Math.min(100, hpCur / hpMax * 100));
