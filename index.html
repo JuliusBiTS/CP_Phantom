@@ -3093,7 +3093,7 @@ const SMART_TIERS = {
 // instead of auto-applied, since they depend on conditions the app has no
 // way to know. Reused by both the combat card and the damage modal.
 function computeLiveWeaponStats(c, w) {
-  const catalogMatch = matchCatalogName(w.name, WEAPON_TABLE);
+  const catalogMatch = matchWeaponName(w.name);
   let bonus = w.bonus || 0;
   let pw = null, pwLabel = w.pw || '';
   if (catalogMatch && c.stats) {
@@ -3206,6 +3206,36 @@ function matchCatalogName(name, table) {
   return key ? table[key] : null;
 }
 
+// Common Cyberpunk-flavor weapon names, mapped to the rulebook catalog
+// entry whose PW stats/bonus they should use. Lets a GM name a weapon
+// "Katana" or "Monowire" and still get real, computed PW/bonus numbers
+// instead of falling back to a generic tier-based guess.
+const WEAPON_ALIASES = {
+  'pistol':'Medium Pistol', 'handgun':'Medium Pistol', 'sidearm':'Medium Pistol',
+  'magnum':'Heavy Pistol', 'hand cannon':'Heavy Pistol', 'revolver':'Heavy Pistol', 'desert eagle':'Heavy Pistol',
+  'auto-cannon pistol':'Very Heavy Pistol', '.50 pistol':'Very Heavy Pistol', 'hand howitzer':'Very Heavy Pistol',
+  'submachine gun':'SMG', 'uzi':'SMG', 'mini-uzi':'SMG', 'mp5':'SMG',
+  'machine pistol':'Heavy SMG',
+  'ar':'Assault Rifle', 'ak-47':'Assault Rifle', 'ak47':'Assault Rifle', 'm16':'Assault Rifle', 'carbine':'Assault Rifle', 'battle rifle':'Assault Rifle',
+  'sawed-off':'Shotgun', 'pump shotgun':'Shotgun', 'combat shotgun':'Shotgun',
+  'sniper':'Sniper Rifle', 'marksman rifle':'Sniper Rifle', 'precision rifle':'Sniper Rifle',
+  'combat knife':'Knife', 'dagger':'Knife', 'switchblade':'Knife', 'vibroblade':'Knife', 'vibro knife':'Knife',
+  'brass knuckles':'Big Knucks', 'knuckle dusters':'Big Knucks', 'fists':'Big Knucks', 'unarmed':'Big Knucks',
+  'monowire':'Mono-Filament Wire', 'wire whip':'Mono-Filament Wire', 'garrote':'Mono-Filament Wire',
+  'katana':'Medium Melee', 'sword':'Medium Melee', 'machete':'Medium Melee', 'bat':'Medium Melee', 'baseball bat':'Medium Melee', 'tanto':'Medium Melee', 'axe':'Medium Melee', 'tomahawk':'Medium Melee', 'crowbar':'Medium Melee',
+  'ripper blades':'Rippers', 'claw blades':'Rippers',
+  'blade arms':'Mantis Blades',
+  'sledgehammer':'Heavy Melee', 'warhammer':'Heavy Melee', 'greatsword':'Heavy Melee', 'zweihander':'Heavy Melee', 'battle axe':'Heavy Melee', 'chainsaw':'Heavy Melee', 'power fist':'Heavy Melee',
+  'monosword':'Kendachi Mono-Three', 'mono blade':'Kendachi Mono-Three', 'nova blade':'Kendachi Mono-Three', 'mono katana':'Kendachi Mono-Three',
+};
+function matchWeaponName(name) {
+  const direct = matchCatalogName(name, WEAPON_TABLE);
+  if (direct) return direct;
+  const norm = String(name || '').trim().toLowerCase();
+  const canonical = WEAPON_ALIASES[norm];
+  return canonical ? WEAPON_TABLE[canonical] : null;
+}
+
 // Number of d20s to roll for a given PW, per the PW-bracket table
 // (1-20: 1 die | 21-40: 2 dice | 41-60: 3 dice | +1 die per further 20).
 function pwDiceCount(pw) {
@@ -3246,7 +3276,7 @@ function processGeneratedEnemy(e) {
     // all attachments are situational, so they stay descriptive-only.
     let neuralLinkNeeded = false;
     e.weapons = (e.weapons || []).map(w => {
-      const match = matchCatalogName(w.name, WEAPON_TABLE);
+      const match = matchWeaponName(w.name);
       let bonus, pwLabel, tags, pw;
       if (match) {
         pw = attrs[match.pw[0]] + attrs[match.pw[1]];
