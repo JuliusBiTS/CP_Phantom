@@ -2769,29 +2769,213 @@ function saveApiKey() {
 // ═══════════════════════════════════════════════════════════════
 const GEN_SYSTEM = `You are a Cyberpunk Phantom GM tool that generates NPC stat blocks for the tabletop RPG "Cyberpunk Phantom" — NOT Cyberpunk Red. The rules are different. Depending on the request, the NPC is either a hostile ENEMY or a friendly ALLY fighting alongside the party — the user message tells you which.
 
-ALLY GENERATION: When asked for an ALLY, write a character who assists or fights alongside the party — a bodyguard, medic, fixer's muscle, netrunner contact, hired gun, etc. Use the same stat/tier ranges as enemies (tier reflects power level, not allegiance). Frame "flavor" and "tactics" around supporting/protecting the party rather than attacking them (e.g. covering fire, healing, hacking support, intel). "loot" still means gear they're carrying (relevant if they die, or so the GM knows what they have on hand).
+ALLY GENERATION: When asked for an ALLY, write a character who assists or fights alongside the party — a bodyguard, medic, fixer's muscle, netrunner contact, hired gun, etc. Use the same tier ranges as enemies (tier reflects power level, not allegiance). Frame "flavor" and "tactics" around supporting/protecting the party rather than attacking them (e.g. covering fire, healing, hacking support, intel). "loot" still means gear they're carrying (relevant if they die, or so the GM knows what they have on hand).
 
-CYBERPUNK PHANTOM RULES — WEAPONS (v1.1):
-Medium Pistol: +3 | Heavy Pistol: +5 | Very Heavy Pistol: +8 | SMG: +3 Autofire | Heavy SMG: +5 Autofire | Assault Rifle: +11 Autofire | Sniper Rifle: +14 single-shot | Shotgun: +8 | Knife: +1 | Big Knucks: +3 | Mantis Blades (Cyber): +5 | Rippers (Cyber): +3 | Heavy Melee: +5
+IMPORTANT — DO NOT INVENT NUMBERS: This tool computes all stats (attributes, HP, Stamina, PW, weapon bonus, armor SP) deterministically in code from the "tier" and "archetype" you choose, plus the real weapon/armor/cyberware names you pick. Do NOT include any stat numbers in your response — just the fields listed below. Picking accurate names from the catalogs matters; the numbers are handled for you.
 
-ARMOR SP: Leathers 4 | Kevlar Vest 7 | Light Armorjack 11 | Medium Armorjack 13 | Heavy Armorjack 15 | MetalGear 18 | Subdermal (Cyber stacks): +4
+ARCHETYPE (pick the ONE that best fits the character's combat role):
+BRUISER — melee tank/brawler. GUNNER — ranged generalist (pistol/SMG/AR). SNIPER — precision long-range. NETRUNNER — hacker/tech specialist. STEALTH — infiltrator/assassin. SUPPORT — medic/social/utility (fits most allies well).
 
-DAMAGE: Roll result + Weapon Bonus - Target SP = Damage. Minimum 1 damage always.
-ARMOR ABLATION: Every hit reduces Temporary SP by 1. Resets after combat.
+WEAPON CATALOG (pick names from this list where possible — pick 1 for GRUNT, 1-2 for THREAT, 2-3 for BOSS):
+Medium Pistol, Heavy Pistol, Very Heavy Pistol, Malorian Arms 3516, SMG, Heavy SMG, Assault Rifle, Shotgun, Sniper Rifle, Knife, Big Knucks, Mono-Filament Wire, Medium Melee, Rippers, Mantis Blades, Heavy Melee, Kendachi Mono-Three
 
-PC BASELINE (Lena +30%): HP ~25 | Combat PW ~17 | Initiative ~13 | Armor SP 11-13
-TIERS: GRUNT: HP 8-14, PW 8-12, SP 4-11, no Flink | THREAT: HP 18-26, PW 14-18, SP 11-15, Flink sometimes | BOSS: HP 32-55+, PW 20-28, SP 15-18 stacked, always Flink
+ARMOR CATALOG (pick one name): Leathers, Kevlar Vest, Body Weight Suit, Light Armorjack, Medium Armorjack, Heavy Armorjack, MetalGear
+
+CYBERWARE CATALOG (optional, pick 0-3 names where sensible; other cyberware names are allowed as flavor but won't affect stats): Reflex Booster, Memory Booster, Cybereye, Cyberaudio Suite, Cyberleg, Cyberarm, Subdermal Armor, Neural Link, Kerenzikov, Sandevistan
+
+FLINK: GRUNT NPCs never have Flink. BOSS NPCs always have Flink. For THREAT, decide based on the character concept.
 
 IMAGE PROMPT: Write "imagePrompt" as a single self-contained paragraph a GM can paste directly into an image generator (Midjourney/DALL-E/Stable Diffusion) with zero editing. Describe ONLY visual, static appearance — build, face, skin/hair/eyes, exact clothing and colors, visible cyberware and where it's mounted, pose/expression, and end with an art-style clause (e.g. "cyberpunk noir illustration, dramatic neon rim lighting, detailed digital art, portrait framing"). Do NOT include stats, tactics, backstory, or anything not visible in a single still image. Must stay consistent with the character's tier, weapons, and cyberware listed elsewhere in the same JSON.
 
 SINGLE ENEMY JSON (respond ONLY with this, no backticks, no extra text):
-{"name":"string","tier":"GRUNT|THREAT|BOSS","flavor":"2-3 sentences noir","imagePrompt":"string, see IMAGE PROMPT rule above","stats":{"HP":number,"Stamina":number,"Initiative":number,"ReactionValue":number},"combat":{"primaryPW":number,"primaryPWLabel":"Dex+Ref","secondaryPW":null,"secondaryPWLabel":null},"armor":{"name":"string","SP_body":number,"SP_head":null,"note":null},"weapons":[{"name":"string","bonus":number,"pwLabel":"string","tags":["Autofire"]}],"cyberware":["string"],"firewall":null,"flink":false,"tactics":"string","loot":["string"],"gmNote":null}
+{"name":"string","tier":"GRUNT|THREAT|BOSS","archetype":"BRUISER|GUNNER|SNIPER|NETRUNNER|STEALTH|SUPPORT","flavor":"2-3 sentences noir","imagePrompt":"string, see IMAGE PROMPT rule above","armor":{"name":"string from ARMOR CATALOG"},"weapons":[{"name":"string from WEAPON CATALOG"}],"cyberware":["string, ideally from CYBERWARE CATALOG"],"flink":false,"tactics":"string","loot":["string"],"gmNote":null}
 
 ENCOUNTER JSON (respond ONLY with this when asked for encounter, no backticks):
 {"encounterTitle":"string","encounterSummary":"string","partySize":number,"difficulty":"EASY|BALANCED|BRUTAL","enemies":[...same format as single enemy...],"encounterTactics":"string","gmNote":null}
 
 LOOT: Always include 3-6 items. Note if weapons/armor are recoverable. Include credchips, ammo, cyberware (needs Chirurgie roll to harvest), narrative items.
 LARGE ENCOUNTERS (5+ enemies): Keep flavor/tactics/gmNote short (1-2 sentences). JSON must be complete and valid.`;
+
+// ═══════════════════════════════════════════════════════════════
+// DETERMINISTIC NPC STAT ENGINE
+// Power/Mobility/Mind are themselves stats ("lead stats") that cap
+// every sub-stat beneath them and grant a pool of leadStat*2 points
+// to freely distribute across those sub-stats. Verified against two
+// real starting-PC sheets (lead-stat triples both summed to 46).
+// The LLM only picks tier/archetype/gear names — every number below
+// is computed here, never trusted from the model's own arithmetic.
+// ═══════════════════════════════════════════════════════════════
+const ARCHETYPES = {
+  BRUISER:   { lead: {power:20, mobility:12, mind:14},
+               power:    {strength:.35, dexterity:.20, grit:.30, drive:.10, core:.05},
+               mobility: {speed:.15, agility:.20, reflexes:.35, stealth:.10, senses:.20},
+               mind:     {intelligence:.11, focus:.17, creativity:.11, will:.33, cool:.28} },
+  GUNNER:    { lead: {power:14, mobility:20, mind:12},
+               power:    {strength:.15, dexterity:.35, grit:.25, drive:.15, core:.10},
+               mobility: {speed:.15, agility:.15, reflexes:.40, stealth:.10, senses:.20},
+               mind:     {intelligence:.11, focus:.17, creativity:.11, will:.17, cool:.44} },
+  SNIPER:    { lead: {power:10, mobility:18, mind:18},
+               power:    {strength:.10, dexterity:.30, grit:.30, drive:.15, core:.15},
+               mobility: {speed:.10, agility:.15, reflexes:.30, stealth:.15, senses:.30},
+               mind:     {intelligence:.17, focus:.44, creativity:.11, will:.17, cool:.11} },
+  NETRUNNER: { lead: {power:8, mobility:12, mind:26},
+               power:    {strength:.10, dexterity:.20, grit:.20, drive:.20, core:.30},
+               mobility: {speed:.15, agility:.15, reflexes:.20, stealth:.25, senses:.25},
+               mind:     {intelligence:.37, focus:.26, creativity:.21, will:.11, cool:.05} },
+  STEALTH:   { lead: {power:12, mobility:24, mind:10},
+               power:    {strength:.15, dexterity:.35, grit:.15, drive:.20, core:.15},
+               mobility: {speed:.15, agility:.30, reflexes:.20, stealth:.25, senses:.10},
+               mind:     {intelligence:.18, focus:.18, creativity:.18, will:.18, cool:.28} },
+  SUPPORT:   { lead: {power:10, mobility:14, mind:22},
+               power:    {strength:.10, dexterity:.15, grit:.20, drive:.25, core:.30},
+               mobility: {speed:.15, agility:.15, reflexes:.20, stealth:.15, senses:.35},
+               mind:     {intelligence:.28, focus:.22, creativity:.17, will:.22, cool:.11} },
+};
+const TIER_SCALE = { GRUNT: 0.55, THREAT: 1.0, BOSS: 2.0 };
+
+const WEAPON_TABLE = {
+  'Medium Pistol':      {bonus:3,  pw:['reflexes','cool'],      label:'Ref+Cool'},
+  'Heavy Pistol':       {bonus:5,  pw:['reflexes','cool'],      label:'Ref+Cool'},
+  'Very Heavy Pistol':  {bonus:8,  pw:['reflexes','cool'],      label:'Ref+Cool'},
+  'Malorian Arms 3516': {bonus:11, pw:['reflexes','cool'],      label:'Ref+Cool'},
+  'SMG':                {bonus:3,  pw:['dexterity','reflexes'], label:'Dex+Ref', tags:['Autofire']},
+  'Heavy SMG':          {bonus:5,  pw:['dexterity','reflexes'], label:'Dex+Ref', tags:['Autofire']},
+  'Assault Rifle':      {bonus:11, pw:['dexterity','reflexes'], label:'Dex+Ref', tags:['Autofire']},
+  'Shotgun':             {bonus:8,  pw:['strength','reflexes'],  label:'Str+Ref'},
+  'Sniper Rifle':        {bonus:14, pw:['focus','senses'],       label:'Foc+Sen'},
+  'Knife':                {bonus:1,  pw:['dexterity','agility'],  label:'Dex+Agi'},
+  'Big Knucks':           {bonus:3,  pw:['dexterity','agility'],  label:'Dex+Agi'},
+  'Mono-Filament Wire':  {bonus:1,  pw:['dexterity','agility'],  label:'Dex+Agi'},
+  'Medium Melee':        {bonus:3,  pw:['dexterity','strength'], label:'Dex+Str'},
+  'Rippers':              {bonus:3,  pw:['dexterity','strength'], label:'Dex+Str'},
+  'Mantis Blades':       {bonus:5,  pw:['dexterity','strength'], label:'Dex+Str'},
+  'Heavy Melee':          {bonus:5,  pw:['strength','grit'],      label:'Str+Grit'},
+  'Kendachi Mono-Three': {bonus:8,  pw:['strength','grit'],      label:'Str+Grit'},
+};
+const ARMOR_TABLE = {
+  'Leathers':         {sp_body:4,  sp_head:null},
+  'Kevlar Vest':      {sp_body:7,  sp_head:null},
+  'Body Weight Suit': {sp_body:11, sp_head:null},
+  'Light Armorjack':  {sp_body:11, sp_head:11},
+  'Medium Armorjack': {sp_body:13, sp_head:13},
+  'Heavy Armorjack':  {sp_body:15, sp_head:15},
+  'MetalGear':        {sp_body:18, sp_head:18},
+};
+const CYBERWARE_STAT_BONUS = {
+  'reflex booster':   {reflexes:3},
+  'memory booster':   {intelligence:3},
+  'cybereye':          {senses:1},
+  'cybereye (basis)': {senses:1},
+  'cyberaudio suite': {senses:1},
+  'cyberleg':          {speed:2},
+  'cyberarm':          {strength:2},
+};
+const FALLBACK_WEAPON_BONUS = { GRUNT:3, THREAT:8, BOSS:12 };
+const FALLBACK_ARMOR_SP = { GRUNT:6, THREAT:12, BOSS:16 };
+
+function distribute(pool, weights, cap) {
+  const keys = Object.keys(weights);
+  const raw = keys.map(k => pool * weights[k]);
+  const floor = raw.map(Math.floor);
+  let remainder = pool - floor.reduce((a,b) => a+b, 0);
+  const order = keys.map((k,i) => ({k, frac: raw[i]-floor[i]})).sort((a,b) => b.frac-a.frac);
+  const result = {};
+  keys.forEach((k,i) => result[k] = floor[i]);
+  for (let i=0; i<remainder; i++) result[order[i].k]++;
+  keys.forEach(k => { if (result[k] > cap) result[k] = cap; });
+  return result;
+}
+
+function computeAttributes(tier, archetype) {
+  const scale = TIER_SCALE[tier] ?? 1.0;
+  const arch = ARCHETYPES[archetype] || ARCHETYPES.GUNNER;
+  const lead = {
+    power: Math.max(1, Math.round(arch.lead.power * scale)),
+    mobility: Math.max(1, Math.round(arch.lead.mobility * scale)),
+    mind: Math.max(1, Math.round(arch.lead.mind * scale)),
+  };
+  return {
+    power: lead.power, mobility: lead.mobility, mind: lead.mind,
+    ...distribute(lead.power * 2, arch.power, lead.power),
+    ...distribute(lead.mobility * 2, arch.mobility, lead.mobility),
+    ...distribute(lead.mind * 2, arch.mind, lead.mind),
+    rep: 0, emp: 0, luck: 0,
+  };
+}
+
+function matchCatalogName(name, table) {
+  if (!name) return null;
+  const norm = String(name).trim().toLowerCase();
+  const key = Object.keys(table).find(k => k.toLowerCase() === norm);
+  return key ? table[key] : null;
+}
+
+// Number of d20s to roll for a given PW, per the PW-bracket table
+// (1-20: 1 die | 21-40: 2 dice | 41-60: 3 dice | +1 die per further 20).
+function pwDiceCount(pw) {
+  if (pw <= 0) return 1;
+  return Math.ceil(pw / 20);
+}
+
+function processGeneratedEnemy(e) {
+  try {
+    const tier = ['GRUNT','THREAT','BOSS'].includes(e.tier) ? e.tier : 'THREAT';
+    const archetype = ARCHETYPES[e.archetype] ? e.archetype : 'GUNNER';
+    e.tier = tier;
+    e.archetype = archetype;
+    const attrs = computeAttributes(tier, archetype);
+
+    // Cyberware: apply clean flat stat bonuses; Subdermal Armor bumps armor SP instead.
+    let subdermalBonus = 0;
+    (e.cyberware || []).forEach(cw => {
+      const norm = String(cw).trim().toLowerCase();
+      if (norm === 'subdermal armor') { subdermalBonus += 4; return; }
+      const bonus = CYBERWARE_STAT_BONUS[norm];
+      if (bonus) Object.entries(bonus).forEach(([stat, amt]) => { attrs[stat] = (attrs[stat] || 0) + amt; });
+    });
+
+    e.attributes = attrs;
+    e.stats = {
+      HP: Math.round((attrs.grit + attrs.core) * 1.5),
+      Stamina: Math.round((attrs.drive + attrs.core) * 1.5),
+      Initiative: attrs.speed + attrs.reflexes,
+      ReactionValue: attrs.drive + attrs.reflexes,
+    };
+    e.ip_max = Math.floor((attrs.intelligence + attrs.focus + attrs.creativity + attrs.will + attrs.cool) / 5) * 2;
+
+    // Weapons: resolve real bonus/PW from attributes, with a graceful fallback for unrecognized names.
+    e.weapons = (e.weapons || []).map(w => {
+      const match = matchCatalogName(w.name, WEAPON_TABLE);
+      if (match) {
+        const pw = attrs[match.pw[0]] + attrs[match.pw[1]];
+        return { name: w.name, bonus: match.bonus, pwLabel: `${match.label} · ${pw}`, tags: match.tags || [], _pw: pw };
+      }
+      const fallbackPW = attrs.dexterity + attrs.reflexes;
+      return { name: w.name || 'Unknown Weapon', bonus: FALLBACK_WEAPON_BONUS[tier], pwLabel: `Dex+Ref · ${fallbackPW}`, tags: [], _pw: fallbackPW };
+    });
+    if (e.weapons.length) {
+      e.combat = { primaryPW: e.weapons[0]._pw, primaryPWLabel: e.weapons[0].pwLabel.split(' · ')[0], secondaryPW: null, secondaryPWLabel: null };
+      e.weapons.forEach(w => delete w._pw);
+    } else {
+      e.combat = { primaryPW: null, primaryPWLabel: '', secondaryPW: null, secondaryPWLabel: null };
+    }
+
+    // Armor: resolve real SP from name, with Subdermal Armor stacking on top.
+    const armorMatch = matchCatalogName(e.armor?.name, ARMOR_TABLE);
+    if (armorMatch) {
+      e.armor = { name: e.armor.name, SP_body: armorMatch.sp_body + subdermalBonus, SP_head: armorMatch.sp_head, note: null };
+    } else {
+      e.armor = { name: e.armor?.name || 'Improvised Armor', SP_body: FALLBACK_ARMOR_SP[tier] + subdermalBonus, SP_head: null, note: null };
+    }
+
+    // Flink is tier-clamped regardless of what the model chose.
+    if (tier === 'GRUNT') e.flink = false;
+    if (tier === 'BOSS') e.flink = true;
+  } catch (err) {
+    console.error('processGeneratedEnemy failed, leaving raw LLM values in place:', err);
+  }
+  return e;
+}
 
 let genMode = 'single';
 let genFaction = 'enemy';
@@ -2872,6 +3056,10 @@ async function runGenerator() {
     // "+ ENCOUNTER" carries it through into the character record.
     if (parsed.enemies) parsed.enemies.forEach(en => en.faction = genFaction);
     else parsed.faction = genFaction;
+    // The LLM only picked tier/archetype/gear names — compute every
+    // actual stat number deterministically from those choices.
+    if (parsed.enemies) parsed.enemies.forEach(en => processGeneratedEnemy(en));
+    else processGeneratedEnemy(parsed);
     document.getElementById('gen-prompt').value = '';
     const container = document.getElementById('gen-results');
     const div = document.createElement('div');
@@ -2913,7 +3101,7 @@ function renderEnemyResult(e) {
         ${e.firewall ? `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);padding:8px 12px;text-align:center;min-width:60px"><div style="font-size:9px;color:#484848;letter-spacing:0.12em;margin-bottom:2px">FW</div><div style="font-size:18px;font-weight:700">${e.firewall}</div></div>` : ''}
       </div>
       <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px">
-        <div style="background:rgba(255,255,255,0.04);padding:5px 11px;border:1px solid rgba(255,255,255,0.05)"><span style="color:var(--text3);font-size:9px">${esc(e.combat?.primaryPWLabel||'')} </span><span style="font-size:14px;font-weight:700">${e.combat?.primaryPW??'—'}</span></div>
+        <div style="background:rgba(255,255,255,0.04);padding:5px 11px;border:1px solid rgba(255,255,255,0.05)"><span style="color:var(--text3);font-size:9px">${esc(e.combat?.primaryPWLabel||'')} </span><span style="font-size:14px;font-weight:700">${e.combat?.primaryPW??'—'}</span>${e.combat?.primaryPW ? `<span style="color:var(--text3);font-size:9px"> → ${pwDiceCount(e.combat.primaryPW)}×d20</span>` : ''}</div>
         ${pw2}
       </div>
       <div style="margin-bottom:10px"><div style="font-size:9px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">ARMOR</div>
@@ -2962,9 +3150,12 @@ function genResultToCharacter(enemy) {
   const armorSP = enemy.armor?.SP_body || 0;
   return {
     name: enemy.name, isNPC: true, isAlly: enemy.faction === 'ally',
+    stats: enemy.attributes || null,
+    hp_override: true, sta_override: true,
     hp_max: hp, hp_current: hp,
     stamina_max: sta, stamina_current: sta,
     initiative: enemy.stats?.Initiative || 8,
+    ip_max: enemy.ip_max ?? null, ip_current: enemy.ip_max ?? null,
     has_flink: !!enemy.flink, flink_used: false,
     tier: enemy.tier || 'THREAT',
     armor_body: enemy.armor?.name ? { name: enemy.armor.name, sp_base: armorSP, sp_temp: armorSP } : null,
