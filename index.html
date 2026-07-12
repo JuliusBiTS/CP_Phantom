@@ -258,7 +258,6 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   position: absolute;
   width: 40px; height: 40px;
   border-radius: 50%;
-  border: 3px solid;
   transform: translate(-50%, -50%);
   background-size: cover;
   background-position: center;
@@ -1488,8 +1487,20 @@ function buildMapTokensHtml(interactive) {
     const initials = esc(c.name.slice(0, 2).toUpperCase());
     const dragAttr = interactive ? ` onpointerdown="startTokenDrag(event,'${id}')"` : '';
     const cursorStyle = interactive ? '' : 'cursor:default;';
+    // Health ring: a full circle at max HP, retracting clockwise from 12
+    // o'clock as HP drops (dasharray drawn as "gap, dash" so the gap sweeps
+    // clockwise first, leaving the remaining arc visible on the trailing side).
+    const hpMax = c.hp_max || 1;
+    const pct = Math.max(0, Math.min(1, (c.hp_current ?? hpMax) / hpMax));
+    const isDead = (c.hp_current ?? 1) <= 0;
+    const r = 18.5, circ = 2 * Math.PI * r;
+    const dashLen = pct * circ, gapLen = circ - dashLen;
+    const ring = `<svg width="40" height="40" viewBox="0 0 40 40" style="position:absolute;inset:0;pointer-events:none">
+      <circle cx="20" cy="20" r="${r}" fill="none" stroke-width="3" style="stroke:${color}" stroke-dasharray="${gapLen} ${dashLen}" transform="rotate(-90 20 20)"/>
+    </svg>`;
+    const deadFilter = isDead ? 'filter:grayscale(85%) brightness(0.65);' : '';
     return `<div class="map-token" data-id="${id}" title="${esc(c.name)}"
-      style="left:${pos.x}%;top:${pos.y}%;border-color:${color};${bg}${cursorStyle}"${dragAttr}>${portrait ? '' : initials}</div>`;
+      style="left:${pos.x}%;top:${pos.y}%;${bg}${cursorStyle}${deadFilter}"${dragAttr}>${portrait ? '' : initials}${ring}</div>`;
   }).join('');
 }
 
