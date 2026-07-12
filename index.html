@@ -973,6 +973,13 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addInventoryRow()">+ ADD ITEM</button>
       <div class="section-heading">Notes (shared with player)</div>
       <textarea id="cm-notes" placeholder="Session notes, contacts, leads, reminders..." rows="6" style="resize:vertical"></textarea>
+      <div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border2)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <label style="font-size:9px;color:var(--text3);letter-spacing:0.18em">Image Prompt</label>
+          <button class="btn btn-ghost btn-small" style="font-size:9px;padding:2px 8px" onclick="copyImagePrompt({imagePrompt:document.getElementById('cm-image-prompt').value})">⎘ COPY</button>
+        </div>
+        <textarea id="cm-image-prompt" placeholder="No image prompt saved." rows="2" style="resize:vertical;font-size:9px;color:var(--text3);line-height:1.5;background:rgba(255,255,255,0.02)"></textarea>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-danger btn-small" id="cm-delete-btn" style="display:none" onclick="deleteCharacter()">DELETE</button>
@@ -2483,6 +2490,7 @@ function openCharModal(id) {
   document.getElementById('cm-cyberware').value = (c.cyberware || []).join('\n');
   loadedCharNotes = c.notes || '';
   document.getElementById('cm-notes').value = loadedCharNotes;
+  document.getElementById('cm-image-prompt').value = c.image_prompt || '';
   // Weapons
   renderWeaponRows(c.weapons || []);
   // Talents
@@ -2635,6 +2643,7 @@ async function saveCharacter() {
     notes: document.getElementById('cm-notes').value !== loadedCharNotes
       ? document.getElementById('cm-notes').value
       : (existing.notes ?? ''),
+    image_prompt: document.getElementById('cm-image-prompt').value.trim(),
   };
   const id = editingCharId || ('char_' + Date.now());
   await dbWrite('characters/' + id, char);
@@ -2773,8 +2782,10 @@ ARMOR ABLATION: Every hit reduces Temporary SP by 1. Resets after combat.
 PC BASELINE (Lena +30%): HP ~25 | Combat PW ~17 | Initiative ~13 | Armor SP 11-13
 TIERS: GRUNT: HP 8-14, PW 8-12, SP 4-11, no Flink | THREAT: HP 18-26, PW 14-18, SP 11-15, Flink sometimes | BOSS: HP 32-55+, PW 20-28, SP 15-18 stacked, always Flink
 
+IMAGE PROMPT: Write "imagePrompt" as a single self-contained paragraph a GM can paste directly into an image generator (Midjourney/DALL-E/Stable Diffusion) with zero editing. Describe ONLY visual, static appearance — build, face, skin/hair/eyes, exact clothing and colors, visible cyberware and where it's mounted, pose/expression, and end with an art-style clause (e.g. "cyberpunk noir illustration, dramatic neon rim lighting, detailed digital art, portrait framing"). Do NOT include stats, tactics, backstory, or anything not visible in a single still image. Must stay consistent with the character's tier, weapons, and cyberware listed elsewhere in the same JSON.
+
 SINGLE ENEMY JSON (respond ONLY with this, no backticks, no extra text):
-{"name":"string","tier":"GRUNT|THREAT|BOSS","flavor":"2-3 sentences noir","stats":{"HP":number,"Stamina":number,"Initiative":number,"ReactionValue":number},"combat":{"primaryPW":number,"primaryPWLabel":"Dex+Ref","secondaryPW":null,"secondaryPWLabel":null},"armor":{"name":"string","SP_body":number,"SP_head":null,"note":null},"weapons":[{"name":"string","bonus":number,"pwLabel":"string","tags":["Autofire"]}],"cyberware":["string"],"firewall":null,"flink":false,"tactics":"string","loot":["string"],"gmNote":null}
+{"name":"string","tier":"GRUNT|THREAT|BOSS","flavor":"2-3 sentences noir","imagePrompt":"string, see IMAGE PROMPT rule above","stats":{"HP":number,"Stamina":number,"Initiative":number,"ReactionValue":number},"combat":{"primaryPW":number,"primaryPWLabel":"Dex+Ref","secondaryPW":null,"secondaryPWLabel":null},"armor":{"name":"string","SP_body":number,"SP_head":null,"note":null},"weapons":[{"name":"string","bonus":number,"pwLabel":"string","tags":["Autofire"]}],"cyberware":["string"],"firewall":null,"flink":false,"tactics":"string","loot":["string"],"gmNote":null}
 
 ENCOUNTER JSON (respond ONLY with this when asked for encounter, no backticks):
 {"encounterTitle":"string","encounterSummary":"string","partySize":number,"difficulty":"EASY|BALANCED|BRUTAL","enemies":[...same format as single enemy...],"encounterTactics":"string","gmNote":null}
@@ -2912,6 +2923,13 @@ function renderEnemyResult(e) {
       ${cyber ? `<div style="margin-bottom:10px"><div style="font-size:9px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">CYBERWARE</div>${cyber}</div>` : ''}
       <div style="margin-bottom:10px"><div style="font-size:9px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">TACTICS</div><p style="font-size:11px;color:#777;line-height:1.65">${esc(e.tactics||'')}</p></div>
       ${loot ? `<div style="margin-bottom:10px"><div style="font-size:9px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">LOOT</div>${loot}</div>` : ''}
+      ${e.imagePrompt ? `<div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+          <div style="font-size:9px;color:var(--text3);letter-spacing:0.18em">IMAGE PROMPT</div>
+          <button onclick="copyImagePrompt(${JSON.stringify(e).replace(/"/g,'&quot;')})" style="background:transparent;border:1px solid var(--border2);color:var(--text2);font-size:9px;padding:2px 8px;cursor:pointer;font-family:var(--font);letter-spacing:0.1em">⎘ COPY</button>
+        </div>
+        <p style="font-size:10px;color:var(--text2);line-height:1.6;background:rgba(255,255,255,0.03);border:1px solid var(--border2);padding:8px 10px">${esc(e.imagePrompt)}</p>
+      </div>` : ''}
       ${e.gmNote ? `<div style="background:rgba(255,140,0,0.05);border:1px solid rgba(255,140,0,0.18);padding:7px 11px"><span style="color:#dd8800;font-size:9px">GM // </span><span style="color:#aa7700;font-size:11px">${esc(e.gmNote)}</span></div>` : ''}
     </div>
   </div>`;
@@ -2955,8 +2973,17 @@ function genResultToCharacter(enemy) {
     loot: enemy.loot || [],
     cyberware: enemy.cyberware || [],
     firewall: enemy.firewall || null,
+    image_prompt: enemy.imagePrompt || '',
     status_effects: [], talents: [], inventory: [], eurodollar: 0
   };
+}
+
+function copyImagePrompt(enemy) {
+  const text = enemy.imagePrompt || '';
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => showToast('Image prompt copied!')).catch(() => {
+    prompt('Copy this image prompt:', text);
+  });
 }
 
 async function addGenToCharacters(enemy) {
