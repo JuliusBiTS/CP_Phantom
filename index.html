@@ -1156,6 +1156,11 @@ let editingCharId = null;
 let loadedCharNotes = '';
 let dmgTargetId = null;
 let statusTargetId = null;
+// Tracks which combatant cards are expanded, since #combatants-list is
+// fully re-rendered from scratch on every Firebase sync (including the
+// sync triggered by the HP/armor +/- buttons inside an open card) — without
+// this, every card would silently collapse the instant its own state changed.
+let expandedCombatants = new Set();
 let pollTimer = null;
 let lastStateHash = '';
 
@@ -1797,9 +1802,10 @@ function renderWeaponsSection(c, id) {
   return `<div class="detail-row" style="align-items:flex-start">
     <span class="detail-label" style="margin-top:4px">WEAPONS</span>
     <div style="display:flex;flex-direction:column;gap:5px;flex:1">
-      ${weapons.map(w => {
+      ${weapons.map((w, wi) => {
         const live = computeLiveWeaponStats(c, w);
         const techColor = TECH_BADGE_COLOR[w.tech] || '#888';
+        const magCur = Math.min(w.magCurrent ?? live.magMax, live.magMax ?? Infinity);
         return `<div style="font-size:11px">
           <div style="display:flex;gap:8px;align-items:center">
             <span style="flex:1;color:var(--text)">${esc(w.name)}</span>
@@ -1811,6 +1817,12 @@ function renderWeaponsSection(c, id) {
             ${live.dice ? `<span style="font-size:10px;color:var(--cyan)">→ ${live.dice}×d20</span>` : ''}
           </div>
           ${live.situational.length ? `<div style="font-size:10px;color:var(--text2);padding-left:2px;margin-top:2px">${live.situational.map(s=>esc(s)).join(' · ')}</div>` : ''}
+          ${live.magMax != null ? `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:3px">
+            <span style="font-size:10px;color:${magCur<=0?'var(--red-bright)':'var(--text2)'};letter-spacing:0.05em">MAG ${magCur}/${live.magMax}</span>
+            <button class="btn btn-ghost btn-small" style="padding:1px 7px;font-size:9px" onclick="quickAdjMag('${id}',${wi},-1)" title="Fire (1 tick)">-1</button>
+            <button class="btn btn-ghost btn-small" style="padding:1px 7px;font-size:9px" onclick="quickAdjMag('${id}',${wi},-2)" title="Autofire / Suppressive Fire (2 ticks)">-2</button>
+            <button class="btn btn-gold btn-small" style="padding:1px 7px;font-size:9px" onclick="reloadWeapon('${id}',${wi})">RELOAD</button>
+          </div>` : ''}
         </div>`;
       }).join('')}
     </div>
@@ -1849,7 +1861,7 @@ function renderCombatantCard(id, isActive) {
         ${flinkHas ? `<span class="flink-badge ${flinkUsed ? 'flink-used' : 'flink-available'}">${flinkUsed ? 'FLINK ✓' : 'FLINK'}</span>` : ''}
       </div>
     </div>
-    <div class="combatant-detail" id="${detailId}">
+    <div class="combatant-detail ${expandedCombatants.has(id) ? 'open' : ''}" id="${detailId}">
       <div class="detail-row">
         <span class="detail-label">HP</span>
         <div class="adj-group">
@@ -2223,6 +2235,29 @@ async function quickAdjArmor(id, delta) {
   await dbWrite('characters/' + id + '/armor_body/sp_temp', val);
 }
 
+// Magazine tracking (rulebook §6.7): normal ammo isn't tracked shot-by-shot,
+// just magazine ticks. A normal shot costs 1 tick, Autofire/Suppressive Fire
+// cost 2. Reloading is a full array write, matching how status_effects and
+// other array fields are persisted elsewhere in this app.
+async function quickAdjMag(id, wi, delta) {
+  const c = state.characters[id]; if (!c?.weapons?.[wi]) return;
+  const weapons = c.weapons.map(w => ({ ...w }));
+  const live = computeLiveWeaponStats(c, weapons[wi]);
+  if (live.magMax == null) return;
+  const cur = weapons[wi].magCurrent ?? live.magMax;
+  weapons[wi].magCurrent = Math.max(0, Math.min(live.magMax, cur + delta));
+  await dbWrite('characters/' + id + '/weapons', weapons);
+}
+async function reloadWeapon(id, wi) {
+  const c = state.characters[id]; if (!c?.weapons?.[wi]) return;
+  const weapons = c.weapons.map(w => ({ ...w }));
+  const live = computeLiveWeaponStats(c, weapons[wi]);
+  if (live.magMax == null) return;
+  weapons[wi].magCurrent = live.magMax;
+  await dbWrite('characters/' + id + '/weapons', weapons);
+  showToast('Reloaded — costs a Nebenaktion.');
+}
+
 async function toggleFlink(id) {
   const c = state.characters[id]; if (!c) return;
   await dbWrite('characters/' + id + '/flink_used', !c.flink_used);
@@ -2381,8 +2416,10 @@ function scrollToCombatant(id) {
 function toggleDetail(id, forceOpen) {
   const el = document.getElementById('detail-' + id);
   if (!el) return;
-  if (forceOpen) el.classList.add('open');
-  else el.classList.toggle('open');
+  if (forceOpen) { el.classList.add('open'); expandedCombatants.add(id); return; }
+  el.classList.toggle('open');
+  if (el.classList.contains('open')) expandedCombatants.add(id);
+  else expandedCombatants.delete(id);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -3042,15 +3079,16 @@ const ARCHETYPES = {
 const TIER_SCALE = { GRUNT: 0.55, THREAT: 1.0, BOSS: 2.0 };
 
 const WEAPON_TABLE = {
-  'Medium Pistol':      {bonus:3,  pw:['reflexes','cool'],      label:'Ref+Cool'},
-  'Heavy Pistol':       {bonus:5,  pw:['reflexes','cool'],      label:'Ref+Cool'},
-  'Very Heavy Pistol':  {bonus:8,  pw:['reflexes','cool'],      label:'Ref+Cool'},
-  'Malorian Arms 3516': {bonus:11, pw:['reflexes','cool'],      label:'Ref+Cool'},
-  'SMG':                {bonus:3,  pw:['dexterity','reflexes'], label:'Dex+Ref', tags:['Autofire']},
-  'Heavy SMG':          {bonus:5,  pw:['dexterity','reflexes'], label:'Dex+Ref', tags:['Autofire']},
-  'Assault Rifle':      {bonus:11, pw:['dexterity','reflexes'], label:'Dex+Ref', tags:['Autofire']},
-  'Shotgun':             {bonus:8,  pw:['strength','reflexes'],  label:'Str+Ref'},
-  'Sniper Rifle':        {bonus:14, pw:['focus','senses'],       label:'Foc+Sen'},
+  'Medium Pistol':      {bonus:3,  pw:['reflexes','cool'],      label:'Ref+Cool', mag:5},
+  'Heavy Pistol':       {bonus:5,  pw:['reflexes','cool'],      label:'Ref+Cool', mag:4},
+  'Very Heavy Pistol':  {bonus:8,  pw:['reflexes','cool'],      label:'Ref+Cool', mag:3},
+  'Malorian Arms 3516': {bonus:11, pw:['reflexes','cool'],      label:'Ref+Cool', mag:2},
+  'SMG':                {bonus:3,  pw:['dexterity','reflexes'], label:'Dex+Ref', tags:['Autofire'], mag:5},
+  'Heavy SMG':          {bonus:5,  pw:['dexterity','reflexes'], label:'Dex+Ref', tags:['Autofire'], mag:4},
+  'Assault Rifle':      {bonus:11, pw:['dexterity','reflexes'], label:'Dex+Ref', tags:['Autofire'], mag:5},
+  'Shotgun':             {bonus:8,  pw:['strength','reflexes'],  label:'Str+Ref', mag:2},
+  'Sniper Rifle':        {bonus:14, pw:['focus','senses'],       label:'Foc+Sen', mag:1},
+  // Melee weapons have no magazine column in the rulebook (§6.5) — no ammo to track.
   'Knife':                {bonus:1,  pw:['dexterity','agility'],  label:'Dex+Agi'},
   'Big Knucks':           {bonus:3,  pw:['dexterity','agility'],  label:'Dex+Agi'},
   'Mono-Filament Wire':  {bonus:1,  pw:['dexterity','agility'],  label:'Dex+Agi'},
@@ -3103,8 +3141,8 @@ const ATTACHMENT_CATALOG = [
   {name:'Bipod', effect:'+4 PW while prone/braced, no movement', costTier:'normal'},
   {name:'Grenade Launcher', effect:'1x/combat: Focus+Strength, +14 in 3m radius', costTier:'sehr teuer'},
   {name:'Flashlight', effect:'Eliminates darkness penalty, but reveals position', costTier:'guenstig'},
-  {name:'Extended Magazine', effect:'+2 magazine ticks', costTier:'normal'},
-  {name:'Drum Magazine', effect:'Doubles magazine, -1 Speed', costTier:'teuer'},
+  {name:'Extended Magazine', effect:'+2 magazine ticks', costTier:'normal', magEffect:{add:2}},
+  {name:'Drum Magazine', effect:'Doubles magazine, -1 Speed', costTier:'teuer', magEffect:{multiply:2}},
   {name:'Quick-Release Mag', effect:'Reload as a free action, once per combat', costTier:'teuer'},
 ];
 const WEAPON_TECH_EFFECTS = {
@@ -3128,6 +3166,7 @@ function computeLiveWeaponStats(c, w) {
   const catalogMatch = matchWeaponName(w.name);
   let bonus = w.bonus || 0;
   let pw = null, pwLabel = w.pw || '';
+  let magMax = catalogMatch?.mag ?? null; // null = no magazine (melee, or unrecognized name)
   if (catalogMatch && c.stats) {
     pw = c.stats[catalogMatch.pw[0]] + c.stats[catalogMatch.pw[1]];
     pwLabel = catalogMatch.label;
@@ -3135,8 +3174,13 @@ function computeLiveWeaponStats(c, w) {
   const situational = [];
   (w.attachments || []).forEach(a => {
     const entry = ATTACHMENT_CATALOG.find(e => e.name === a.name);
-    if (entry && entry.alwaysOn) bonus += entry.alwaysOn.bonus || 0;
-    else situational.push(a.name + (a.effect ? ': ' + a.effect : ''));
+    const isNumeric = entry && (entry.alwaysOn || entry.magEffect);
+    if (entry?.alwaysOn) bonus += entry.alwaysOn.bonus || 0;
+    if (entry?.magEffect && magMax != null) {
+      if (entry.magEffect.multiply) magMax *= entry.magEffect.multiply;
+      if (entry.magEffect.add) magMax += entry.magEffect.add;
+    }
+    if (!isNumeric) situational.push(a.name + (a.effect ? ': ' + a.effect : ''));
   });
   if (w.tech === 'smart' && w.techLevel && SMART_TIERS[w.techLevel]) {
     const s = SMART_TIERS[w.techLevel];
@@ -3146,7 +3190,7 @@ function computeLiveWeaponStats(c, w) {
   } else if (w.tech === 'power' || w.tech === 'tech') {
     situational.push(WEAPON_TECH_EFFECTS[w.tech]);
   }
-  return { bonus, pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, situational };
+  return { bonus, pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, situational, magMax };
 }
 
 const TECH_CHANCE = { GRUNT:0.05, THREAT:0.25, BOSS:0.70 };
