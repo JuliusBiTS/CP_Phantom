@@ -997,6 +997,25 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <button class="modal-close" onclick="closeModal('dmg-modal')">✕</button>
     </div>
     <div class="modal-body">
+      <div id="dmg-calc-section" style="display:none;margin-bottom:10px;padding:8px;background:var(--surface2);border:1px solid var(--border2)">
+        <div class="inline-row" style="gap:4px;margin-bottom:6px">
+          <select id="dmg-calc-attacker" style="flex:1" onchange="onDmgCalcAttackerChange()">
+            <option value="">Attacker...</option>
+          </select>
+          <select id="dmg-calc-weapon" style="flex:1" onchange="onDmgCalcChange()">
+            <option value="">Weapon...</option>
+          </select>
+        </div>
+        <div id="dmg-calc-pw" style="font-size:11px;color:var(--cyan);margin-bottom:2px"></div>
+        <div id="dmg-calc-situational" style="font-size:9px;color:var(--text3);margin-bottom:6px"></div>
+        <div class="inline-row" style="gap:6px;align-items:center">
+          <span style="font-size:9px;color:var(--text3);white-space:nowrap;letter-spacing:0.08em">ROLL RESULT</span>
+          <input type="number" id="dmg-calc-roll" placeholder="0" style="width:64px" oninput="onDmgCalcChange()">
+          <span style="font-size:11px;color:var(--text2)">→</span>
+          <span id="dmg-calc-result" style="font-size:13px;font-weight:700;color:var(--red-bright)">—</span>
+          <button class="btn btn-primary btn-small" style="margin-left:auto" onclick="useDmgCalcResult()">↓ USE</button>
+        </div>
+      </div>
       <div class="dmg-display" id="dmg-display">0</div>
       <div class="dmg-keypad">
         <button class="dmg-key" onclick="dmgKey('1')">1</button>
@@ -1772,6 +1791,30 @@ function renderLootAndItems(c, id) {
   return html;
 }
 
+function renderWeaponsSection(c, id) {
+  const weapons = c.weapons || [];
+  if (!weapons.length) return '';
+  return `<div class="detail-row" style="align-items:flex-start">
+    <span class="detail-label" style="margin-top:4px">WEAPONS</span>
+    <div style="display:flex;flex-direction:column;gap:5px;flex:1">
+      ${weapons.map(w => {
+        const live = computeLiveWeaponStats(c, w);
+        const techColor = TECH_BADGE_COLOR[w.tech] || '#888';
+        return `<div style="font-size:11px">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <span style="flex:1;min-width:60px">${esc(w.name)}</span>
+            <span style="color:var(--gold-bright);font-weight:700">+${live.bonus}</span>
+            <span style="font-size:9px;color:var(--text3)">${esc(live.pwLabel)}${live.pw!=null?' · '+live.pw:''}</span>
+            ${live.dice ? `<span style="font-size:9px;color:var(--text3)">→ ${live.dice}×d20</span>` : ''}
+            ${w.tech && w.tech!=='base' ? `<span style="font-size:8px;padding:1px 5px;background:${techColor}33;border:1px solid ${techColor};color:${techColor};letter-spacing:0.05em">${w.tech.toUpperCase()}</span>` : ''}
+          </div>
+          ${live.situational.length ? `<div style="font-size:9px;color:var(--text3);padding-left:8px;margin-top:1px">${live.situational.map(s=>esc(s)).join(' · ')}</div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
 function renderCombatantCard(id, isActive) {
   const c = state.characters[id]; if (!c) return '';
   const hpMax = c.hp_max || 1;
@@ -1855,6 +1898,7 @@ function renderCombatantCard(id, isActive) {
           </div>
         </div>
       </div>
+      ${renderWeaponsSection(c, id)}
       ${renderLootAndItems(c, id)}
       <div class="detail-row" style="justify-content:flex-end">
         <button class="btn btn-ghost btn-small" onclick="openCharModal('${id}')">EDIT</button>
@@ -2349,7 +2393,72 @@ function openDmgModal(id, mode) {
   const c = state.characters[id];
   document.getElementById('dmg-modal-title').textContent = (dmgHealMode ? 'HEAL ' : 'DAMAGE ') + (c?.name || '').toUpperCase();
   document.getElementById('dmg-display').textContent = '0';
+  populateDmgCalc();
   openModal('dmg-modal');
+}
+
+// Damage calculator: pick an attacker + their weapon, see the live PW to
+// tell the player what to roll, type the roll result, and get
+// roll+bonus-targetSP (min 1) to push into the keypad above. Doesn't touch
+// dmgKey/applyDmg at all — it's purely a pre-fill convenience.
+function populateDmgCalc() {
+  const section = document.getElementById('dmg-calc-section');
+  if (dmgHealMode) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  const attackerSel = document.getElementById('dmg-calc-attacker');
+  const order = state.combat?.order || [];
+  attackerSel.innerHTML = '<option value="">Attacker...</option>' + order
+    .filter(cid => cid !== dmgTargetId)
+    .map(cid => state.characters[cid] ? [cid, state.characters[cid]] : null)
+    .filter(pair => pair && (pair[1].hp_current ?? pair[1].hp_max ?? 1) > 0)
+    .map(([cid, c]) => `<option value="${cid}">${esc(c.name)}</option>`).join('');
+  document.getElementById('dmg-calc-weapon').innerHTML = '<option value="">Weapon...</option>';
+  document.getElementById('dmg-calc-pw').textContent = '';
+  document.getElementById('dmg-calc-situational').textContent = '';
+  document.getElementById('dmg-calc-roll').value = '';
+  const resultEl = document.getElementById('dmg-calc-result');
+  resultEl.textContent = '—';
+  resultEl.dataset.value = '';
+}
+function onDmgCalcAttackerChange() {
+  const attackerId = document.getElementById('dmg-calc-attacker').value;
+  const weaponSel = document.getElementById('dmg-calc-weapon');
+  const weapons = state.characters[attackerId]?.weapons || [];
+  weaponSel.innerHTML = '<option value="">Weapon...</option>' + weapons.map((w,i) => `<option value="${i}">${esc(w.name)}</option>`).join('');
+  onDmgCalcChange();
+}
+function onDmgCalcChange() {
+  const attacker = state.characters[document.getElementById('dmg-calc-attacker').value];
+  const wi = document.getElementById('dmg-calc-weapon').value;
+  const weapon = attacker?.weapons?.[wi];
+  const pwEl = document.getElementById('dmg-calc-pw');
+  const sitEl = document.getElementById('dmg-calc-situational');
+  const resultEl = document.getElementById('dmg-calc-result');
+  if (!attacker || !weapon) {
+    pwEl.textContent = ''; sitEl.textContent = ''; resultEl.textContent = '—'; resultEl.dataset.value = '';
+    return;
+  }
+  const live = computeLiveWeaponStats(attacker, weapon);
+  pwEl.textContent = live.pw != null
+    ? `PW: ${live.pwLabel} · ${live.pw} → roll ${live.dice}×d20`
+    : `PW: ${live.pwLabel || '(no stats set — enter roll manually)'}`;
+  sitEl.textContent = live.situational.length ? 'Also check: ' + live.situational.join(' · ') : '';
+  const roll = parseInt(document.getElementById('dmg-calc-roll').value) || 0;
+  const target = state.characters[dmgTargetId];
+  const targetSP = target?.armor_body?.sp_temp ?? target?.armor_body?.sp_base ?? 0;
+  if (roll > 0) {
+    const dmg = Math.max(1, roll + live.bonus - targetSP);
+    resultEl.textContent = `${dmg} dmg (${roll}+${live.bonus}-${targetSP})`;
+    resultEl.dataset.value = dmg;
+  } else {
+    resultEl.textContent = '—';
+    resultEl.dataset.value = '';
+  }
+}
+function useDmgCalcResult() {
+  const val = document.getElementById('dmg-calc-result').dataset.value;
+  if (!val) return;
+  document.getElementById('dmg-display').textContent = String(parseInt(val)).slice(0,4);
 }
 
 function dmgKey(k) {
@@ -2949,8 +3058,8 @@ const ATTACHMENT_CATALOG = [
   {name:'2.5x Scope', effect:'+4 weapon bonus medium range, -2 PW on Autofire', costTier:'normal'},
   {name:'Sniper Scope', effect:'+6 weapon bonus long range (50m+), no Autofire', costTier:'teuer'},
   {name:'Thermal Scope', effect:'Sees through smoke/darkness, +2 weapon bonus at night', costTier:'teuer'},
-  {name:'Smart Scope', effect:'Requires Neural Link. +1 weapon bonus always.', costTier:'sehr teuer'},
-  {name:'Suppressor', effect:'Shot inaudible beyond 15m, -1 weapon bonus', costTier:'normal'},
+  {name:'Smart Scope', effect:'Requires Neural Link. +1 weapon bonus always.', costTier:'sehr teuer', alwaysOn:{bonus:1}},
+  {name:'Suppressor', effect:'Shot inaudible beyond 15m, -1 weapon bonus', costTier:'normal', alwaysOn:{bonus:-1}},
   {name:'Muzzle Brake', effect:'-2 Autofire PW penalty', costTier:'normal'},
   {name:'Extended Barrel', effect:'+2 weapon bonus long range, no longer concealable', costTier:'normal'},
   {name:'Compensator', effect:'Blindfire: 1/4 PW instead of 1/2 PW penalty', costTier:'teuer'},
@@ -2975,6 +3084,37 @@ const SMART_TIERS = {
   4: { pwBonus:10, wbPenalty:3, effect:'Can shoot around cover if target is Ping-tagged.' },
   5: { pwBonus:null, wbPenalty:4, autoHit:true, effect:'Absolute targeting — automatic hit, no PW roll. Damage = weapon bonus - SP, no Crit.' },
 };
+// Live weapon math for the combat UI — computes a weapon's real PW/bonus
+// for ANY character (PC or NPC) from their actual attributes, folding in
+// unconditional (always-on) attachment/Smart-tech bonuses. Situational
+// effects (range, stance, lighting, etc.) are surfaced as reference text
+// instead of auto-applied, since they depend on conditions the app has no
+// way to know. Reused by both the combat card and the damage modal.
+function computeLiveWeaponStats(c, w) {
+  const catalogMatch = matchCatalogName(w.name, WEAPON_TABLE);
+  let bonus = w.bonus || 0;
+  let pw = null, pwLabel = w.pw || '';
+  if (catalogMatch && c.stats) {
+    pw = c.stats[catalogMatch.pw[0]] + c.stats[catalogMatch.pw[1]];
+    pwLabel = catalogMatch.label;
+  }
+  const situational = [];
+  (w.attachments || []).forEach(a => {
+    const entry = ATTACHMENT_CATALOG.find(e => e.name === a.name);
+    if (entry && entry.alwaysOn) bonus += entry.alwaysOn.bonus || 0;
+    else situational.push(a.name + (a.effect ? ': ' + a.effect : ''));
+  });
+  if (w.tech === 'smart' && w.techLevel && SMART_TIERS[w.techLevel]) {
+    const s = SMART_TIERS[w.techLevel];
+    bonus = Math.max(0, bonus - s.wbPenalty);
+    if (s.autoHit) { pw = null; pwLabel = `AUTO-HIT (Smart ${w.techLevel})`; }
+    else if (pw !== null) { pw += s.pwBonus; pwLabel = `${pwLabel} (Smart ${w.techLevel})`; }
+  } else if (w.tech === 'power' || w.tech === 'tech') {
+    situational.push(WEAPON_TECH_EFFECTS[w.tech]);
+  }
+  return { bonus, pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, situational };
+}
+
 const TECH_CHANCE = { GRUNT:0.05, THREAT:0.25, BOSS:0.70 };
 const TECH_TYPE_WEIGHTS = {
   GRUNT:  [['power',1.0]],
