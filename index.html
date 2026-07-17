@@ -1547,8 +1547,13 @@ function buildMapTokensHtml(interactive) {
     // the visible segment, so a leading "0" is needed to force the pattern
     // to start with the (invisible) gap before the (visible) remaining arc.
     const hpMax = c.hp_max || 1;
-    const pct = Math.max(0, Math.min(1, (c.hp_current ?? hpMax) / hpMax));
+    const rawPct = Math.max(0, Math.min(1, (c.hp_current ?? hpMax) / hpMax));
     const isDead = (c.hp_current ?? 1) <= 0;
+    // Players shouldn't be able to read an enemy's exact HP off the ring —
+    // show it full (or gone, if actually dead — that's an obvious binary
+    // state in play already, not a leaked number) on the player-facing map.
+    const isEnemy = c.isNPC && !c.isAlly;
+    const pct = (!interactive && isEnemy) ? (isDead ? 0 : 1) : rawPct;
     const r = 18.5, circ = 2 * Math.PI * r;
     const dashLen = pct * circ, gapLen = circ - dashLen;
     const ring = `<svg width="40" height="40" viewBox="0 0 40 40" style="position:absolute;inset:0;pointer-events:none">
