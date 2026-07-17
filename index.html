@@ -3416,6 +3416,12 @@ function processGeneratedEnemy(e) {
     let neuralLinkNeeded = false;
     e.weapons = (e.weapons || []).map(w => {
       const match = matchWeaponName(w.name);
+      // Weapon technology (Power/Tech/Smart, §7a "Fernkampfwaffen") and
+      // attachments (scopes/muzzle/underbarrel/magazine, §8 "Exotische
+      // Waffen haben keine [Attachment-Slots]") are ranged-weapon-only per
+      // the rulebook — melee weapons never roll either. `mag` is only set
+      // on firearm entries in WEAPON_TABLE, so it doubles as the ranged flag.
+      const isRanged = !!(match && match.mag != null);
       let bonus, pwLabel, tags, pw;
       if (match) {
         pw = attrs[match.pw[0]] + attrs[match.pw[1]];
@@ -3424,7 +3430,7 @@ function processGeneratedEnemy(e) {
         pw = attrs.dexterity + attrs.reflexes;
         bonus = FALLBACK_WEAPON_BONUS[tier]; tags = []; pwLabel = `Dex+Ref · ${pw}`;
       }
-      const { tech, techLevel } = rollWeaponTech(tier);
+      const { tech, techLevel } = isRanged ? rollWeaponTech(tier) : { tech: 'base', techLevel: null };
       let finalPW = pw;
       if (tech === 'smart') {
         const smart = SMART_TIERS[techLevel];
@@ -3440,7 +3446,7 @@ function processGeneratedEnemy(e) {
       }
       return {
         name: w.name || 'Unknown Weapon', bonus, pwLabel, tags,
-        tech, techLevel, attachments: rollAttachments(tier),
+        tech, techLevel, attachments: isRanged ? rollAttachments(tier) : [],
         _pw: finalPW,
       };
     });
@@ -3545,13 +3551,18 @@ async function runGenerator() {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: genMode === 'encounter' ? 8000 : 1200, system: GEN_SYSTEM, messages: [{ role: 'user', content: userMsg }] })
+      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: genMode === 'encounter' ? 8000 : 3000, system: GEN_SYSTEM, messages: [{ role: 'user', content: userMsg }] })
     });
     if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || res.statusText); }
     const data = await res.json();
     const raw = data.content.map(b => b.text || '').join('');
     const clean = raw.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
+    let parsed;
+    try {
+      parsed = JSON.parse(clean);
+    } catch (parseErr) {
+      throw new Error('Response got cut off or malformed (usually from a very long description) — try a shorter description or just hit GEN again.');
+    }
     // Stamp the faction chosen at generation time onto the result so
     // "+ ENCOUNTER" carries it through into the character record.
     if (parsed.enemies) parsed.enemies.forEach(en => en.faction = genFaction);
