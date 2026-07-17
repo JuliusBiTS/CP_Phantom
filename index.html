@@ -817,7 +817,10 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   <div id="player-tab-talents" class="tab-content main-scroll">
     <div class="player-view">
       <div class="player-card">
-        <div class="player-card-title">Talents & Techniques (tap to toggle used)</div>
+        <div class="player-card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span>Talents & Techniques (tap to toggle used)</span>
+          <span id="player-talent-badge" style="display:none;font-size:9px;padding:3px 8px;background:rgba(255,255,255,0.05);border:1px solid var(--gold-bright);color:var(--gold-bright);letter-spacing:0.08em;white-space:nowrap">★ TALENT POINT AVAILABLE</span>
+        </div>
         <div id="player-talents-list" style="display:flex;flex-direction:column;gap:6px"></div>
       </div>
     </div>
@@ -960,6 +963,10 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <div class="section-heading">Derived Values (auto-calculated)</div>
       <div id="cm-derived" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:4px"></div>
       <div style="font-size:9px;color:var(--text3);margin-bottom:4px">HP Max and Stamina Max are synced from stats. Override below only if needed (NPCs without full stats).</div>
+      <div id="cm-progression-section" style="display:none">
+        <div class="section-heading">Progression (GM only)</div>
+        <div id="cm-progression-body"></div>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
         <div class="field"><label>HP Max (override)</label><input type="number" id="cm-hp" placeholder="auto" min="1"></div>
         <div class="field"><label>Stamina Max (override)</label><input type="number" id="cm-sta" placeholder="auto" min="1"></div>
@@ -1100,6 +1107,26 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
     <div class="modal-footer">
       <button class="btn btn-ghost btn-small" onclick="closeModal('status-modal')">CANCEL</button>
       <button class="btn btn-primary btn-small" onclick="addStatusEffect()">ADD</button>
+    </div>
+  </div>
+</div>
+
+<!-- Award XP Modal -->
+<div class="modal-overlay" id="xp-modal">
+  <div class="modal" style="max-width:320px">
+    <div class="modal-header">
+      <span class="modal-title">AWARD XP — <span id="xp-modal-char-name"></span></span>
+      <button class="modal-close" onclick="closeModal('xp-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.5">Enter the XP earned for each tree based on what the character mainly did (combat/physical → Power, mobility/stealth/social → Mobility, hacking/intelligence/social → Mind). Also adds to the global talent-point pool.</div>
+      <div class="field"><label>Power XP</label><input type="number" id="xp-power" min="0" value="0"></div>
+      <div class="field"><label>Mobility XP</label><input type="number" id="xp-mobility" min="0" value="0"></div>
+      <div class="field"><label>Mind XP</label><input type="number" id="xp-mind" min="0" value="0"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-small" onclick="closeModal('xp-modal')">CANCEL</button>
+      <button class="btn btn-primary btn-small" onclick="submitAwardXp()">AWARD</button>
     </div>
   </div>
 </div>
@@ -2117,6 +2144,10 @@ function renderPlayerView() {
       </div>`;
     }).join('');
   }
+  // Talent point badge (progression tracking itself is GM-only; players only
+  // ever see whether they have an unused point, never the XP numbers behind it)
+  const talentAvailable = talentXpProgress(c.globalXP || 0).earned - (c.talentPointsSpent || 0);
+  document.getElementById('player-talent-badge').style.display = talentAvailable > 0 ? 'inline-block' : 'none';
   // Talents
   const talentList = document.getElementById('player-talents-list');
   const talents = c.talents || [];
@@ -2787,6 +2818,145 @@ function calcDerived(s, hpBonus=0, staBonus=0, ipBonus=0) {
   };
 }
 
+// ═══════════════════════════════════════════════════════════════
+// PROGRESSION — Tree XP, level-ups, banked stat points, talent points
+// (rulebook §5.3-5.5: 500 XP per tree level-up, 2 free stat points per
+// level-up, talent points from a separate never-resets global XP pool)
+// ═══════════════════════════════════════════════════════════════
+const TALENT_XP_DELTAS = [1000, 1200, 1500, 1800, 2300, 2700, 3500];
+function talentXpProgress(globalXp) {
+  globalXp = globalXp || 0;
+  let count = 0, total = 0, delta = 0;
+  while (true) {
+    delta = count < TALENT_XP_DELTAS.length ? TALENT_XP_DELTAS[count] : Math.round(delta * 1.25 / 100) * 100;
+    if (total + delta > globalXp) break;
+    total += delta;
+    count++;
+  }
+  return { earned: count, currentThreshold: total, nextThreshold: total + delta };
+}
+function getTreeLevel(c, tree) {
+  const st = c.stats || {};
+  const sum = STAT_KEYS[tree].reduce((a, k) => a + (parseInt(st[k]) || 0), 0);
+  return Math.floor(sum / 2);
+}
+function renderProgressionSection(id) {
+  const c = state.characters[id] || {};
+  const section = document.getElementById('cm-progression-section');
+  const type = document.getElementById('cm-type').value;
+  if (!id || type !== 'pc') { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  const treeXP = c.treeXP || { power: 0, mobility: 0, mind: 0 };
+  const banked = c.treeBankedPoints || { power: 0, mobility: 0, mind: 0 };
+  const treeRow = (tree, label) => {
+    const level = getTreeLevel(c, tree);
+    const xp = treeXP[tree] || 0;
+    const pts = banked[tree] || 0;
+    const allocRow = pts > 0 ? `
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">
+        <span style="font-size:9px;color:var(--gold-bright);align-self:center">${pts} pt${pts>1?'s':''} to allocate:</span>
+        ${STAT_KEYS[tree].map(k => `<button class="btn btn-ghost btn-small" style="padding:2px 7px;font-size:9px" onclick="spendBankedPoint('${id}','${tree}','${k}')">${k.charAt(0).toUpperCase()+k.slice(1)} +1</button>`).join('')}
+      </div>` : '';
+    return `
+      <div style="background:var(--surface2);border:1px solid var(--border);padding:7px 9px;margin-bottom:5px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:10px;color:var(--text2);letter-spacing:0.08em">${label} — Lv ${level}</span>
+          <span style="font-size:10px;color:var(--cyan)">${xp}/500 XP</span>
+        </div>
+        ${allocRow}
+      </div>`;
+  };
+  const globalXP = c.globalXP || 0;
+  const talentSpent = c.talentPointsSpent || 0;
+  const prog = talentXpProgress(globalXP);
+  const available = prog.earned - talentSpent;
+  document.getElementById('cm-progression-body').innerHTML = `
+    ${treeRow('power', 'POWER')}
+    ${treeRow('mobility', 'MOBILITY')}
+    ${treeRow('mind', 'MIND')}
+    <div style="background:var(--surface2);border:1px solid var(--border);padding:7px 9px;margin-top:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <div style="font-size:10px;color:var(--text2)">Global XP: <span style="color:var(--cyan)">${globalXP}</span> (next talent pt at ${prog.nextThreshold})</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:10px;color:var(--text2)">Talent Pts: ${prog.earned} earned / ${talentSpent} spent</span>
+        <button class="adj-btn red" style="width:22px;height:22px;font-size:11px" onclick="adjTalentSpent('${id}',-1)">−</button>
+        <button class="adj-btn green" style="width:22px;height:22px;font-size:11px" onclick="adjTalentSpent('${id}',1)">+</button>
+        <span style="font-size:10px;color:${available>0?'var(--gold-bright)':'var(--text3)'};font-weight:700">${available} available</span>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-small" style="margin-top:8px" onclick="openAwardXpModal('${id}')">AWARD XP</button>`;
+}
+
+let awardXpTargetId = null;
+function openAwardXpModal(id) {
+  const c = state.characters[id]; if (!c) return;
+  awardXpTargetId = id;
+  document.getElementById('xp-modal-char-name').textContent = c.name;
+  document.getElementById('xp-power').value = 0;
+  document.getElementById('xp-mobility').value = 0;
+  document.getElementById('xp-mind').value = 0;
+  openModal('xp-modal');
+}
+async function submitAwardXp() {
+  const id = awardXpTargetId;
+  const c = state.characters[id]; if (!c) return;
+  const amounts = {
+    power: Math.max(0, parseInt(document.getElementById('xp-power').value) || 0),
+    mobility: Math.max(0, parseInt(document.getElementById('xp-mobility').value) || 0),
+    mind: Math.max(0, parseInt(document.getElementById('xp-mind').value) || 0),
+  };
+  const totalAmount = amounts.power + amounts.mobility + amounts.mind;
+  if (totalAmount <= 0) { closeModal('xp-modal'); return; }
+  const treeXP = { ...(c.treeXP || { power: 0, mobility: 0, mind: 0 }) };
+  const banked = { ...(c.treeBankedPoints || { power: 0, mobility: 0, mind: 0 }) };
+  let levelUps = 0;
+  for (const tree of ['power', 'mobility', 'mind']) {
+    if (!amounts[tree]) continue;
+    treeXP[tree] = (treeXP[tree] || 0) + amounts[tree];
+    while (treeXP[tree] >= 500) { treeXP[tree] -= 500; banked[tree] = (banked[tree] || 0) + 2; levelUps++; }
+  }
+  const oldGlobal = c.globalXP || 0;
+  const newGlobal = oldGlobal + totalAmount;
+  const oldTalent = talentXpProgress(oldGlobal).earned;
+  const newTalent = talentXpProgress(newGlobal).earned;
+  await dbUpdate({
+    ['characters/' + id + '/treeXP']: treeXP,
+    ['characters/' + id + '/treeBankedPoints']: banked,
+    ['characters/' + id + '/globalXP']: newGlobal,
+  });
+  closeModal('xp-modal');
+  let msg = `${c.name}: +${totalAmount} XP`;
+  if (levelUps > 0) msg += ` — ${levelUps} tree level-up${levelUps > 1 ? 's' : ''}!`;
+  if (newTalent > oldTalent) msg += ` — ${newTalent - oldTalent} new talent point${newTalent - oldTalent > 1 ? 's' : ''}!`;
+  showToast(msg);
+  if (editingCharId === id) renderProgressionSection(id);
+}
+async function spendBankedPoint(id, tree, statKey) {
+  const c = state.characters[id]; if (!c) return;
+  const banked = { ...(c.treeBankedPoints || {}) };
+  if (!banked[tree]) return;
+  banked[tree] -= 1;
+  const stats = { ...(c.stats || {}) };
+  stats[statKey] = (parseInt(stats[statKey]) || 0) + 1;
+  await dbUpdate({
+    ['characters/' + id + '/treeBankedPoints']: banked,
+    ['characters/' + id + '/stats']: stats,
+  });
+  showToast(`${c.name}: +1 ${statKey.charAt(0).toUpperCase() + statKey.slice(1)}`);
+  if (editingCharId === id) {
+    const el = document.getElementById('cs-' + statKey);
+    if (el) el.value = stats[statKey];
+    recalcDerived();
+    renderProgressionSection(id);
+  }
+}
+async function adjTalentSpent(id, delta) {
+  const c = state.characters[id]; if (!c) return;
+  const earned = talentXpProgress(c.globalXP || 0).earned;
+  const spent = Math.max(0, Math.min(earned, (c.talentPointsSpent || 0) + delta));
+  await dbWrite('characters/' + id + '/talentPointsSpent', spent);
+  if (editingCharId === id) renderProgressionSection(id);
+}
+
 function getModalStats() {
   const s = {};
   [...STAT_KEYS.power, ...STAT_KEYS.mobility, ...STAT_KEYS.mind, ...STAT_KEYS.special].forEach(k => {
@@ -2815,6 +2985,23 @@ function recalcDerived() {
   if (!document.getElementById('cm-hp').value) document.getElementById('cm-hp').placeholder = hpCalc || 'auto';
   if (!document.getElementById('cm-sta').value) document.getElementById('cm-sta').placeholder = staCalc || 'auto';
   if (!document.getElementById('cm-init').value) document.getElementById('cm-init').placeholder = initCalc || 'auto';
+  // Stat-cap warning (rulebook §7.1: no single stat may exceed its tree's
+  // current Level). Warn only — never blocks saving, since the book also
+  // says the cap doesn't apply during initial character creation.
+  const levels = {
+    power: Math.floor(STAT_KEYS.power.reduce((a, k) => a + g(k), 0) / 2),
+    mobility: Math.floor(STAT_KEYS.mobility.reduce((a, k) => a + g(k), 0) / 2),
+    mind: Math.floor(STAT_KEYS.mind.reduce((a, k) => a + g(k), 0) / 2),
+  };
+  [['power', STAT_KEYS.power], ['mobility', STAT_KEYS.mobility], ['mind', STAT_KEYS.mind]].forEach(([tree, keys]) => {
+    keys.forEach(k => {
+      const el = document.getElementById('cs-' + k);
+      if (!el) return;
+      const overCap = g(k) > levels[tree];
+      el.style.borderColor = overCap ? 'var(--red-bright)' : '';
+      el.title = overCap ? `Exceeds ${tree.toUpperCase()} Level (${levels[tree]})` : '';
+    });
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2864,6 +3051,7 @@ function openCharModal(id) {
   if (c.init_override) document.getElementById('cm-init').value = c.initiative;
   if (c.ip_override) document.getElementById('cm-ip').value = c.ip_max;
   recalcDerived();
+  renderProgressionSection(id);
   document.getElementById('cm-cyberware').value = (c.cyberware || []).join('\n');
   loadedCharNotes = c.notes || '';
   document.getElementById('cm-notes').value = loadedCharNotes;
@@ -2886,6 +3074,7 @@ function onCmTypeChange() {
   document.getElementById('cm-allegiance-row').style.display = type === 'npc' ? 'flex' : 'none';
   document.getElementById('cm-companion-row').style.display = type === 'companion' ? 'flex' : 'none';
   if (type === 'companion') { populateOwnerDropdown(); populateCompanionTemplateDropdown(); }
+  renderProgressionSection(editingCharId);
 }
 
 function populateOwnerDropdown() {
@@ -3190,6 +3379,13 @@ async function saveCharacter() {
     // whatever was already there instead of silently dropping it on save.
     tier: existing.tier ?? null,
     loot: existing.loot ?? [],
+    // Tree XP/talent-point progression is edited via the Progression panel's
+    // own actions (Award XP, banked-point allocation), not this form —
+    // preserve whatever's already there instead of silently dropping it.
+    treeXP: existing.treeXP || { power: 0, mobility: 0, mind: 0 },
+    treeBankedPoints: existing.treeBankedPoints || { power: 0, mobility: 0, mind: 0 },
+    globalXP: existing.globalXP || 0,
+    talentPointsSpent: existing.talentPointsSpent || 0,
     // If the GM didn't touch the notes field, keep whatever's freshest in
     // local state (a player may have typed a note while this modal was
     // open) rather than the stale value the textarea loaded at open-time.
