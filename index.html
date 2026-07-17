@@ -1853,6 +1853,7 @@ function renderWeaponsSection(c, id) {
             ${live.dice ? `<span style="font-size:10px;color:var(--cyan)">→ ${live.dice}×d20</span>` : ''}
           </div>
           ${live.situational.length ? `<div style="font-size:10px;color:var(--text2);padding-left:2px;margin-top:2px">${live.situational.map(s=>esc(s)).join(' · ')}</div>` : ''}
+          ${w.tags ? `<div style="font-size:10px;color:var(--text2);padding-left:2px;margin-top:2px">${esc(w.tags)}</div>` : ''}
           ${live.magMax != null ? `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:3px">
             <span style="font-size:10px;color:${magCur<=0?'var(--red-bright)':'var(--text2)'};letter-spacing:0.05em">MAG ${magCur}/${live.magMax}</span>
             <button class="btn btn-ghost btn-small" style="padding:1px 7px;font-size:9px" onclick="quickAdjMag('${id}',${wi},-1)" title="Fire (1 tick)">-1</button>
@@ -3071,6 +3072,10 @@ async function saveCharacter() {
     talents: talentData.filter(t => t.name),
     inventory: inventoryData.filter(i => i.name),
     status_effects: existing.status_effects || [],
+    // Neither has edit-modal UI today (generator-only fields) — preserve
+    // whatever was already there instead of silently dropping it on save.
+    tier: existing.tier ?? null,
+    loot: existing.loot ?? [],
     // If the GM didn't touch the notes field, keep whatever's freshest in
     // local state (a player may have typed a note while this modal was
     // open) rather than the stale value the textarea loaded at open-time.
@@ -3286,6 +3291,18 @@ const WEAPON_TABLE = {
   'Mantis Blades':       {bonus:5,  pw:['dexterity','strength'], label:'Dex+Str'},
   'Heavy Melee':          {bonus:5,  pw:['strength','grit'],      label:'Str+Grit'},
   'Kendachi Mono-Three': {bonus:8,  pw:['strength','grit'],      label:'Str+Grit'},
+  // Heavy/special weapons (§7a.5, §16.2-16.3, §5.7 lifepath rewards).
+  // Flamethrower has no base bonus anywhere in the rulebook (only charge
+  // counts/to-hit bonuses in its talent tree) — +11 is an estimate anchored
+  // to the Rocket Launcher's base shot and the incendiary grenade, per the
+  // user's sign-off. Cryo Thrower is pure homebrew mirroring it exactly,
+  // with a freeze-slow effect instead of burn (also user-approved).
+  'Grenade Launcher':    {bonus:18, pw:['focus','strength'],     label:'Foc+Str', mag:2, tags:['AoE 10m×10m']},
+  'Rocket Launcher':     {bonus:11, pw:['focus','strength'],     label:'Foc+Str', mag:2, tags:['AoE 5m', 'Charged (Nebenaktion): +25 overcharge next round']},
+  'Flamethrower':        {bonus:11, pw:['focus','strength'],     label:'Foc+Str', tags:['Burn: 2 HP/round (Mild Fire)']},
+  'Cryo Thrower':        {bonus:11, pw:['focus','strength'],     label:'Foc+Str', tags:['Freeze: -5 Speed/Agility, 2 rounds']},
+  'Minigun':             {bonus:13, pw:['strength','focus'],     label:'Str+Foc', tags:['Autofire']},
+  'Anti-Materiel Rifle': {bonus:16, pw:['focus','senses'],       label:'Foc+Sen', mag:1},
 };
 const ARMOR_TABLE = {
   'Leathers':         {sp_body:4,  sp_head:null},
@@ -3595,6 +3612,11 @@ const WEAPON_ALIASES = {
   'blade arms':'Mantis Blades',
   'sledgehammer':'Heavy Melee', 'warhammer':'Heavy Melee', 'greatsword':'Heavy Melee', 'zweihander':'Heavy Melee', 'battle axe':'Heavy Melee', 'chainsaw':'Heavy Melee', 'power fist':'Heavy Melee',
   'monosword':'Kendachi Mono-Three', 'mono blade':'Kendachi Mono-Three', 'nova blade':'Kendachi Mono-Three', 'mono katana':'Kendachi Mono-Three',
+  'pls':'Rocket Launcher', 'rpg':'Rocket Launcher', 'bazooka':'Rocket Launcher', 'missile launcher':'Rocket Launcher', 'projectile launch system':'Rocket Launcher',
+  'flame thrower':'Flamethrower', 'napalm thrower':'Flamethrower', 'flame gun':'Flamethrower',
+  'cryo gun':'Cryo Thrower', 'freeze gun':'Cryo Thrower', 'frost thrower':'Cryo Thrower', 'ice gun':'Cryo Thrower',
+  'gatling':'Minigun', 'lmg':'Minigun', 'light machine gun':'Minigun',
+  'amr':'Anti-Materiel Rifle', 'anti-material rifle':'Anti-Materiel Rifle', 'anti materiel rifle':'Anti-Materiel Rifle',
 };
 function matchWeaponName(name) {
   const direct = matchCatalogName(name, WEAPON_TABLE);
@@ -3664,6 +3686,14 @@ const WEAPON_SPECIFIC_OPTIONS = {
     {label:'Chainsaw', canonical:'Heavy Melee'},
     {label:'Kendachi Mono-Three', canonical:'Kendachi Mono-Three'},
     {label:'Monosword', canonical:'Kendachi Mono-Three'},
+  ],
+  'Heavy/Special Weapons': [
+    {label:'Grenade Launcher', canonical:'Grenade Launcher'},
+    {label:'Rocket Launcher (PLS)', canonical:'Rocket Launcher'},
+    {label:'Flamethrower', canonical:'Flamethrower'},
+    {label:'Cryo Thrower', canonical:'Cryo Thrower'},
+    {label:'Minigun', canonical:'Minigun'},
+    {label:'Anti-Materiel Rifle', canonical:'Anti-Materiel Rifle'},
   ],
 };
 
