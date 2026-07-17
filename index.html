@@ -1507,7 +1507,9 @@ function renderCombat() {
       i === current ? 'active-turn' : '',
       (c.hp_current ?? c.hp_max) <= 0 ? 'dead' : ''
     ].filter(Boolean).join(' ');
-    return `<div class="${cls}" onclick="scrollToCombatant('${id}')">${esc(c.name)}<br><span style="font-size:9px;color:inherit;opacity:0.7">${c.hp_current ?? c.hp_max}hp</span></div>`;
+    const rollCat = state.combat.initRolls?.[id]?.category;
+    const critBadge = rollCat === 0 ? ' ★' : rollCat === 3 ? ' ☠' : '';
+    return `<div class="${cls}" onclick="scrollToCombatant('${id}')" title="${critBadge ? (rollCat===0?'Crit success — initiative':'Crit fail — initiative') : ''}">${esc(c.name)}${critBadge}<br><span style="font-size:9px;color:inherit;opacity:0.7">${c.hp_current ?? c.hp_max}hp</span></div>`;
   }).join('');
   // Combatant cards
   document.getElementById('combatants-list').innerHTML = order.map((id, i) => renderCombatantCard(id, i === current)).join('');
@@ -2205,22 +2207,124 @@ async function saveNotes(val) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// INITIATIVE ROLLING — Initiative (Speed+Reflexes) is rolled as a PW,
+// same dice-count/crit rules as any other roll (rulebook §2.1-2.2):
+//   - Only the FIRST die's natural 1/20 triggers a whole-roll crit.
+//   - 2nd+ dice: natural 1 counts that die's own cap (max value);
+//     natural 20 drops that die entirely (contributes nothing).
+//   - If a 1 and a 20 land simultaneously across different dice in the
+//     same roll, both cancel and both reroll.
+// Ordering: crit success always first, then hits by rolled result
+// (highest first), then misses by raw Initiative stat (highest first),
+// then crit fail always last. Ties within crit success/crit fail use
+// raw Initiative as the tiebreaker. Companions never roll — they're
+// always slotted immediately after their owner.
+// ═══════════════════════════════════════════════════════════════
+function rollD20() { return Math.floor(Math.random() * 20) + 1; }
+
+function rollInitiativeDice(diceCount) {
+  let rolls = Array.from({ length: diceCount }, rollD20);
+  // "1 and 20 at the same time cancel, both reroll" — only possible with 2+ dice.
+  for (let guard = 0; guard < 10; guard++) {
+    const i1 = rolls.indexOf(1), i20 = rolls.indexOf(20);
+    if (i1 === -1 || i20 === -1) break;
+    rolls[i1] = rollD20();
+    rolls[i20] = rollD20();
+  }
+  return rolls;
+}
+
+// category: 0=crit success, 1=hit, 2=miss, 3=crit fail (lower sorts first)
+function rollInitiative(pw) {
+  const safePw = Math.max(pw || 0, 0);
+  const full = Math.floor(safePw / 20);
+  const remainder = safePw % 20;
+  const caps = [];
+  for (let i = 0; i < full; i++) caps.push(20);
+  if (remainder > 0 || caps.length === 0) caps.push(remainder);
+  const rolls = rollInitiativeDice(caps.length);
+  if (rolls[0] === 1) return { category: 0, total: null, rolls };
+  if (rolls[0] === 20) return { category: 3, total: null, rolls };
+  let total = 0, anyHit = false;
+  rolls.forEach((r, i) => {
+    const cap = caps[i];
+    if (i === 0) {
+      if (r <= cap) { total += r; anyHit = true; }
+    } else if (r === 1) { total += cap; anyHit = true; }
+    else if (r === 20) { /* dropped */ }
+    else if (r <= cap) { total += r; anyHit = true; }
+  });
+  return { category: anyHit ? 1 : 2, total, rolls };
+}
+
+function rollInitiativeFor(c) {
+  const result = rollInitiative(c.initiative || 0);
+  const value = result.category === 1 ? result.total : (c.initiative || 0);
+  return { category: result.category, value, rolls: result.rolls };
+}
+
+function initRollLabel(category, total) {
+  if (category === 0) return 'CRIT SUCCESS — goes first!';
+  if (category === 3) return 'CRIT FAIL — goes last!';
+  if (category === 1) return `hit, result ${total}`;
+  return 'miss';
+}
+
+function initCompareKey(id, initRolls) {
+  const c = state.characters[id];
+  const r = initRolls[id];
+  if (r) return [r.category, -r.value];
+  return [1, -(c?.initiative || 0)]; // guard: shouldn't normally happen
+}
+
+// Sorts non-companions by the crit/hit/miss/crit-fail rule above, then
+// slots each companion in right after its owner (end of order if the
+// owner isn't in this combat yet).
+function sortCombatOrder(ids, initRolls) {
+  const companions = ids.filter(id => state.characters[id]?.isCompanion);
+  const nonCompanions = ids.filter(id => !state.characters[id]?.isCompanion);
+  nonCompanions.sort((a, b) => {
+    const [ca, va] = initCompareKey(a, initRolls);
+    const [cb, vb] = initCompareKey(b, initRolls);
+    return ca !== cb ? ca - cb : va - vb;
+  });
+  const result = [...nonCompanions];
+  for (const compId of companions) {
+    const ownerId = state.characters[compId]?.owner_char_id;
+    const ownerIdx = result.indexOf(ownerId);
+    if (ownerIdx === -1) { result.push(compId); continue; }
+    let insertAt = ownerIdx + 1;
+    while (insertAt < result.length && state.characters[result[insertAt]]?.isCompanion && state.characters[result[insertAt]]?.owner_char_id === ownerId) insertAt++;
+    result.splice(insertAt, 0, compId);
+  }
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // COMBAT ACTIONS
 // ═══════════════════════════════════════════════════════════════
 async function startCombat() {
   const validIds = (state.encounterQueue || []).filter(id => state.characters[id]);
   if (!validIds.length) { showToast('Queue some characters first (Characters tab)!'); return; }
-  const order = [...validIds].sort((a, b) => (state.characters[b].initiative || 0) - (state.characters[a].initiative || 0));
-  const combat = { active: true, round: 1, currentTurn: 0, order };
+  const initRolls = {};
+  validIds.forEach(id => {
+    const c = state.characters[id];
+    if (!c.isCompanion) {
+      const rolled = rollInitiativeFor(c);
+      initRolls[id] = { category: rolled.category, value: rolled.value };
+    }
+  });
+  const order = sortCombatOrder(validIds, initRolls);
+  const combat = { active: true, round: 1, currentTurn: 0, order, initRolls };
   await dbUpdate({ 'combat': combat, 'encounterQueue': [] });
-  showToast('Combat started!');
+  showToast('Combat started! Initiative rolled.');
 }
 
 async function endCombat() {
   if (!confirm('End combat?')) return;
   // Characters are persistent roster entries now — ending combat just resets
   // the round/turn tracker and PC-only combat state. Nothing is deleted.
-  const updates = { 'combat': { active: false, round: 1, currentTurn: 0, order: [] } };
+  const updates = { 'combat': { active: false, round: 1, currentTurn: 0, order: [], initRolls: {} } };
   for (const [id, c] of Object.entries(state.characters)) {
     if (!c.isNPC || c.isCompanion) {
       updates['characters/' + id + '/flink_used'] = false;
@@ -2366,19 +2470,29 @@ async function removeFromCombat(id) {
 // ═══════════════════════════════════════════════════════════════
 async function toggleCombatQueue(id) {
   if (state.combat?.active) {
-    const order = [...(state.combat.order || [])];
+    let order = [...(state.combat.order || [])];
     const currentId = order[state.combat.currentTurn || 0];
     const idx = order.indexOf(id);
-    if (idx >= 0) order.splice(idx, 1);
-    else {
+    const initRolls = { ...(state.combat.initRolls || {}) };
+    if (idx >= 0) {
+      order.splice(idx, 1);
+      delete initRolls[id];
+    } else {
       order.push(id);
-      order.sort((a, b) => (state.characters[b]?.initiative || 0) - (state.characters[a]?.initiative || 0));
+      const c = state.characters[id];
+      if (c && !c.isCompanion) {
+        const rolled = rollInitiativeFor(c);
+        initRolls[id] = { category: rolled.category, value: rolled.value };
+        showToast(`${c.name} rolled initiative: ${rolled.rolls.join('+')} → ${initRollLabel(rolled.category, rolled.value)}`);
+      }
+      order = sortCombatOrder(order, initRolls);
     }
     // Keep "whose turn it is" stable even though the array just shifted
     const newTurn = order.length ? Math.max(0, order.indexOf(currentId)) : 0;
     state.combat.order = order;
     state.combat.currentTurn = newTurn;
-    await dbUpdate({ 'combat/order': order, 'combat/currentTurn': newTurn });
+    state.combat.initRolls = initRolls;
+    await dbUpdate({ 'combat/order': order, 'combat/currentTurn': newTurn, 'combat/initRolls': initRolls });
     renderCombat();
   } else {
     const queue = [...(state.encounterQueue || [])];
