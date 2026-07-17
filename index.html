@@ -1146,7 +1146,11 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       </div>
       <div class="field">
         <label>Give To</label>
-        <select id="transfer-target"></select>
+        <select id="transfer-target" onchange="onTransferTargetChange()"></select>
+      </div>
+      <div class="field" id="transfer-weapon-field" style="display:none">
+        <label>Attach To Weapon</label>
+        <select id="transfer-target-weapon"></select>
       </div>
     </div>
     <div class="modal-footer">
@@ -1872,6 +1876,37 @@ function renderLootAndItems(c, id) {
         <span style="font-size:10px;color:var(--text2);flex:1">${esc(it.name)}${it.qty>1?' ×'+it.qty:''}</span>
         <button class="btn btn-ghost btn-small btn-icon" style="padding:2px 6px" onclick="openTransferModal('${id}','inventory',${i})" title="Give to...">→</button>
       </div>`).join('')}</div>
+    </div>`;
+  }
+  if (c.weapons?.length) {
+    html += `<div class="detail-row" style="align-items:flex-start">
+      <span class="detail-label" style="margin-top:4px">WEAPONS</span>
+      <div style="display:flex;flex-direction:column;gap:6px;flex:1">${c.weapons.map((w, wi) => `
+        <div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;color:var(--text2);flex:1">${esc(w.name)}</span>
+            <button class="btn btn-ghost btn-small btn-icon" style="padding:2px 6px" onclick="openTransferModal('${id}','weapon',${wi})" title="Give to...">→</button>
+          </div>
+          ${(w.attachments || []).map((a, ai) => `<div style="display:flex;align-items:center;gap:6px;padding-left:12px;margin-top:2px">
+            <span style="font-size:9px;color:var(--text3);flex:1">↳ ${esc(a.name)}</span>
+            <button class="btn btn-ghost btn-small btn-icon" style="padding:1px 5px" onclick="openTransferModal('${id}','attachment',${ai},${wi})" title="Give to...">→</button>
+          </div>`).join('')}
+        </div>`).join('')}</div>
+    </div>`;
+  }
+  if (c.armor_body || c.armor_head) {
+    html += `<div class="detail-row" style="align-items:flex-start">
+      <span class="detail-label" style="margin-top:4px">ARMOR</span>
+      <div style="display:flex;flex-direction:column;gap:3px;flex:1">
+        ${c.armor_body ? `<div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;color:var(--text2);flex:1">${esc(c.armor_body.name)} (Body, SP ${c.armor_body.sp_base})</span>
+          <button class="btn btn-ghost btn-small btn-icon" style="padding:2px 6px" onclick="openTransferModal('${id}','armor_body',null)" title="Give to...">→</button>
+        </div>` : ''}
+        ${c.armor_head ? `<div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;color:var(--text2);flex:1">${esc(c.armor_head.name)} (Head, SP ${c.armor_head.sp_base})</span>
+          <button class="btn btn-ghost btn-small btn-icon" style="padding:2px 6px" onclick="openTransferModal('${id}','armor_head',null)" title="Give to...">→</button>
+        </div>` : ''}
+      </div>
     </div>`;
   }
   if (!html) html = '<div class="detail-row"><span style="color:var(--text3);font-size:11px">No loot or items.</span></div>';
@@ -2615,22 +2650,47 @@ function populateTransferTargets(excludeId) {
     : '<option value="">No other characters</option>';
 }
 
-function openTransferModal(charId, kind, index) {
+function openTransferModal(charId, kind, index, weaponIndex) {
   const c = state.characters[charId]; if (!c) return;
-  transferSource = { charId, kind, index };
+  transferSource = { charId, kind, index, weaponIndex };
   populateTransferTargets(charId);
   const qtyField = document.getElementById('transfer-qty-field');
+  const weaponField = document.getElementById('transfer-weapon-field');
+  qtyField.style.display = 'none';
+  weaponField.style.display = 'none';
   if (kind === 'inventory') {
     const item = (c.inventory || [])[index]; if (!item) return;
     document.getElementById('transfer-item-label').textContent = item.name;
     document.getElementById('transfer-qty').value = item.qty || 1;
     document.getElementById('transfer-qty').max = item.qty || 1;
     qtyField.style.display = 'block';
-  } else {
+  } else if (kind === 'loot') {
     document.getElementById('transfer-item-label').textContent = (c.loot || [])[index] || '';
-    qtyField.style.display = 'none';
+  } else if (kind === 'weapon') {
+    const w = (c.weapons || [])[index]; if (!w) return;
+    document.getElementById('transfer-item-label').textContent = w.name;
+  } else if (kind === 'armor_body' || kind === 'armor_head') {
+    const armor = c[kind]; if (!armor) return;
+    document.getElementById('transfer-item-label').textContent = `${armor.name} (SP ${armor.sp_base})`;
+  } else if (kind === 'attachment') {
+    const w = (c.weapons || [])[weaponIndex]; const att = w?.attachments?.[index]; if (!att) return;
+    document.getElementById('transfer-item-label').textContent = `${att.name} (from ${w.name})`;
+    weaponField.style.display = 'block';
+    populateTransferWeaponPicker();
   }
   openModal('transfer-modal');
+}
+
+function onTransferTargetChange() {
+  if (transferSource?.kind === 'attachment') populateTransferWeaponPicker();
+}
+
+function populateTransferWeaponPicker() {
+  const targetId = document.getElementById('transfer-target').value;
+  const weapons = state.characters[targetId]?.weapons || [];
+  document.getElementById('transfer-target-weapon').innerHTML = weapons.length
+    ? weapons.map((w, wi) => `<option value="${wi}">${esc(w.name)}</option>`).join('')
+    : '<option value="">No weapons on target</option>';
 }
 
 function openGiveAllLootModal(charId) {
@@ -2642,6 +2702,7 @@ function openGiveAllLootModal(charId) {
   document.getElementById('transfer-item-label').textContent =
     `All loot (${lootCount} item${lootCount !== 1 ? 's' : ''}${eb ? ' + ' + eb + ' eb' : ''})`;
   document.getElementById('transfer-qty-field').style.display = 'none';
+  document.getElementById('transfer-weapon-field').style.display = 'none';
   openModal('transfer-modal');
 }
 
@@ -2653,7 +2714,7 @@ function mergeIntoInventory(items, name, qty) {
 }
 
 async function confirmTransfer() {
-  const { charId, kind, index } = transferSource || {};
+  const { charId, kind, index, weaponIndex } = transferSource || {};
   const targetId = document.getElementById('transfer-target').value;
   if (!targetId) { showToast('No target selected.'); return; }
   const source = state.characters[charId];
@@ -2661,7 +2722,32 @@ async function confirmTransfer() {
   if (!source || !target) return;
   const updates = {};
 
-  if (kind === 'inventory') {
+  if (kind === 'weapon') {
+    const weapons = [...(source.weapons || [])];
+    const weapon = weapons[index]; if (!weapon) return;
+    weapons.splice(index, 1);
+    updates['characters/' + charId + '/weapons'] = weapons;
+    updates['characters/' + targetId + '/weapons'] = [...(target.weapons || []), weapon];
+  } else if (kind === 'armor_body' || kind === 'armor_head') {
+    const armor = source[kind]; if (!armor) return;
+    if (target[kind] && !confirm(`This will replace ${target.name}'s ${target[kind].name} with ${armor.name} — continue?`)) return;
+    updates['characters/' + charId + '/' + kind] = null;
+    updates['characters/' + targetId + '/' + kind] = armor;
+  } else if (kind === 'attachment') {
+    const weapons = [...(source.weapons || [])];
+    const weapon = weapons[weaponIndex]; if (!weapon) return;
+    const attachments = [...(weapon.attachments || [])];
+    const attachment = attachments[index]; if (!attachment) return;
+    attachments.splice(index, 1);
+    weapons[weaponIndex] = { ...weapon, attachments };
+    const targetWeaponIdx = parseInt(document.getElementById('transfer-target-weapon').value);
+    const targetWeapons = [...(target.weapons || [])];
+    const targetWeapon = targetWeapons[targetWeaponIdx];
+    if (isNaN(targetWeaponIdx) || !targetWeapon) { showToast('Target has no weapon to attach to.'); return; }
+    targetWeapons[targetWeaponIdx] = { ...targetWeapon, attachments: [...(targetWeapon.attachments || []), attachment] };
+    updates['characters/' + charId + '/weapons'] = weapons;
+    updates['characters/' + targetId + '/weapons'] = targetWeapons;
+  } else if (kind === 'inventory') {
     const items = [...(source.inventory || [])];
     const item = items[index]; if (!item) return;
     const requested = parseInt(document.getElementById('transfer-qty').value) || 1;
@@ -3609,7 +3695,7 @@ SINGLE ENEMY JSON (respond ONLY with this, no backticks, no extra text):
 ENCOUNTER JSON (respond ONLY with this when asked for encounter, no backticks):
 {"encounterTitle":"string","encounterSummary":"string","partySize":number,"difficulty":"EASY|BALANCED|BRUTAL","enemies":[...same format as single enemy...],"encounterTactics":"string","gmNote":null}
 
-LOOT: Always include 3-6 items. Note if weapons/armor are recoverable. Include credchips, ammo, cyberware (needs Chirurgie roll to harvest), narrative items.
+LOOT: Always include 3-6 items. Do NOT mention the enemy's equipped weapon or armor here — those are already recoverable directly from their weapon/armor slots. Only list separate found items: credchips, ammo, cyberware (needs Chirurgie roll to harvest), narrative items.
 LARGE ENCOUNTERS (5+ enemies): Keep flavor/tactics/gmNote short (1-2 sentences). JSON must be complete and valid.`;
 
 // ═══════════════════════════════════════════════════════════════
