@@ -251,6 +251,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 }
 .init-chip.npc { border-color: var(--red-bright); color: #ff6688; }
 .init-chip.ally { border-color: var(--green-bright); color: var(--green-bright); }
+.init-chip.companion { border-color: var(--purple-bright); color: var(--purple-bright); }
 .init-chip.dead { opacity: 0.25; text-decoration: line-through; }
 .combatants { padding: 8px 12px; display: flex; flex-direction: column; gap: 5px; }
 /* ── COMBAT MAP ── */
@@ -284,6 +285,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .combatant-card.is-npc { border-left: 3px solid var(--red-bright); }
 .combatant-card.is-ally { border-left: 3px solid var(--green-bright); }
 .combatant-card.is-pc { border-left: 3px solid var(--cyan); }
+.combatant-card.is-companion { border-left: 3px solid var(--purple-bright); }
 .combatant-card.is-dead { opacity: 0.3; filter: grayscale(0.5); }
 .combatant-top { padding: 10px 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .combatant-name { font-size: 13px; font-weight: 700; flex: 1; letter-spacing: 0.04em; }
@@ -880,13 +882,27 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       </div>
       <div class="inline-row">
         <div class="field"><label>Name</label><input type="text" id="cm-name" placeholder="Character name"></div>
-        <div class="field" style="max-width:80px"><label>Type</label>
-          <select id="cm-type" onchange="onCmTypeChange()"><option value="pc">PC</option><option value="npc">NPC</option></select>
+        <div class="field" style="max-width:110px"><label>Type</label>
+          <select id="cm-type" onchange="onCmTypeChange()"><option value="pc">PC</option><option value="npc">NPC</option><option value="companion">Companion</option></select>
         </div>
       </div>
       <div class="inline-row" id="cm-allegiance-row" style="display:none">
         <div class="field"><label>Allegiance</label>
           <select id="cm-allegiance"><option value="enemy">⚔ Enemy</option><option value="ally">🤝 Ally</option></select>
+        </div>
+      </div>
+      <div class="inline-row" id="cm-companion-row" style="display:none">
+        <div class="field"><label>Owner (PC)</label>
+          <select id="cm-owner"><option value="">— none —</option></select>
+        </div>
+        <div class="field"><label>Template</label>
+          <select id="cm-companion-template" onchange="applyCompanionTemplate(this.value)">
+            <option value="">— pick to prefill —</option>
+          </select>
+        </div>
+        <div class="field" style="display:flex;align-items:center;gap:6px;margin-top:16px;flex:0 0 auto">
+          <input type="checkbox" id="cm-use-owner-stats" checked>
+          <label style="font-size:10px;white-space:nowrap" for="cm-use-owner-stats">Weapons use owner's stats for PW</label>
         </div>
       </div>
       <div class="inline-row">
@@ -967,6 +983,21 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addTalentRow()">+ ADD TALENT/TECHNIQUE</button>
       <div class="section-heading">Cyberware</div>
       <textarea id="cm-cyberware" placeholder="One per line, e.g.: Reflex Booster (+2 Reflexes)" rows="3" style="resize:vertical"></textarea>
+      <div class="section-heading">Netrunning</div>
+      <div class="inline-row">
+        <div class="field"><label>Cyberdeck</label>
+          <select id="cm-cyberdeck">
+            <option value="">None</option>
+            <option value="Basic">Basic (2 slots, +0 IP/rd)</option>
+            <option value="Standard">Standard (4 slots, +1 IP/rd)</option>
+            <option value="Military">Military (6 slots, +2 IP/rd)</option>
+            <option value="Blackmarket">Blackmarket (8 slots, +3 IP/rd)</option>
+          </select>
+        </div>
+        <div class="field" style="max-width:100px"><label>Firewall</label><input type="number" id="cm-firewall" placeholder="0" min="0"></div>
+      </div>
+      <div id="cm-hacks-list" style="display:flex;flex-direction:column;gap:4px"></div>
+      <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addHackRow()">+ ADD HACK</button>
       <div class="section-heading">Inventory (max 40 slots)</div>
       <div id="cm-inventory-list" style="display:flex;flex-direction:column;gap:4px"></div>
       <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addInventoryRow()">+ ADD ITEM</button>
@@ -1454,9 +1485,9 @@ function renderPreCombat() {
     return;
   }
   el.innerHTML = entries.map(([id, c]) => `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid ${c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red)' : 'var(--cyan)')}">
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid ${c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red)' : 'var(--cyan)'))}">
       <div style="flex:1;font-size:13px;font-weight:700">${esc(c.name)}</div>
-      <div style="font-size:10px;color:var(--text2)">${c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC')}</div>
+      <div style="font-size:10px;color:var(--text2)">${c.isCompanion ? 'COM' : (c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC'))}</div>
       <div style="font-size:11px;color:var(--green-bright)">${c.hp_current ?? c.hp_max}/${c.hp_max} HP</div>
       <div style="font-size:10px;color:var(--text2)">INI: ${c.initiative ?? 0}</div>
       <button class="btn btn-danger btn-small btn-icon" onclick="toggleCombatQueue('${id}')" title="Remove from queue">✕</button>
@@ -1472,7 +1503,7 @@ function renderCombat() {
     const c = state.characters[id]; if (!c) return '';
     const cls = [
       'init-chip',
-      c.isAlly ? 'ally' : (c.isNPC ? 'npc' : ''),
+      c.isCompanion ? 'companion' : (c.isAlly ? 'ally' : (c.isNPC ? 'npc' : '')),
       i === current ? 'active-turn' : '',
       (c.hp_current ?? c.hp_max) <= 0 ? 'dead' : ''
     ].filter(Boolean).join(' ');
@@ -1505,7 +1536,7 @@ function buildMapTokensHtml(interactive) {
     const c = state.characters[id]; if (!c) return '';
     ensurePortraitListener(id);
     const portrait = portraits[id];
-    const color = c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)');
+    const color = c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)'));
     const pos = state.map?.tokens?.[id] || { x: 50, y: 50 };
     const bg = portrait ? `background-image:url('${portrait}');` : '';
     const initials = esc(c.name.slice(0, 2).toUpperCase());
@@ -1803,7 +1834,7 @@ function renderWeaponsSection(c, id) {
     <span class="detail-label" style="margin-top:4px">WEAPONS</span>
     <div style="display:flex;flex-direction:column;gap:5px;flex:1">
       ${weapons.map((w, wi) => {
-        const live = computeLiveWeaponStats(c, w);
+        const live = computeLiveWeaponStats(getStatsSourceChar(c), w);
         const techColor = TECH_BADGE_COLOR[w.tech] || '#888';
         const magCur = Math.min(w.magCurrent ?? live.magMax, live.magMax ?? Infinity);
         return `<div style="font-size:11px">
@@ -1829,6 +1860,41 @@ function renderWeaponsSection(c, id) {
   </div>`;
 }
 
+function renderHacksSection(c, id) {
+  const hacks = c.hacks || [];
+  if (!hacks.length && !c.cyberdeck && !c.firewall) return '';
+  const fw = computeLiveFirewall(c);
+  const targetOptions = (state.combat?.order || []).filter(tid => tid !== id).map(tid => ({ tid, tc: state.characters[tid] })).filter(o => o.tc);
+  return `<div class="detail-row" style="align-items:flex-start">
+    <span class="detail-label" style="margin-top:4px">HACKS</span>
+    <div style="display:flex;flex-direction:column;gap:5px;flex:1">
+      ${(c.cyberdeck || c.firewall) ? `<div style="font-size:10px;color:var(--text2)">${c.cyberdeck ? esc(c.cyberdeck) + ' Deck' : ''}${fw ? ` · Firewall ${fw}` : ''}</div>` : ''}
+      ${hacks.map((h, hi) => {
+        const live = computeLiveHackStats(c, h);
+        const ipCur = c.ip_current ?? c.ip_max ?? 0;
+        const canAfford = ipCur >= live.ip;
+        return `<div style="font-size:11px">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span style="flex:1;color:var(--text)">${esc(h.name)}</span>
+            <span style="color:var(--gold-bright);font-weight:700">${live.ip} IP</span>
+            <button class="btn ${canAfford ? 'btn-primary' : 'btn-ghost'} btn-small" style="padding:1px 8px;font-size:9px" onclick="useHack('${id}',${hi})" ${canAfford ? '' : 'disabled'}>USE</button>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:2px">
+            <span style="font-size:10px;color:var(--cyan)">${esc(live.pwLabel)}${live.pw!=null?' · '+live.pw:''}</span>
+            ${live.dice ? `<span style="font-size:10px;color:var(--cyan)">→ ${live.dice}×d20</span>` : ''}
+            ${targetOptions.length ? `<select style="font-size:9px" onchange="onHackTargetChange('${id}',${hi},this.value)">
+              <option value="">vs target...</option>
+              ${targetOptions.map(o => `<option value="${o.tid}">${esc(o.tc.name)}</option>`).join('')}
+            </select>
+            <span id="hack-vs-${id}-${hi}" style="font-size:10px;color:var(--text2)"></span>` : ''}
+          </div>
+          ${live.effect ? `<div style="font-size:10px;color:var(--text2);padding-left:2px;margin-top:2px">${esc(live.effect)}</div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
 function renderCombatantCard(id, isActive) {
   const c = state.characters[id]; if (!c) return '';
   const hpMax = c.hp_max || 1;
@@ -1845,7 +1911,7 @@ function renderCombatantCard(id, isActive) {
   const staMax = c.stamina_max ?? 0;
   const ipCur = c.ip_current ?? c.ip_max ?? 0;
   const ipMax = c.ip_max ?? 0;
-  return `<div class="combatant-card ${c.isAlly ? 'is-ally' : (c.isNPC ? 'is-npc' : 'is-pc')} ${isActive ? 'active-turn' : ''} ${hpCur <= 0 ? 'is-dead' : ''}" id="cc-${id}">
+  return `<div class="combatant-card ${c.isCompanion ? 'is-companion' : (c.isAlly ? 'is-ally' : (c.isNPC ? 'is-npc' : 'is-pc'))} ${isActive ? 'active-turn' : ''} ${hpCur <= 0 ? 'is-dead' : ''}" id="cc-${id}">
     <div class="combatant-top" onclick="toggleDetail('${id}')">
       <div>
         <div class="combatant-name">${esc(c.name)}</div>
@@ -1913,10 +1979,11 @@ function renderCombatantCard(id, isActive) {
         </div>
       </div>
       ${renderWeaponsSection(c, id)}
+      ${renderHacksSection(c, id)}
       ${renderLootAndItems(c, id)}
       <div class="detail-row" style="justify-content:flex-end">
         <button class="btn btn-ghost btn-small" onclick="openCharModal('${id}')">EDIT</button>
-        ${c.isNPC ? `<button class="btn btn-danger btn-small" onclick="removeFromCombat('${id}')">REMOVE</button>` : ''}
+        ${(c.isNPC || c.isCompanion) ? `<button class="btn btn-danger btn-small" onclick="removeFromCombat('${id}')">REMOVE</button>` : ''}
       </div>
     </div>
   </div>`;
@@ -1941,7 +2008,7 @@ function renderCharList() {
   if (!chars.length) { el.innerHTML = '<div style="padding:16px;color:var(--text3);font-size:11px">No characters yet.</div>'; return; }
   chars.forEach(([id]) => ensurePortraitListener(id));
   el.innerHTML = chars.map(([id, c]) => {
-    const color = c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)');
+    const color = c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)'));
     const portrait = portraits[id];
     const avatar = portrait
       ? `<div style="width:32px;height:32px;border-radius:50%;background-image:url('${portrait}');background-size:cover;background-position:center;border:2px solid ${color};flex-shrink:0"></div>`
@@ -1951,7 +2018,7 @@ function renderCharList() {
       ${avatar}
       <div style="flex:1">
         <div class="char-item-name">${esc(c.name)}</div>
-        <div class="char-item-sub">${c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC')}${c.pin ? ' · PIN set' : ''} · INI ${c.initiative ?? 0}</div>
+        <div class="char-item-sub">${c.isCompanion ? 'COM' : (c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC'))}${c.pin ? ' · PIN set' : ''} · INI ${c.initiative ?? 0}</div>
       </div>
       <div class="char-item-hp">${c.hp_current ?? c.hp_max}/${c.hp_max}</div>
       ${combatToggleButtonHtml(id)}
@@ -1964,7 +2031,7 @@ function renderCharList() {
 function renderSettings() {
   document.getElementById('settings-campaign').value = state.campaignName;
   const el = document.getElementById('player-pins-list');
-  const pcs = Object.entries(state.characters).filter(([,c]) => !c.isNPC);
+  const pcs = Object.entries(state.characters).filter(([,c]) => !c.isNPC && !c.isCompanion);
   if (!pcs.length) { el.innerHTML = '<div style="color:var(--text3);font-size:11px">No PC characters yet.</div>'; return; }
   el.innerHTML = pcs.map(([id, c]) => `
     <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border:1px solid var(--border)">
@@ -2149,7 +2216,7 @@ async function endCombat() {
   // the round/turn tracker and PC-only combat state. Nothing is deleted.
   const updates = { 'combat': { active: false, round: 1, currentTurn: 0, order: [] } };
   for (const [id, c] of Object.entries(state.characters)) {
-    if (!c.isNPC) {
+    if (!c.isNPC || c.isCompanion) {
       updates['characters/' + id + '/flink_used'] = false;
       updates['characters/' + id + '/status_effects'] = [];
       if (c.armor_body) updates['characters/' + id + '/armor_body/sp_temp'] = c.armor_body.sp_base;
@@ -2258,6 +2325,24 @@ async function reloadWeapon(id, wi) {
   showToast('Reloaded — costs a Nebenaktion.');
 }
 
+async function useHack(id, hi) {
+  const c = state.characters[id]; if (!c?.hacks?.[hi]) return;
+  const live = computeLiveHackStats(c, c.hacks[hi]);
+  await quickAdj(id, 'ip', -live.ip);
+  showToast(`${c.hacks[hi].name}: -${live.ip} IP`);
+}
+
+// Pure client-side preview (no Firebase write, doesn't need to survive a
+// re-render) — mirrors how the damage modal's calculator updates its
+// preview text directly rather than persisting UI-only selection state.
+function onHackTargetChange(id, hi, targetId) {
+  const el = document.getElementById(`hack-vs-${id}-${hi}`);
+  if (!el) return;
+  const target = state.characters[targetId];
+  if (!target) { el.textContent = ''; return; }
+  el.textContent = `vs ${target.name}: Firewall ${computeLiveFirewall(target)}`;
+}
+
 async function toggleFlink(id) {
   const c = state.characters[id]; if (!c) return;
   await dbWrite('characters/' + id + '/flink_used', !c.flink_used);
@@ -2319,7 +2404,7 @@ function populateTransferTargets(excludeId) {
   const sel = document.getElementById('transfer-target');
   const targets = Object.entries(state.characters).filter(([id]) => id !== excludeId);
   sel.innerHTML = targets.length
-    ? targets.map(([id, t]) => `<option value="${id}">${esc(t.name)}${t.isNPC ? ' (NPC)' : ''}</option>`).join('')
+    ? targets.map(([id, t]) => `<option value="${id}">${esc(t.name)}${t.isCompanion ? ' (COM)' : (t.isNPC ? ' (NPC)' : '')}</option>`).join('')
     : '<option value="">No other characters</option>';
 }
 
@@ -2477,7 +2562,7 @@ function onDmgCalcChange() {
     pwEl.textContent = ''; sitEl.textContent = ''; resultEl.textContent = '—'; resultEl.dataset.value = '';
     return;
   }
-  const live = computeLiveWeaponStats(attacker, weapon);
+  const live = computeLiveWeaponStats(getStatsSourceChar(attacker), weapon);
   pwEl.textContent = live.pw != null
     ? `PW: ${live.pwLabel} · ${live.pw} → roll ${live.dice}×d20`
     : `PW: ${live.pwLabel || '(no stats set — enter roll manually)'}`;
@@ -2625,9 +2710,13 @@ function openCharModal(id) {
   if (!isNew) { ensurePortraitListener(id); updatePortraitPreview(id); }
   const c = id ? (state.characters[id] || {}) : {};
   document.getElementById('cm-name').value = c.name || '';
-  document.getElementById('cm-type').value = c.isNPC ? 'npc' : 'pc';
+  document.getElementById('cm-type').value = c.isCompanion ? 'companion' : (c.isNPC ? 'npc' : 'pc');
   document.getElementById('cm-allegiance').value = c.isAlly ? 'ally' : 'enemy';
   onCmTypeChange();
+  document.getElementById('cm-owner').value = c.owner_char_id || '';
+  document.getElementById('cm-use-owner-stats').checked = c.useOwnerStatsForPW !== false;
+  document.getElementById('cm-cyberdeck').value = c.cyberdeck || '';
+  document.getElementById('cm-firewall').value = c.firewall ?? '';
   document.getElementById('cm-hp').value = '';
   document.getElementById('cm-sta').value = '';
   document.getElementById('cm-init').value = '';
@@ -2662,6 +2751,9 @@ function openCharModal(id) {
   // Weapons
   weaponFamilySelection = {};
   renderWeaponRows(c.weapons || []);
+  // Hacks
+  hackCategorySelection = {};
+  renderHackRows(c.hacks || []);
   // Talents
   renderTalentRows(c.talents || []);
   // Inventory
@@ -2670,8 +2762,36 @@ function openCharModal(id) {
 }
 
 function onCmTypeChange() {
-  const isNPC = document.getElementById('cm-type').value === 'npc';
-  document.getElementById('cm-allegiance-row').style.display = isNPC ? 'flex' : 'none';
+  const type = document.getElementById('cm-type').value;
+  document.getElementById('cm-allegiance-row').style.display = type === 'npc' ? 'flex' : 'none';
+  document.getElementById('cm-companion-row').style.display = type === 'companion' ? 'flex' : 'none';
+  if (type === 'companion') { populateOwnerDropdown(); populateCompanionTemplateDropdown(); }
+}
+
+function populateOwnerDropdown() {
+  const sel = document.getElementById('cm-owner');
+  const current = sel.value;
+  const pcs = Object.entries(state.characters).filter(([id, c]) => !c.isNPC && !c.isCompanion);
+  sel.innerHTML = '<option value="">— none —</option>' + pcs.map(([id, c]) => `<option value="${id}">${esc(c.name)}</option>`).join('');
+  if (pcs.some(([id]) => id === current)) sel.value = current;
+}
+
+function populateCompanionTemplateDropdown() {
+  const sel = document.getElementById('cm-companion-template');
+  sel.innerHTML = '<option value="">— pick to prefill —</option>' + Object.keys(COMPANION_TEMPLATES).map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
+}
+
+function applyCompanionTemplate(name) {
+  const tpl = COMPANION_TEMPLATES[name];
+  if (!tpl) return;
+  document.getElementById('cm-hp').value = tpl.hp;
+  const bodySpEl = document.getElementById('cm-armor-body-sp');
+  if (!bodySpEl.value) bodySpEl.value = tpl.sp;
+  const notesEl = document.getElementById('cm-notes');
+  const speedNote = `Speed ${tpl.speed} (${name})`;
+  if (!notesEl.value.includes(speedNote)) notesEl.value = (notesEl.value ? notesEl.value + '\n' : '') + speedNote;
+  weaponData.push({ ...tpl.weapon, attachments: [] });
+  renderWeaponRows(weaponData);
 }
 
 function renderWeaponRows(weapons) {
@@ -2777,6 +2897,63 @@ function removeAttachmentRow(wi, ai) {
   renderWeaponRows(weaponData);
 }
 
+// Hacks — mirrors the weapon list/picker exactly (renderHackRows re-syncs
+// hackData from source every render; hackCategorySelection is transient
+// UI-only state for the category/specific picker, reset in openCharModal).
+let hackData = [];
+let hackCategorySelection = {};
+function renderHackRows(hacks) {
+  hackData = hacks.map(h => ({ ...h }));
+  const el = document.getElementById('cm-hacks-list');
+  el.innerHTML = hackData.map((h, i) => hackRow(i, h)).join('');
+}
+function hackRow(i, h={}) {
+  const selCategory = hackCategorySelection[i] || '';
+  const specificOptions = HACK_CATALOG[selCategory] || [];
+  return `<div style="border:1px solid var(--border);padding:4px;margin-bottom:2px">
+    <div class="inline-row" style="gap:4px;margin-bottom:4px">
+      <select style="flex:1" onchange="onHackCategoryChange(${i},this.value)">
+        <option value="">— Category... —</option>
+        ${Object.keys(HACK_CATALOG).map(cat => `<option value="${esc(cat)}" ${selCategory===cat?'selected':''}>${esc(cat)}</option>`).join('')}
+      </select>
+      <select style="flex:1" onchange="onHackSpecificChange(${i},this.value)" ${!selCategory?'disabled':''}>
+        <option value="">— Specific... —</option>
+        ${specificOptions.map(opt => `<option value="${esc(opt.name)}">${esc(opt.name)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="inline-row" style="gap:4px">
+      <input type="text" placeholder="Name" value="${esc(h.name||'')}" style="flex:2" onchange="updateHackField(${i},'name',this.value)">
+      <input type="number" placeholder="IP" value="${h.ip||''}" style="width:60px" onchange="updateHackField(${i},'ip',this.value)">
+      <input type="text" placeholder="Effect" value="${esc(h.effect||'')}" style="flex:3" onchange="updateHackField(${i},'effect',this.value)">
+      <button class="btn btn-danger btn-icon" onclick="removeHackRow(${i})">✕</button>
+    </div>
+  </div>`;
+}
+function addHackRow() {
+  hackData.push({});
+  renderHackRows(hackData);
+}
+function updateHackField(i, field, val) {
+  if (!hackData[i]) hackData[i] = {};
+  hackData[i][field] = field === 'ip' ? (parseInt(val)||0) : val;
+}
+function removeHackRow(i) {
+  hackData.splice(i, 1);
+  renderHackRows(hackData);
+}
+function onHackCategoryChange(i, category) {
+  hackCategorySelection[i] = category;
+  renderHackRows(hackData);
+}
+function onHackSpecificChange(i, name) {
+  if (!name) return;
+  const category = hackCategorySelection[i];
+  const entry = (HACK_CATALOG[category] || []).find(h => h.name === name);
+  if (!entry) return;
+  hackData[i] = { name: entry.name, ip: entry.ip, effect: entry.effect };
+  renderHackRows(hackData);
+}
+
 let talentData = [];
 function renderTalentRows(talents) {
   talentData = [...talents];
@@ -2828,7 +3005,9 @@ function removeInvRow(i) { inventoryData.splice(i,1); renderInventoryRows(invent
 async function saveCharacter() {
   const name = document.getElementById('cm-name').value.trim();
   if (!name) { showToast('Name required!'); return; }
-  const isNPC = document.getElementById('cm-type').value === 'npc';
+  const typeVal = document.getElementById('cm-type').value;
+  const isNPC = typeVal === 'npc';
+  const isCompanion = typeVal === 'companion';
   const isAlly = isNPC && document.getElementById('cm-allegiance').value === 'ally';
   const existing = editingCharId ? (state.characters[editingCharId] || {}) : {};
   // Collect stats
@@ -2860,7 +3039,12 @@ async function saveCharacter() {
   const headName = document.getElementById('cm-armor-head-name').value.trim();
   const headSP = parseInt(document.getElementById('cm-armor-head-sp').value) || 0;
   const char = {
-    name, isNPC, isAlly,
+    name, isNPC, isAlly, isCompanion,
+    owner_char_id: isCompanion ? (document.getElementById('cm-owner').value || null) : null,
+    useOwnerStatsForPW: isCompanion ? document.getElementById('cm-use-owner-stats').checked : true,
+    cyberdeck: document.getElementById('cm-cyberdeck').value || null,
+    firewall: parseInt(document.getElementById('cm-firewall').value) || 0,
+    hacks: hackData.filter(h => h.name),
     stats: hasStats ? stats : (existing.stats || null),
     origin_hp_bonus: hpBonus, origin_sta_bonus: staBonus, origin_ip_bonus: ipBonus,
     hp_override: !isNaN(hpOverrideVal), sta_override: !isNaN(staOverrideVal), init_override: !isNaN(initOverrideVal), ip_override: !isNaN(ipOverrideVal),
@@ -2959,7 +3143,7 @@ async function setPlayerPin(charId, pin) {
 async function resetAllHP() {
   const updates = {};
   for (const [id, c] of Object.entries(state.characters)) {
-    if (!c.isNPC) {
+    if (!c.isNPC || c.isCompanion) {
       updates['characters/' + id + '/hp_current'] = c.hp_max;
       updates['characters/' + id + '/stamina_current'] = c.stamina_max;
       if (c.ip_max) updates['characters/' + id + '/ip_current'] = c.ip_max;
@@ -3191,6 +3375,109 @@ function computeLiveWeaponStats(c, w) {
     situational.push(WEAPON_TECH_EFFECTS[w.tech]);
   }
   return { bonus, pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, situational, magMax };
+}
+
+// A controlled companion drone's attack roll uses its OPERATOR's stats
+// (rulebook §7b.2: "PW = Int+Focus des Operators"), not its own — resolve
+// which character's `.stats` a weapon-PW calculation should actually read
+// from, defaulting to the owner unless the GM opted out per-companion.
+function getStatsSourceChar(c) {
+  if (c.isCompanion && c.useOwnerStatsForPW !== false && c.owner_char_id) {
+    const owner = state.characters[c.owner_char_id];
+    if (owner) return owner;
+  }
+  return c;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COMPANIONS — quick-fill templates for the rulebook's named drone stat
+// blocks (§7b.5). Speed isn't tracked as a character stat anywhere in this
+// app, so it's dropped into Notes as reference text rather than inventing
+// a field for a single use case.
+// ═══════════════════════════════════════════════════════════════
+const COMPANION_TEMPLATES = {
+  'GREMLIN Support Drone':                { hp:15, sp:4,  speed:16, weapon:{name:'EMP Discharge', bonus:7,  pw:'', tags:'Ignores SP'} },
+  'Kampfdrohne (Leicht)':                 { hp:20, sp:5,  speed:12, weapon:{name:'Heavy Pistol',   bonus:11, pw:'Ref+Cool', tags:''} },
+  'Kampfdrohne (Schwer)':                 { hp:40, sp:11, speed:8,  weapon:{name:'SMG',            bonus:14, pw:'Dex+Ref',  tags:'Autofire'} },
+  'Autonome Begleiter-Drohne (Leicht)':   { hp:25, sp:7,  speed:12, weapon:{name:'Heavy Pistol',   bonus:11, pw:'Ref+Cool', tags:''} },
+  'Autonome Kampf-Begleitdrohne (Schwer)': { hp:50, sp:14, speed:10, weapon:{name:'SMG',            bonus:18, pw:'Dex+Ref',  tags:'Autofire'} },
+};
+
+// ═══════════════════════════════════════════════════════════════
+// NETRUNNING — all 27 hacks from rulebook §10.4-10.8, verbatim. Only IP
+// cost and PW (which two Mind stats to sum) are computed live; durations,
+// stacks, combos, and the Duel/Trace mechanic are too varied to
+// auto-resolve reliably and stay as reference effect text for the GM.
+// ═══════════════════════════════════════════════════════════════
+const HACK_CATALOG = {
+  Combat: [
+    {name:'Short Circuit', ip:6, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Electrical direct damage: roll result − half target Firewall. Armor ignored. Combo: doubled damage if target has Cyberware Malfunction active.'},
+    {name:'Overheat', ip:6, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Burn: 4 dmg/round for 3 rounds, armor ignored. Combo: ignites Contagion on an infected target for an explosion.'},
+    {name:'Contagion', ip:8, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Poison virus: 3 dmg/round for 4 rounds, spreads to up to 2 targets within 5m. Combo with Overheat/Burn → explosion (3m area).'},
+    {name:'Synapse Burnout', ip:12, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Massive direct brain damage: 2× roll result − Firewall. No armor deduction. Crit Success: target instantly taken out.'},
+  ],
+  Control: [
+    {name:'Cyberware Malfunction', ip:4, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Target −3 on cyberware actions. Stacks up to 3×. At 3 stacks: cyberware disabled for 2 rounds.'},
+    {name:'Reboot Optics', ip:4, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Target blind for 1 round: no ranged attacks, −6 PW melee, no reaction roll.'},
+    {name:'Cripple Movement', ip:6, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Target loses secondary action/movement for 2 rounds.'},
+    {name:'Weapon Glitch', ip:6, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Target's next attack action automatically fails."},
+    {name:'Sonic Shock', ip:4, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Target can't communicate for 1 round. Stealth rolls against target automatically succeed."},
+    {name:'Cyberpsychosis', ip:16, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Target attacks an ally for 2 rounds. Does not work on non-cybered targets.'},
+  ],
+  Utility: [
+    {name:'Ping', ip:2, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'All enemies/devices on the network visible for 3 rounds, even through walls.'},
+    {name:'Memory Wipe', ip:8, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Target leaves combat mode and forgets the netrunner. In combat: target loses its initiative slot this round.'},
+    {name:'Bait', ip:6, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Target is lured to a position — leaves cover and moves there.'},
+    {name:'System Collapse', ip:14, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Target instantly unconscious (KO, not dead). Only works on targets below 30% Health.'},
+    {name:'Breach', ip:4, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Opens doors, disables cameras, shuts down turrets.'},
+    {name:'Detonate Grenade', ip:10, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:"Detonates target's grenade. Only if target carries grenades."},
+    {name:'Request Backup', ip:12, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Hacks comms: 1d3 additional enemies are lured to a false position.'},
+  ],
+  Environment: [
+    {name:'Blackout', ip:8, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Power outage in a sector (up to 30m radius), 3 rounds. Cameras/turrets disabled. Non-thermal-optic combatants: −4 PW ranged.'},
+    {name:'Hostile Architecture', ip:6, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Activates environment elements against a target (sprinklers, vent covers, barriers) — GM confirms availability.'},
+    {name:'Vehicle Override', ip:10, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Takes over a networked vehicle in range (up to 50m), 3 rounds. Ramming as weapon: Strength 12, ignores SP.'},
+    {name:'Broadcast Jam', ip:6, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Blocks radio comms within 30m for 3 rounds. No reinforcements callable.'},
+    {name:'Turret Override', ip:8, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Takes over a networked turret for 3 rounds, fires at targets of choice.'},
+    {name:'Emergency Protocol', ip:12, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Triggers building emergency system: Lockdown / Fire Suppression / Evacuation Alarm (GM choice of effect).'},
+  ],
+  Duel: [
+    {name:'Neural Spike', ip:8, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Direct net attack: roll result − target's deck-quality value (Basic 5/Standard 10/Military 15/Blackmarket 20). Ignores Firewall and armor. Only vs. targets with an active cyberdeck."},
+    {name:'Feedback Loop', ip:6, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:"Poisons target's deck: their next hack costs HP instead of IP (1:1). Persists until triggered or combat ends."},
+    {name:'ICE Wall', ip:6, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Defensive: own Firewall +8 for 3 rounds. Every failed hack against it costs the attacker 2 IP. Costs a main action to maintain each round.'},
+    {name:'Dead Drop', ip:10, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Erases all running traces on self, hides position for 2 rounds — no Trace roll possible. Costs a main action.'},
+  ],
+};
+
+function matchHackName(name) {
+  const norm = String(name || '').trim().toLowerCase();
+  for (const list of Object.values(HACK_CATALOG)) {
+    const found = list.find(h => h.name.toLowerCase() === norm);
+    if (found) return found;
+  }
+  return null;
+}
+
+function computeLiveHackStats(c, h) {
+  const match = matchHackName(h.name);
+  let pw = null, pwLabel = match?.pwLabel || '';
+  if (match && c.stats) pw = c.stats[match.pwStats[0]] + c.stats[match.pwStats[1]];
+  return { pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, ip: h.ip ?? match?.ip ?? 0, effect: h.effect || match?.effect || '' };
+}
+
+// Firewall-boosting gear (§10.2) — scans the character's existing free-text
+// cyberware list for exact matches, same pattern as CYBERWARE_STAT_BONUS.
+const FIREWALL_ITEM_BONUS = {
+  'basic ice': 5, 'hardened ice': 10, 'militech firewall': 15, 'blackwall fragment': 20,
+  'netrunner helm': 8, 'faraday helm': 12,
+};
+function computeLiveFirewall(c) {
+  let fw = c.firewall || 0;
+  (c.cyberware || []).forEach(cw => {
+    const bonus = FIREWALL_ITEM_BONUS[String(cw).trim().toLowerCase()];
+    if (bonus) fw += bonus;
+  });
+  return fw;
 }
 
 const TECH_CHANCE = { GRUNT:0.05, THREAT:0.25, BOSS:0.70 };
