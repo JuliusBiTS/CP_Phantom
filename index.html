@@ -1119,14 +1119,14 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <button class="modal-close" onclick="closeModal('xp-modal')">✕</button>
     </div>
     <div class="modal-body">
-      <div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.5">Enter the XP earned for each tree based on what the character mainly did (combat/physical → Power, mobility/stealth/social → Mobility, hacking/intelligence/social → Mind). Also adds to the global talent-point pool.</div>
-      <div class="field"><label>Power XP</label><input type="number" id="xp-power" min="0" value="0"></div>
-      <div class="field"><label>Mobility XP</label><input type="number" id="xp-mobility" min="0" value="0"></div>
-      <div class="field"><label>Mind XP</label><input type="number" id="xp-mind" min="0" value="0"></div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.5">Enter the XP earned for each tree based on what the character mainly did (combat/physical → Power, mobility/stealth/social → Mobility, hacking/intelligence/social → Mind). Also adds to the global talent-point pool. Use negative numbers to correct a mistake.</div>
+      <div class="field"><label>Power XP</label><input type="number" id="xp-power" value="0"></div>
+      <div class="field"><label>Mobility XP</label><input type="number" id="xp-mobility" value="0"></div>
+      <div class="field"><label>Mind XP</label><input type="number" id="xp-mind" value="0"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost btn-small" onclick="closeModal('xp-modal')">CANCEL</button>
-      <button class="btn btn-primary btn-small" onclick="submitAwardXp()">AWARD</button>
+      <button class="btn btn-primary btn-small" onclick="submitAwardXp()">APPLY</button>
     </div>
   </div>
 </div>
@@ -1282,7 +1282,24 @@ async function undoLast() {
   const prefixed = {};
   for (const [k, v] of Object.entries(prevMap)) prefixed[dbPath() + '/' + k] = v;
   await db.ref('/').update(prefixed);
+  // The write above reverts Firebase (and, via the sync listener, `state`)
+  // correctly on its own — but if the character edit modal is open, its
+  // fields were populated from a one-time snapshot at open-time and don't
+  // live-update from `state`. Without this, an undone stat/XP change is
+  // invisible in the still-open modal and looks like "undo did nothing."
+  if (editingCharId) refreshOpenCharModalFields(editingCharId);
   showToast('Last action undone.');
+}
+
+function refreshOpenCharModalFields(id) {
+  const c = state.characters[id]; if (!c) return;
+  const st = c.stats || {};
+  [...STAT_KEYS.power, ...STAT_KEYS.mobility, ...STAT_KEYS.mind, ...STAT_KEYS.special].forEach(k => {
+    const el = document.getElementById('cs-' + k);
+    if (el) el.value = st[k] !== undefined ? st[k] : '';
+  });
+  recalcDerived();
+  renderProgressionSection(id);
 }
 
 async function dbWrite(path, val) {
@@ -1930,6 +1947,44 @@ function renderHacksSection(c, id) {
   </div>`;
 }
 
+// Shows the actual rolled dice + how they resolved (transparency for the
+// GM), plus manual up/down controls in case the auto-sorted order needs
+// a correction — e.g. a rule interaction the auto-roll doesn't know about.
+function renderInitRow(id) {
+  if (!state.combat?.active) return '';
+  const order = state.combat.order || [];
+  const idx = order.indexOf(id);
+  if (idx === -1) return '';
+  const r = state.combat.initRolls?.[id];
+  const rollText = r
+    ? `🎲 [${(r.rolls || []).join(', ')}] → ${initRollLabel(r.category, r.value)}`
+    : 'No roll — companion, follows owner';
+  return `<div class="detail-row">
+    <span class="detail-label">INITIATIVE</span>
+    <div style="display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap">
+      <span style="font-size:10px;color:var(--text2)">${esc(rollText)}</span>
+      <div class="adj-group" style="margin-left:auto">
+        <button class="adj-btn" style="width:26px" onclick="event.stopPropagation(); moveInOrder('${id}',-1)" ${idx === 0 ? 'disabled' : ''} title="Move earlier in turn order">▲</button>
+        <button class="adj-btn" style="width:26px" onclick="event.stopPropagation(); moveInOrder('${id}',1)" ${idx === order.length - 1 ? 'disabled' : ''} title="Move later in turn order">▼</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Manual turn-order override. Swaps with the adjacent slot and keeps
+// "whose turn it is" pinned to the same character even though its index
+// just shifted, so a mid-correction doesn't accidentally skip/replay a turn.
+async function moveInOrder(id, delta) {
+  const order = [...(state.combat?.order || [])];
+  const idx = order.indexOf(id);
+  const newIdx = idx + delta;
+  if (idx === -1 || newIdx < 0 || newIdx >= order.length) return;
+  const currentId = order[state.combat.currentTurn || 0];
+  [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
+  const newTurn = Math.max(0, order.indexOf(currentId));
+  await dbUpdate({ 'combat/order': order, 'combat/currentTurn': newTurn });
+}
+
 function renderCombatantCard(id, isActive) {
   const c = state.characters[id]; if (!c) return '';
   const hpMax = c.hp_max || 1;
@@ -1963,6 +2018,7 @@ function renderCombatantCard(id, isActive) {
       </div>
     </div>
     <div class="combatant-detail ${expandedCombatants.has(id) ? 'open' : ''}" id="${detailId}">
+      ${renderInitRow(id)}
       <div class="detail-row">
         <span class="detail-label">HP</span>
         <div class="adj-group">
@@ -2342,7 +2398,7 @@ async function startCombat() {
     const c = state.characters[id];
     if (!c.isCompanion) {
       const rolled = rollInitiativeFor(c);
-      initRolls[id] = { category: rolled.category, value: rolled.value };
+      initRolls[id] = { category: rolled.category, value: rolled.value, rolls: rolled.rolls };
     }
   });
   const order = sortCombatOrder(validIds, initRolls);
@@ -2513,7 +2569,7 @@ async function toggleCombatQueue(id) {
       const c = state.characters[id];
       if (c && !c.isCompanion) {
         const rolled = rollInitiativeFor(c);
-        initRolls[id] = { category: rolled.category, value: rolled.value };
+        initRolls[id] = { category: rolled.category, value: rolled.value, rolls: rolled.rolls };
         showToast(`${c.name} rolled initiative: ${rolled.rolls.join('+')} → ${initRollLabel(rolled.category, rolled.value)}`);
       }
       order = sortCombatOrder(order, initRolls);
@@ -2869,7 +2925,7 @@ function renderProgressionSection(id) {
   const globalXP = c.globalXP || 0;
   const talentSpent = c.talentPointsSpent || 0;
   const prog = talentXpProgress(globalXP);
-  const available = prog.earned - talentSpent;
+  const available = Math.max(0, prog.earned - talentSpent);
   document.getElementById('cm-progression-body').innerHTML = `
     ${treeRow('power', 'POWER')}
     ${treeRow('mobility', 'MOBILITY')}
@@ -2900,22 +2956,30 @@ async function submitAwardXp() {
   const id = awardXpTargetId;
   const c = state.characters[id]; if (!c) return;
   const amounts = {
-    power: Math.max(0, parseInt(document.getElementById('xp-power').value) || 0),
-    mobility: Math.max(0, parseInt(document.getElementById('xp-mobility').value) || 0),
-    mind: Math.max(0, parseInt(document.getElementById('xp-mind').value) || 0),
+    power: parseInt(document.getElementById('xp-power').value) || 0,
+    mobility: parseInt(document.getElementById('xp-mobility').value) || 0,
+    mind: parseInt(document.getElementById('xp-mind').value) || 0,
   };
   const totalAmount = amounts.power + amounts.mobility + amounts.mind;
-  if (totalAmount <= 0) { closeModal('xp-modal'); return; }
+  if (!amounts.power && !amounts.mobility && !amounts.mind) { closeModal('xp-modal'); return; }
   const treeXP = { ...(c.treeXP || { power: 0, mobility: 0, mind: 0 }) };
   const banked = { ...(c.treeBankedPoints || { power: 0, mobility: 0, mind: 0 }) };
-  let levelUps = 0;
+  let levelUps = 0, levelDowns = 0, blockedDowns = 0;
   for (const tree of ['power', 'mobility', 'mind']) {
     if (!amounts[tree]) continue;
     treeXP[tree] = (treeXP[tree] || 0) + amounts[tree];
     while (treeXP[tree] >= 500) { treeXP[tree] -= 500; banked[tree] = (banked[tree] || 0) + 2; levelUps++; }
+    // Removing XP symmetrically un-levels the tree, but only as long as the
+    // points from that level-up are still sitting unspent in the bank — if
+    // they were already allocated into a stat, we can't safely claw a
+    // specific stat point back out, so floor at 0 and flag it for the GM.
+    while (treeXP[tree] < 0) {
+      if ((banked[tree] || 0) >= 2) { banked[tree] -= 2; treeXP[tree] += 500; levelDowns++; }
+      else { treeXP[tree] = 0; blockedDowns++; break; }
+    }
   }
   const oldGlobal = c.globalXP || 0;
-  const newGlobal = oldGlobal + totalAmount;
+  const newGlobal = Math.max(0, oldGlobal + totalAmount);
   const oldTalent = talentXpProgress(oldGlobal).earned;
   const newTalent = talentXpProgress(newGlobal).earned;
   await dbUpdate({
@@ -2924,9 +2988,12 @@ async function submitAwardXp() {
     ['characters/' + id + '/globalXP']: newGlobal,
   });
   closeModal('xp-modal');
-  let msg = `${c.name}: +${totalAmount} XP`;
+  let msg = totalAmount >= 0 ? `${c.name}: +${totalAmount} XP` : `${c.name}: ${totalAmount} XP (correction)`;
   if (levelUps > 0) msg += ` — ${levelUps} tree level-up${levelUps > 1 ? 's' : ''}!`;
+  if (levelDowns > 0) msg += ` — ${levelDowns} tree level-down${levelDowns > 1 ? 's' : ''}.`;
   if (newTalent > oldTalent) msg += ` — ${newTalent - oldTalent} new talent point${newTalent - oldTalent > 1 ? 's' : ''}!`;
+  if (newTalent < oldTalent) msg += ` — ${oldTalent - newTalent} talent point${oldTalent - newTalent > 1 ? 's' : ''} removed.`;
+  if (blockedDowns > 0) msg += ` — Note: ${blockedDowns} tree's banked points were already spent; floored at 0 XP instead. Adjust stats manually if needed.`;
   showToast(msg);
   if (editingCharId === id) renderProgressionSection(id);
 }
