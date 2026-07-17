@@ -649,6 +649,16 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Share this link with players — it includes the database URL so they connect automatically.</div>
       <div id="player-pins-list" style="display:flex;flex-direction:column;gap:6px"></div>
       <hr class="divider">
+      <div class="section-heading">Backups</div>
+      <div style="color:var(--text2);font-size:11px;margin-bottom:8px;line-height:1.6">Auto-backs up twice per day (AM/PM), kept forever — nothing is ever deleted automatically. "Backup Now" snapshots into Firebase on demand; "Download" saves a file to your computer (survives even if Firebase itself is lost). Restoring overwrites everything currently live — it always asks first.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="btn btn-ghost btn-small" onclick="manualBackupNow()">BACKUP NOW</button>
+        <button class="btn btn-ghost btn-small" onclick="downloadBackup()">⬇ DOWNLOAD BACKUP</button>
+        <input type="file" accept="application/json" id="backup-file-input" style="display:none" onchange="handleBackupFileUpload(event)">
+        <button class="btn btn-ghost btn-small" onclick="document.getElementById('backup-file-input').click()">⬆ RESTORE FROM FILE</button>
+      </div>
+      <div id="backup-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      <hr class="divider">
       <div class="section-heading">Reset Combat</div>
       <button class="btn btn-danger btn-small" onclick="if(confirm('Reset all HP to max and clear status effects?'))resetAllHP()">RESET ALL HP & STATUS</button>
       <hr class="divider">
@@ -1246,6 +1256,111 @@ async function dbRead() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// BACKUPS — full-campaign snapshots live outside 'campaign/' (a sibling
+// 'campaignBackups/' tree keyed by sanitized ISO timestamp) so a broken
+// or corrupted live campaign node can't take its own backups down with
+// it. Two auto-snapshots per day (AM/PM) plus on-demand manual ones;
+// none are ever pruned — long-term rollback (months/sessions back) is
+// the point. A local JSON download is the last line of defense if
+// Firebase itself becomes unreachable.
+// ═══════════════════════════════════════════════════════════════
+// Kept forever — no pruning. History across months/sessions is the point.
+async function takeBackupSnapshot(label) {
+  const data = await dbRead();
+  if (!data) return;
+  const now = Date.now();
+  const key = new Date(now).toISOString().replace(/[:.]/g, '-');
+  await db.ref('campaignBackups/' + key).set({ timestamp: now, label, data });
+}
+
+async function maybeAutoBackup() {
+  try {
+    const now = new Date();
+    const period = now.toISOString().slice(0, 10) + (now.getHours() < 12 ? '-AM' : '-PM');
+    const snap = await db.ref('campaignBackupMeta/lastAutoPeriod').get();
+    if (snap.exists() && snap.val() === period) return;
+    await takeBackupSnapshot('auto');
+    await db.ref('campaignBackupMeta/lastAutoPeriod').set(period);
+  } catch (e) { console.error('Auto-backup failed', e); }
+}
+
+async function manualBackupNow() {
+  await takeBackupSnapshot('manual');
+  showToast('Backup saved.');
+  renderBackupList();
+}
+
+async function downloadBackup() {
+  const data = await dbRead();
+  if (!data) { showToast('Nothing to back up yet.'); return; }
+  const payload = { exportedAt: new Date().toISOString(), campaignName: data.campaignName || 'Campaign', data };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `cp-phantom-backup-${(data.campaignName || 'campaign').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast('Backup downloaded.');
+}
+
+function handleBackupFileUpload(event) {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    let parsed;
+    try { parsed = JSON.parse(reader.result); } catch (e) { showToast('Invalid backup file.'); return; }
+    const data = parsed?.data && typeof parsed.data === 'object' ? parsed.data : parsed;
+    if (!data || typeof data !== 'object') { showToast('Invalid backup file.'); return; }
+    if (!confirm('Restore campaign from this file? This overwrites everything currently live. (You can Undo right after if needed.)')) return;
+    await applyCampaignSnapshot(data);
+    showToast('Campaign restored from file.');
+  };
+  reader.readAsText(file);
+}
+
+// Single dbUpdate call over every top-level campaign key so the whole
+// restore lands as ONE entry on the undo stack — one Undo click fully
+// reverts a bad restore, instead of needing one click per field.
+async function applyCampaignSnapshot(data) {
+  const updates = {
+    characters: data.characters || {},
+    combat: data.combat || { active: false, round: 1, currentTurn: 0, order: [] },
+    campaignName: data.campaignName || 'Campaign',
+    encounterQueue: data.encounterQueue || [],
+    map: data.map || { tokens: {} },
+  };
+  await dbUpdate(updates);
+}
+
+async function restoreBackup(key) {
+  const snap = await db.ref('campaignBackups/' + key).get();
+  if (!snap.exists()) { showToast('Backup not found.'); return; }
+  const backup = snap.val();
+  if (!confirm(`Restore campaign to the backup from ${new Date(backup.timestamp).toLocaleString()}? This overwrites everything currently live. (You can Undo right after if needed.)`)) return;
+  await applyCampaignSnapshot(backup.data);
+  showToast('Campaign restored.');
+}
+
+async function renderBackupList() {
+  const el = document.getElementById('backup-list');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--text3);font-size:11px">Loading backups...</div>';
+  const snap = await db.ref('campaignBackups').get();
+  if (!snap.exists()) { el.innerHTML = '<div style="color:var(--text3);font-size:11px">No backups yet.</div>'; return; }
+  const entries = Object.entries(snap.val()).sort((a, b) => b[1].timestamp - a[1].timestamp);
+  el.innerHTML = entries.map(([key, b]) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface);border:1px solid var(--border)">
+      <div style="flex:1;font-size:11px">${new Date(b.timestamp).toLocaleString()} <span style="color:var(--text3);font-size:9px">(${esc(b.label || '')})</span></div>
+      <button class="btn btn-ghost btn-small" onclick="restoreBackup('${key}')">RESTORE</button>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
 // UNDO — snapshots the pre-write value of every path touched by
 // dbWrite/dbUpdate so a mistake can be reverted from this browser tab.
 // Does not see writes made by other players/devices, and does not
@@ -1424,6 +1539,7 @@ async function doLogin() {
       state.encounterQueue = data.encounterQueue || [];
       startSync();
       showGM();
+      maybeAutoBackup();
       return;
     }
     // Check player pins
@@ -2158,13 +2274,13 @@ function renderSettings() {
   document.getElementById('settings-campaign').value = state.campaignName;
   const el = document.getElementById('player-pins-list');
   const pcs = Object.entries(state.characters).filter(([,c]) => !c.isNPC && !c.isCompanion);
-  if (!pcs.length) { el.innerHTML = '<div style="color:var(--text3);font-size:11px">No PC characters yet.</div>'; return; }
-  el.innerHTML = pcs.map(([id, c]) => `
+  el.innerHTML = pcs.length ? pcs.map(([id, c]) => `
     <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border:1px solid var(--border)">
       <div style="flex:1;font-size:12px">${esc(c.name)}</div>
       <input type="text" value="${esc(c.pin || '')}" placeholder="Set PIN" maxlength="8"
         style="width:100px" onchange="setPlayerPin('${id}', this.value)">
-    </div>`).join('');
+    </div>`).join('') : '<div style="color:var(--text3);font-size:11px">No PC characters yet.</div>';
+  renderBackupList();
 }
 
 // ═══════════════════════════════════════════════════════════════
