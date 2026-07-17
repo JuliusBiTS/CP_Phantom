@@ -2611,7 +2611,7 @@ async function nextRound() {
     }
     if (dmg > 0 || regenHp > 0) {
       const hpMax = c.hp_max || 1;
-      const newHp = Math.min(hpMax, Math.max(-(c.grit || 0) - 10, (c.hp_current ?? hpMax) - dmg + regenHp));
+      const newHp = Math.min(hpMax, Math.max(-(c.stats?.grit || 0) - 10, (c.hp_current ?? hpMax) - dmg + regenHp));
       updates['characters/' + id + '/hp_current'] = newHp;
     }
     if (regenSta > 0) {
@@ -2632,7 +2632,7 @@ async function nextRound() {
 async function quickAdj(id, stat, delta) {
   const c = state.characters[id]; if (!c) return;
   if (stat === 'hp') {
-    const val = Math.min(c.hp_max, Math.max(-(c.grit || 0) - 10, (c.hp_current ?? c.hp_max) + delta));
+    const val = Math.min(c.hp_max, Math.max(-(c.stats?.grit || 0) - 10, (c.hp_current ?? c.hp_max) + delta));
     await dbWrite('characters/' + id + '/hp_current', val);
   } else if (stat === 'stamina') {
     const val = Math.min(c.stamina_max || 0, Math.max(0, (c.stamina_current ?? c.stamina_max ?? 0) + delta));
@@ -3009,7 +3009,7 @@ async function applyDmg(sign) {
   const id = dmgTargetId;
   const c = state.characters[id]; if (!c) return;
   const delta = sign > 0 ? val : -val;
-  const newHp = Math.min(c.hp_max, Math.max(-(c.grit || 0) - 10, (c.hp_current ?? c.hp_max) + delta));
+  const newHp = Math.min(c.hp_max, Math.max(-(c.stats?.grit || 0) - 10, (c.hp_current ?? c.hp_max) + delta));
   await dbWrite('characters/' + id + '/hp_current', newHp);
   closeModal('dmg-modal');
   showToast(`${c.name}: ${delta > 0 ? '+' : ''}${delta} HP → ${newHp}`);
