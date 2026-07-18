@@ -1147,10 +1147,10 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         <div class="field"><label>Cyberdeck</label>
           <select id="cm-cyberdeck">
             <option value="">None</option>
-            <option value="Basic">Basic (2 slots, +0 IP/rd)</option>
-            <option value="Standard">Standard (4 slots, +1 IP/rd)</option>
-            <option value="Military">Military (6 slots, +2 IP/rd)</option>
-            <option value="Blackmarket">Blackmarket (8 slots, +3 IP/rd)</option>
+            <option value="Basic">Basic (2 slots, +1 IP/rd)</option>
+            <option value="Standard">Standard (4 slots, +2 IP/rd)</option>
+            <option value="Military">Military (6 slots, +3 IP/rd)</option>
+            <option value="Blackmarket">Blackmarket (8 slots, +4 IP/rd)</option>
           </select>
         </div>
         <div class="field" style="max-width:100px"><label>Firewall</label><input type="number" id="cm-firewall" placeholder="0" min="0"></div>
@@ -2233,6 +2233,36 @@ function renderHacksSection(c, id) {
   </div>`;
 }
 
+// §6.6a-c consumables — a quick roll-and-apply picker rather than a
+// per-character list, since (unlike weapons/hacks) any character could
+// plausibly use any stim and tracking a separate owned-items list would
+// just duplicate the free-text inventory. Hidden for plain NPCs to avoid
+// bloating enemy cards; premium items are reference-only (see catalog note).
+function renderConsumablesSection(c, id) {
+  if (c.isNPC) return '';
+  const premiumNames = Object.values(CONSUMABLE_CATALOG).flatMap(g => g.premium.map(p => `${p.name}: ${p.effect}`)).join('\n');
+  return `<div class="detail-row" style="align-items:flex-start">
+    <span class="detail-label" style="margin-top:4px">CONSUMABLES</span>
+    <div style="display:flex;flex-direction:column;gap:4px;flex:1">
+      <div class="inline-row" style="gap:4px">
+        <select id="consumable-pick-${id}" style="flex:1;font-size:11px">
+          ${Object.entries(CONSUMABLE_CATALOG).map(([pool, g]) => `<optgroup label="${esc(g.label)}">
+            ${g.basic.map(item => `<option value="${pool}|||${esc(item.name)}">${esc(item.name)} (${item.dice}, min ${item.min})</option>`).join('')}
+          </optgroup>`).join('')}
+        </select>
+        <button class="btn btn-primary btn-small" style="font-size:10px;padding:2px 8px;white-space:nowrap" onclick="onUseConsumableClick('${id}')">ROLL &amp; APPLY</button>
+      </div>
+      <div style="font-size:9px;color:var(--text3)" title="${esc(premiumNames)}">Premium (§6.6a-c, apply manually — hover for effects): ${esc(Object.values(CONSUMABLE_CATALOG).flatMap(g => g.premium.map(p => p.name)).join(', '))}</div>
+    </div>
+  </div>`;
+}
+function onUseConsumableClick(id) {
+  const sel = document.getElementById('consumable-pick-' + id);
+  if (!sel.value) return;
+  const [pool, name] = sel.value.split('|||');
+  useConsumable(id, pool, name);
+}
+
 // Shows the actual rolled dice + how they resolved (transparency for the
 // GM), plus manual up/down controls in case the auto-sorted order needs
 // a correction — e.g. a rule interaction the auto-roll doesn't know about.
@@ -2367,6 +2397,7 @@ function renderCombatantCard(id, isActive) {
       </div>
       ${renderWeaponsSection(c, id)}
       ${renderHacksSection(c, id)}
+      ${renderConsumablesSection(c, id)}
       ${renderLootAndItems(c, id)}
       <div class="detail-row" style="justify-content:flex-end">
         <button class="btn btn-ghost btn-small" onclick="openCharModal('${id}')">EDIT</button>
@@ -2815,7 +2846,7 @@ async function nextRound() {
     }
     if (dmg > 0 || regenHp > 0) {
       const hpMax = c.hp_max || 1;
-      const newHp = Math.min(hpMax, Math.max(-(c.stats?.grit || 0) - 10, (c.hp_current ?? hpMax) - dmg + regenHp));
+      const newHp = Math.min(hpMax, Math.max(-(c.stats?.grit || 0), (c.hp_current ?? hpMax) - dmg + regenHp));
       updates['characters/' + id + '/hp_current'] = newHp;
     }
     if (regenSta > 0) {
@@ -2836,7 +2867,7 @@ async function nextRound() {
 async function quickAdj(id, stat, delta) {
   const c = state.characters[id]; if (!c) return;
   if (stat === 'hp') {
-    const val = Math.min(c.hp_max, Math.max(-(c.stats?.grit || 0) - 10, (c.hp_current ?? c.hp_max) + delta));
+    const val = Math.min(c.hp_max, Math.max(-(c.stats?.grit || 0), (c.hp_current ?? c.hp_max) + delta));
     await dbWrite('characters/' + id + '/hp_current', val);
   } else if (stat === 'stamina') {
     const val = Math.min(c.stamina_max || 0, Math.max(0, (c.stamina_current ?? c.stamina_max ?? 0) + delta));
@@ -2845,7 +2876,7 @@ async function quickAdj(id, stat, delta) {
     const val = Math.min(c.ip_max || 0, Math.max(0, (c.ip_current ?? c.ip_max ?? 0) + delta));
     await dbWrite('characters/' + id + '/ip_current', val);
   } else if (stat === 'humanity') {
-    // §25.2: 0 is the floor — negative Humanity no longer exists.
+    // §21.2: 0 is the floor — negative Humanity no longer exists.
     const val = Math.min(c.humanity_max || 0, Math.max(0, (c.humanity_current ?? c.humanity_max ?? 0) + delta));
     await dbWrite('characters/' + id + '/humanity_current', val);
   }
@@ -3217,7 +3248,7 @@ async function applyDmg(sign) {
   const id = dmgTargetId;
   const c = state.characters[id]; if (!c) return;
   const delta = sign > 0 ? val : -val;
-  const newHp = Math.min(c.hp_max, Math.max(-(c.stats?.grit || 0) - 10, (c.hp_current ?? c.hp_max) + delta));
+  const newHp = Math.min(c.hp_max, Math.max(-(c.stats?.grit || 0), (c.hp_current ?? c.hp_max) + delta));
   await dbWrite('characters/' + id + '/hp_current', newHp);
   closeModal('dmg-modal');
   showToast(`${c.name}: ${delta > 0 ? '+' : ''}${delta} HP → ${newHp}`);
@@ -3266,7 +3297,7 @@ const STAT_KEYS = {
   special: ['luck']
 };
 
-// Basis-Humanity (§25.2): 12 + floor((Will+Cool)/2), clamped 15-30, plus any
+// Basis-Humanity (§21.2): 12 + floor((Will+Cool)/2), clamped 15-30, plus any
 // permanent lifepath adjustment. Replaces the old EMP-based formula.
 function calcHumanityBase(s, humanityBonus=0) {
   const g = v => parseInt(s?.[v]) || 0;
@@ -3283,7 +3314,7 @@ function calcDerived(s, hpBonus=0, staBonus=0, ipBonus=0, humanityBonus=0, cyber
     'HP Max':     `${g('grit')}+${g('core')}+${hpBonus} = ${g('grit')+g('core')+hpBonus}`,
     'Stamina Max':`${g('drive')}+${g('core')}+${staBonus} = ${g('drive')+g('core')+staBonus}`,
     'Initiative': `${g('speed')}+${g('reflexes')} = ${g('speed')+g('reflexes')}`,
-    'RW':         `${g('speed')}+${g('reflexes')} = ${g('speed')+g('reflexes')}`,
+    'RW':         `${g('drive')}+${g('reflexes')} = ${g('drive')+g('reflexes')}`,
     'Humanity (Base/Max)': `${humanityBase} / ${humanityMax}${cyberwareImpact ? ` (−${cyberwareImpact} Impact)` : ''}`,
     'Capacity':   `${g('grit')}×5 = ${g('grit')*5}`,
     'IP':         `floor(${mindSum}/5)×2+${ipBonus} = ${Math.floor(mindSum/5)*2+ipBonus}`,
@@ -3634,15 +3665,21 @@ function renderWeaponRows(weapons) {
 }
 function weaponRow(i, w={}) {
   const tech = w.tech || 'base';
+  const slotInfo = getWeaponSlotInfo(w.name);
   const attachRows = (w.attachments || []).map((a, ai) => `<div class="inline-row" style="gap:4px;margin-top:3px">
-    <input type="text" placeholder="Attachment name" value="${esc(a.name||'')}" style="flex:1.5;font-size:11px" onchange="updateAttachmentField(${i},${ai},'name',this.value)">
+    <input type="text" list="mod-catalog-${i}" placeholder="Attachment name" value="${esc(a.name||'')}" style="flex:1.5;font-size:11px" onchange="updateAttachmentField(${i},${ai},'name',this.value)">
     <input type="text" placeholder="Stat effect" value="${esc(a.effect||'')}" style="flex:2;font-size:11px" onchange="updateAttachmentField(${i},${ai},'effect',this.value)">
     <input type="text" placeholder="Special effect" value="${esc(a.special||'')}" style="flex:2;font-size:11px" onchange="updateAttachmentField(${i},${ai},'special',this.value)">
     <button class="btn btn-danger btn-icon" onclick="removeAttachmentRow(${i},${ai})">✕</button>
   </div>`).join('');
   const selFamily = weaponFamilySelection[i] || '';
   const specificOptions = WEAPON_SPECIFIC_OPTIONS[selFamily] || [];
+  const slotCount = (w.attachments || []).length;
+  const overSlots = slotCount > slotInfo.max;
+  const attachNames = (w.attachments || []).map(a => String(a.name||'').trim().toLowerCase());
+  const suppressorConflict = attachNames.includes('suppressor') && attachNames.includes('extended barrel');
   return `<div style="border:1px solid var(--border);padding:4px;margin-bottom:2px">
+    <datalist id="mod-catalog-${i}">${slotInfo.catalog.map(e => `<option value="${esc(e.name)}">`).join('')}</datalist>
     <div class="inline-row" style="gap:4px;margin-bottom:4px">
       <select style="flex:1" onchange="onWeaponFamilyChange(${i},this.value)">
         <option value="">— Family... —</option>
@@ -3672,9 +3709,10 @@ function weaponRow(i, w={}) {
         ${[1,2,3,4,5].map(l=>`<option value="${l}" ${(w.techLevel||1)==l?'selected':''}>Smart ${l}</option>`).join('')}
       </select>` : ''}
     </div>
-    <div style="font-size:10px;color:var(--text3);letter-spacing:0.1em;margin-bottom:2px">ATTACHMENTS</div>
+    <div style="font-size:10px;color:${overSlots ? 'var(--red-bright)' : 'var(--text3)'};letter-spacing:0.1em;margin-bottom:2px" title="${slotInfo.note || ''}">${slotInfo.label} (${slotCount}/${slotInfo.max})${slotInfo.note ? ' — ' + esc(slotInfo.note) : ''}</div>
+    ${suppressorConflict ? `<div style="font-size:10px;color:var(--red-bright);margin-bottom:2px">⚠ Suppressor and Extended Barrel can't be combined (§8.1)</div>` : ''}
     ${attachRows}
-    <button class="btn btn-ghost btn-small" style="margin-top:4px;font-size:10px;padding:2px 8px" onclick="addAttachmentRow(${i})">+ ADD ATTACHMENT</button>
+    <button class="btn btn-ghost btn-small" style="margin-top:4px;font-size:10px;padding:2px 8px" onclick="addAttachmentRow(${i})">+ ADD ${slotInfo.label === 'MELEE MODS' ? 'MOD' : 'ATTACHMENT'}</button>
   </div>`;
 }
 let weaponData = [];
@@ -3900,7 +3938,7 @@ async function saveCharacter() {
     stamina_current: existing.stamina_current ?? staMax,
     ip_max: ipMax,
     ip_current: existing.ip_current ?? ipMax,
-    // §25.2: if new cyberware/edits drop Max below the current value, current
+    // §21.2: if new cyberware/edits drop Max below the current value, current
     // instantly falls to the new Max — same clamp-on-save the other pools use.
     humanity_max: humanityMax,
     humanity_current: Math.min(existing.humanity_current ?? humanityMax, humanityMax),
@@ -4128,37 +4166,49 @@ const ARCHETYPES = {
 };
 const TIER_SCALE = { GRUNT: 0.55, THREAT: 1.0, BOSS: 2.0 };
 
+// slotType classifies each weapon for the attachment/mod slot-cap warning
+// (§8.1: normal firearms get 3 attachment slots, exotic weapons get none;
+// §8.6: melee weapons get up to 2 melee mods instead; §6.5a: shields use
+// their fixed Block-SP stat and have no slots of their own).
 const WEAPON_TABLE = {
-  'Medium Pistol':      {bonus:3,  pw:['reflexes','cool'],      label:'Ref+Cool', mag:5},
-  'Heavy Pistol':       {bonus:5,  pw:['reflexes','cool'],      label:'Ref+Cool', mag:4},
-  'Very Heavy Pistol':  {bonus:8,  pw:['reflexes','cool'],      label:'Ref+Cool', mag:3},
-  'Malorian Arms 3516': {bonus:11, pw:['reflexes','cool'],      label:'Ref+Cool', mag:2},
-  'SMG':                {bonus:3,  pw:['dexterity','reflexes'], label:'Dex+Ref', tags:['Autofire'], mag:5},
-  'Heavy SMG':          {bonus:5,  pw:['dexterity','reflexes'], label:'Dex+Ref', tags:['Autofire'], mag:4},
-  'Assault Rifle':      {bonus:11, pw:['dexterity','reflexes'], label:'Dex+Ref', tags:['Autofire'], mag:5},
-  'Shotgun':             {bonus:8,  pw:['strength','reflexes'],  label:'Str+Ref', mag:2},
-  'Sniper Rifle':        {bonus:14, pw:['focus','senses'],       label:'Foc+Sen', mag:1},
+  'Medium Pistol':      {bonus:3,  pw:['reflexes','cool'],      label:'Ref+Cool', mag:5, slotType:'firearm'},
+  'Heavy Pistol':       {bonus:5,  pw:['reflexes','cool'],      label:'Ref+Cool', mag:4, slotType:'firearm'},
+  'Very Heavy Pistol':  {bonus:8,  pw:['reflexes','cool'],      label:'Ref+Cool', mag:3, slotType:'firearm'},
+  'Malorian Arms 3516': {bonus:11, pw:['reflexes','cool'],      label:'Ref+Cool', mag:2, slotType:'firearm'},
+  'SMG':                {bonus:3,  pw:['dexterity','reflexes'], label:'Dex+Ref', tags:['Autofire'], mag:4, slotType:'firearm'},
+  'Heavy SMG':          {bonus:5,  pw:['dexterity','reflexes'], label:'Dex+Ref', tags:['Autofire'], mag:4, slotType:'firearm'},
+  'Assault Rifle':      {bonus:11, pw:['dexterity','reflexes'], label:'Dex+Ref', tags:['Autofire'], mag:4, slotType:'firearm'},
+  'Shotgun':             {bonus:8,  pw:['strength','reflexes'],  label:'Str+Ref', mag:2, slotType:'firearm'},
+  'Sniper Rifle':        {bonus:14, pw:['focus','senses'],       label:'Foc+Sen', mag:2, slotType:'firearm'},
   // Melee weapons have no magazine column in the rulebook (§6.5) — no ammo to track.
-  'Knife':                {bonus:1,  pw:['dexterity','agility'],  label:'Dex+Agi'},
-  'Big Knucks':           {bonus:3,  pw:['dexterity','agility'],  label:'Dex+Agi'},
-  'Mono-Filament Wire':  {bonus:1,  pw:['dexterity','agility'],  label:'Dex+Agi'},
-  'Medium Melee':        {bonus:3,  pw:['dexterity','strength'], label:'Dex+Str'},
-  'Rippers':              {bonus:3,  pw:['dexterity','strength'], label:'Dex+Str'},
-  'Mantis Blades':       {bonus:5,  pw:['dexterity','strength'], label:'Dex+Str'},
-  'Heavy Melee':          {bonus:5,  pw:['strength','grit'],      label:'Str+Grit'},
-  'Kendachi Mono-Three': {bonus:8,  pw:['strength','grit'],      label:'Str+Grit'},
+  'Knife':                {bonus:1,  pw:['dexterity','reflexes'], label:'Dex+Ref', slotType:'melee'},
+  'Big Knucks':           {bonus:3,  pw:['dexterity','strength'], label:'Dex+Str', slotType:'melee'},
+  'Mono-Filament Wire':  {bonus:1,  pw:['dexterity','agility'],  label:'Dex+Agi', slotType:'melee'},
+  'Medium Melee':        {bonus:3,  pw:['dexterity','strength'], label:'Dex+Str', slotType:'melee'},
+  'Rippers':              {bonus:3,  pw:['dexterity','strength'], label:'Dex+Str', slotType:'melee'},
+  'Mantis Blades':       {bonus:5,  pw:['dexterity','strength'], label:'Dex+Str', slotType:'melee'},
+  'Heavy Melee':          {bonus:5,  pw:['strength','grit'],      label:'Str+Grit', slotType:'melee'},
+  'Kendachi Mono-Three': {bonus:8,  pw:['dexterity','agility'],  label:'Dex+Agi', slotType:'melee'},
+  // Shields (§6.5a) — a distinct melee type for Enforcer/Tank builds. PW
+  // runs on Strength+Grit instead of Dex+Strength. blockSP adds to armor SP
+  // only while the wielder takes the Block action (Ch. 3.4) — situational,
+  // so it's surfaced as reference text/tags rather than auto-applied like
+  // armor SP. One-handed; combinable with a one-handed weapon, not two-handers/dual-wield.
+  'Ballistic Shield (Light)': {bonus:1, pw:['strength','grit'], label:'Str+Grit', blockSP:6,  tags:['Block-SP +6', 'One-handed, can carry a pistol'], slotType:'shield'},
+  'Riot Shield':               {bonus:2, pw:['strength','grit'], label:'Str+Grit', blockSP:10, tags:['Block-SP +10', 'Protects 1 ally behind you'], slotType:'shield'},
+  'Ballistic Breacher (Heavy)': {bonus:3, pw:['strength','grit'], label:'Str+Grit', blockSP:14, tags:['Block-SP +14', '-2 Dodge', 'Corporate Enforcer'], slotType:'shield'},
   // Heavy/special weapons (§7a.5, §16.2-16.3, §5.7 lifepath rewards).
   // Flamethrower has no base bonus anywhere in the rulebook (only charge
   // counts/to-hit bonuses in its talent tree) — +11 is an estimate anchored
   // to the Rocket Launcher's base shot and the incendiary grenade, per the
   // user's sign-off. Cryo Thrower is pure homebrew mirroring it exactly,
   // with a freeze-slow effect instead of burn (also user-approved).
-  'Grenade Launcher':    {bonus:18, pw:['focus','strength'],     label:'Foc+Str', mag:2, tags:['AoE 10m×10m']},
-  'Rocket Launcher':     {bonus:11, pw:['focus','strength'],     label:'Foc+Str', mag:2, tags:['AoE 5m', 'Charged (Nebenaktion): +25 overcharge next round']},
-  'Flamethrower':        {bonus:11, pw:['focus','strength'],     label:'Foc+Str', tags:['Burn: 2 HP/round (Mild Fire)']},
-  'Cryo Thrower':        {bonus:11, pw:['focus','strength'],     label:'Foc+Str', tags:['Freeze: -5 Speed/Agility, 2 rounds']},
-  'Minigun':             {bonus:13, pw:['strength','focus'],     label:'Str+Foc', tags:['Autofire']},
-  'Anti-Materiel Rifle': {bonus:16, pw:['focus','senses'],       label:'Foc+Sen', mag:1},
+  'Grenade Launcher':    {bonus:18, pw:['focus','strength'],     label:'Foc+Str', mag:2, tags:['AoE 10m×10m'], slotType:'exotic'},
+  'Rocket Launcher':     {bonus:11, pw:['focus','strength'],     label:'Foc+Str', mag:2, tags:['AoE 5m', 'Charged (Nebenaktion): +25 overcharge next round'], slotType:'exotic'},
+  'Flamethrower':        {bonus:11, pw:['focus','strength'],     label:'Foc+Str', tags:['Burn: 2 HP/round (Mild Fire)'], slotType:'exotic'},
+  'Cryo Thrower':        {bonus:11, pw:['focus','strength'],     label:'Foc+Str', tags:['Freeze: -5 Speed/Agility, 2 rounds'], slotType:'exotic'},
+  'Minigun':             {bonus:13, pw:['strength','focus'],     label:'Str+Foc', tags:['Autofire'], slotType:'exotic'},
+  'Anti-Materiel Rifle': {bonus:16, pw:['focus','senses'],       label:'Foc+Sen', mag:1, slotType:'exotic'},
 };
 const ARMOR_TABLE = {
   'Leathers':         {sp_body:4,  sp_head:null},
@@ -4177,6 +4227,11 @@ const CYBERWARE_STAT_BONUS = {
   'cyberaudio suite': {senses:1},
   'cyberleg':          {speed:2},
   'cyberarm':          {strength:2},
+  'titanium bones':      {strength:3},
+  'muscle & bone lace':  {strength:2, grit:2},
+  'grafted muscles':     {strength:3},
+  'stamina booster':     {drive:4},
+  'grip strength':       {strength:2},
 };
 const FALLBACK_WEAPON_BONUS = { GRUNT:3, THREAT:8, BOSS:12 };
 const FALLBACK_ARMOR_SP = { GRUNT:6, THREAT:12, BOSS:16 };
@@ -4532,7 +4587,7 @@ const ATTACHMENT_CATALOG = [
   {name:'Suppressor', effect:'Shot inaudible beyond 15m, -1 weapon bonus', costTier:'normal', alwaysOn:{bonus:-1}},
   {name:'Muzzle Brake', effect:'-2 Autofire PW penalty', costTier:'normal'},
   {name:'Extended Barrel', effect:'+2 weapon bonus long range, no longer concealable', costTier:'normal'},
-  {name:'Compensator', effect:'Blindfire: 1/4 PW instead of 1/2 PW penalty', costTier:'teuer'},
+  {name:'Compensator', effect:'Blindfire: 1/4 PW → 1/2 PW', costTier:'teuer'},
   {name:'Laser Sight', effect:'Darkness PW penalty reduced by 4', costTier:'normal'},
   {name:'UV Laser Sight', effect:'Like Laser Sight, only visible with Cyberoptics', costTier:'teuer'},
   {name:'Foregrip', effect:'+1 weapon bonus while standing', costTier:'guenstig'},
@@ -4543,6 +4598,31 @@ const ATTACHMENT_CATALOG = [
   {name:'Drum Magazine', effect:'Doubles magazine, -1 Speed', costTier:'teuer', magEffect:{multiply:2}},
   {name:'Quick-Release Mag', effect:'Reload as a free action, once per combat', costTier:'teuer'},
 ];
+// Melee weapon mods (§8.6) — permanently built in by a weaponsmith, max 2
+// mods per weapon. Same alwaysOn/situational split as ATTACHMENT_CATALOG.
+const MELEE_MOD_CATALOG = [
+  {name:'Monofilament Edge', effect:'+2 weapon bonus, ignores SP under 6', costTier:'teuer', alwaysOn:{bonus:2}},
+  {name:'Vibroblade', effect:'+3 weapon bonus, battery (5 fights)', costTier:'teuer', alwaysOn:{bonus:3}},
+  {name:'Weighted Grip', effect:'+1 weapon bonus, +1 damage per meter of movement bonus', costTier:'normal', alwaysOn:{bonus:1}},
+  {name:'Shock Element', effect:'On Crit Success: target loses its secondary action next round', costTier:'sehr teuer'},
+  {name:'Serrated Edge', effect:'Bleed on Crit Success: 2 dmg/round until treated', costTier:'normal'},
+  {name:'Concealable Holster', effect:'Weapon up to Medium Melee becomes concealable', costTier:'guenstig'},
+];
+// Attachment/mod slot cap per weapon type (§8.1 firearms=3/exotic=0, §8.6
+// melee=2 mods, §6.5a shields=0 — Block-SP is their fixed built-in stat).
+// Warn-only in the UI, matching this app's established stat-cap pattern —
+// never blocks saving.
+const WEAPON_SLOT_INFO = {
+  firearm: { max: 3, catalog: ATTACHMENT_CATALOG, label: 'ATTACHMENTS' },
+  melee:   { max: 2, catalog: MELEE_MOD_CATALOG,  label: 'MELEE MODS' },
+  exotic:  { max: 0, catalog: ATTACHMENT_CATALOG, label: 'ATTACHMENTS', note: 'Exotic weapons have no attachment slots (§8.1).' },
+  shield:  { max: 0, catalog: [],                 label: 'ATTACHMENTS', note: 'Shields use their fixed Block-SP instead of attachment slots.' },
+};
+function getWeaponSlotInfo(weaponName) {
+  const canonical = Object.keys(WEAPON_TABLE).find(k => k.toLowerCase() === String(weaponName||'').trim().toLowerCase());
+  const slotType = canonical ? WEAPON_TABLE[canonical].slotType : null;
+  return WEAPON_SLOT_INFO[slotType] || { max: 3, catalog: ATTACHMENT_CATALOG, label: 'ATTACHMENTS' };
+}
 const WEAPON_TECH_EFFECTS = {
   power: 'Power weapon: shots ricochet off hard cover (up to 2 bounces, -2 weapon bonus per bounce).',
   tech:  'Tech weapon: chargeable via Nebenaktion — Half=ignores half target SP, Full=ignores all SP + shoots through light cover, Overcharge=ignores SP + pierces 2 targets.',
@@ -4571,7 +4651,7 @@ function computeLiveWeaponStats(c, w) {
   }
   const situational = [];
   (w.attachments || []).forEach(a => {
-    const entry = ATTACHMENT_CATALOG.find(e => e.name === a.name);
+    const entry = ATTACHMENT_CATALOG.find(e => e.name === a.name) || MELEE_MOD_CATALOG.find(e => e.name === a.name);
     const isNumeric = entry && (entry.alwaysOn || entry.magEffect);
     if (entry?.alwaysOn) bonus += entry.alwaysOn.bonus || 0;
     if (entry?.magEffect && magMax != null) {
@@ -4618,48 +4698,53 @@ const COMPANION_TEMPLATES = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// NETRUNNING — all 27 hacks from rulebook §10.4-10.8, verbatim. Only IP
+// NETRUNNING — all 32 hacks from rulebook §10.4-10.8, verbatim. Only IP
 // cost and PW (which two Mind stats to sum) are computed live; durations,
 // stacks, combos, and the Duel/Trace mechanic are too varied to
 // auto-resolve reliably and stay as reference effect text for the GM.
 // ═══════════════════════════════════════════════════════════════
 const HACK_CATALOG = {
   Combat: [
-    {name:'Short Circuit', ip:6, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Electrical direct damage: roll result − half target Firewall. Armor ignored. Combo: doubled damage if target has Cyberware Malfunction active.'},
-    {name:'Overheat', ip:6, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Burn: 4 dmg/round for 3 rounds, armor ignored. Combo: ignites Contagion on an infected target for an explosion.'},
+    {name:'Short Circuit', ip:5, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Electrical direct damage: roll result − half target Firewall. Armor ignored. Combo: doubled damage if target has Cyberware Malfunction active.'},
+    {name:'Overheat', ip:5, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Burn: 4 dmg/round for 3 rounds, armor ignored. Combo: ignites Contagion on an infected target for an explosion.'},
     {name:'Contagion', ip:8, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Poison virus: 3 dmg/round for 4 rounds, spreads to up to 2 targets within 5m. Combo with Overheat/Burn → explosion (3m area).'},
-    {name:'Synapse Burnout', ip:12, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Massive direct brain damage: 2× roll result − Firewall. No armor deduction. Crit Success: target instantly taken out.'},
+    {name:'Synapse Burnout', ip:11, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Massive direct brain damage: 2× roll result − Firewall. No armor deduction. Crit Success: target instantly taken out.'},
+    {name:'Cyberware Overload', ip:9, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Overloads target's implants: damage = roll result + 3 per cyberware item (GM estimate: lightly cybered 0-2, heavily cybered 4-6). Armor ignored. Only vs. cybered targets."},
   ],
   Control: [
     {name:'Cyberware Malfunction', ip:4, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Target −3 on cyberware actions. Stacks up to 3×. At 3 stacks: cyberware disabled for 2 rounds.'},
-    {name:'Reboot Optics', ip:4, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Target blind for 1 round: no ranged attacks, −6 PW melee, no reaction roll.'},
-    {name:'Cripple Movement', ip:6, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Target loses secondary action/movement for 2 rounds.'},
-    {name:'Weapon Glitch', ip:6, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Target's next attack action automatically fails."},
+    {name:'Reboot Optics', ip:7, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Target blind for 1 round: no ranged attacks, −6 PW melee, no reaction roll.'},
+    {name:'Cripple Movement', ip:5, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Target loses secondary action/movement for 2 rounds.'},
+    {name:'Weapon Glitch', ip:7, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Target's next attack action automatically fails."},
     {name:'Sonic Shock', ip:4, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Target can't communicate for 1 round. Stealth rolls against target automatically succeed."},
     {name:'Cyberpsychosis', ip:16, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Target attacks an ally for 2 rounds. Does not work on non-cybered targets.'},
+    {name:'Suicide', ip:14, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:"Turns target's own weapon against them: immediate full-weapon attack against self (no reaction roll). Only vs. cybered targets. Doesn't work on bosses with a Military deck."},
+    {name:'Whistle', ip:4, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Lures a single target, which moves up to its Speed toward the netrunner's ping — isolates it from the group. Ideal for stealth takedowns."},
   ],
   Utility: [
     {name:'Ping', ip:2, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'All enemies/devices on the network visible for 3 rounds, even through walls.'},
     {name:'Memory Wipe', ip:8, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Target leaves combat mode and forgets the netrunner. In combat: target loses its initiative slot this round.'},
-    {name:'Bait', ip:6, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Target is lured to a position — leaves cover and moves there.'},
-    {name:'System Collapse', ip:14, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Target instantly unconscious (KO, not dead). Only works on targets below 30% Health.'},
+    {name:'Bait', ip:5, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Target is lured to a position — leaves cover and moves there.'},
+    {name:'System Collapse', ip:11, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Target instantly unconscious (KO, not dead). Only works on targets below 30% Health.'},
     {name:'Breach', ip:4, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Opens doors, disables cameras, shuts down turrets.'},
-    {name:'Detonate Grenade', ip:10, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:"Detonates target's grenade. Only if target carries grenades."},
-    {name:'Request Backup', ip:12, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Hacks comms: 1d3 additional enemies are lured to a false position.'},
+    {name:'Detonate Grenade', ip:8, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:"Detonates target's grenade. Only if target carries grenades."},
+    {name:'Request Backup', ip:10, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Hacks comms: 1d3 additional enemies are lured to a false position.'},
+    {name:'System Reset', ip:18, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Full neural reset: target instantly unconscious (KO, not dead), regardless of HP. Needs 2 rounds of uninterrupted connection (announce round 1, effect round 2). Target must not leave range in round 1.'},
+    {name:'Reflex-Membran', ip:7, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Self-buff: for the next 2 rounds the netrunner gets a reaction roll against the first attack each round at no action cost (even from an offensive stance). Survival aid for the exposed runner.'},
   ],
   Environment: [
-    {name:'Blackout', ip:8, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Power outage in a sector (up to 30m radius), 3 rounds. Cameras/turrets disabled. Non-thermal-optic combatants: −4 PW ranged.'},
-    {name:'Hostile Architecture', ip:6, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Activates environment elements against a target (sprinklers, vent covers, barriers) — GM confirms availability.'},
-    {name:'Vehicle Override', ip:10, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Takes over a networked vehicle in range (up to 50m), 3 rounds. Ramming as weapon: Strength 12, ignores SP.'},
-    {name:'Broadcast Jam', ip:6, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Blocks radio comms within 30m for 3 rounds. No reinforcements callable.'},
-    {name:'Turret Override', ip:8, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Takes over a networked turret for 3 rounds, fires at targets of choice.'},
-    {name:'Emergency Protocol', ip:12, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Triggers building emergency system: Lockdown / Fire Suppression / Evacuation Alarm (GM choice of effect).'},
+    {name:'Blackout', ip:10, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Power outage in a sector (up to 30m radius), 3 rounds. Cameras/turrets disabled, electronic doors sealed or opened (GM choice). Non-thermal-optic combatants: −4 PW ranged. Combo: +4 PW Stealth in the blackout area.'},
+    {name:'Hostile Architecture', ip:5, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Activates environment elements against a target: sprinklers (Cyberware Malfunction 1 stack immediately), vent covers (Stagger, target loses secondary action), barrier/roll-gate (blocks escape route). GM confirms availability per environment.'},
+    {name:'Vehicle Override', ip:11, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Takes over a networked vehicle in range (up to 50m), 3 rounds. Control: accelerate, steer, doors. As a weapon: Ramming (Strength 12, ignores SP). Against an active driver: Int+Focus vs. Drive+Will of the driver.'},
+    {name:'Broadcast Jam', ip:8, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Blocks all radio comms within 30m for 3 rounds. Enemies can't call for reinforcements. Drones without line-of-sight to their operator are deactivated. Combo: enemy Request Backup is automatically redirected to a false position."},
+    {name:'Turret Override', ip:12, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Takes over a networked turret for 3 rounds, fires at targets of choice (PW = netrunner's Int+Focus). Combo: with Blackout — the turret is the only light source, all non-thermal-optic enemies are visible."},
+    {name:'Emergency Protocol', ip:13, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:"Triggers the building's emergency system — choice of: LOCKDOWN (seals all electronic doors, 5 rounds) / FIRE SUPPRESSION (all sprinklers active: −4 PW sight, extinguishes fire effects, electro-hacks +1 Malfunction stack) / EVACUATION ALARM (civilians flee, ties up at least 1 round of enemy attention — GM decides tactical impact)."},
   ],
   Duel: [
-    {name:'Neural Spike', ip:8, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Direct net attack: roll result − target's deck-quality value (Basic 5/Standard 10/Military 15/Blackmarket 20). Ignores Firewall and armor. Only vs. targets with an active cyberdeck."},
+    {name:'Neural Spike', ip:5, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Direct net attack: roll result − target's deck-quality value (Basic 5/Standard 10/Military 15/Blackmarket 20). Ignores Firewall and armor. Only vs. targets with an active cyberdeck."},
     {name:'Feedback Loop', ip:6, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:"Poisons target's deck: their next hack costs HP instead of IP (1:1). Persists until triggered or combat ends."},
     {name:'ICE Wall', ip:6, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Defensive: own Firewall +8 for 3 rounds. Every failed hack against it costs the attacker 2 IP. Costs a main action to maintain each round.'},
-    {name:'Dead Drop', ip:10, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Erases all running traces on self, hides position for 2 rounds — no Trace roll possible. Costs a main action.'},
+    {name:'Dead Drop', ip:7, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Erases all running traces on self, hides position for 2 rounds — no Trace roll possible. Costs a main action.'},
   ],
 };
 
@@ -4694,7 +4779,76 @@ function computeLiveFirewall(c) {
   return fw;
 }
 
-// Cyberware Impact (§9, §25.3) — replaces the old flat "HL-Wert". Reduces
+// One-time consumables (§6.6a-c) that restore a resource pool via a die
+// roll, floored at a listed minimum. Basic tiers are simple enough to
+// roll-and-apply directly (same "roll it live" spirit as initiative);
+// premium tiers have compound/conditional effects (buffs, cleanses,
+// crash penalties) too varied to auto-resolve, so they stay reference
+// text for the GM, matching this app's established pattern for
+// situational effects (weapon attachments, tech weapons, etc.).
+const CONSUMABLE_CATALOG = {
+  hp: {
+    label: 'Pharma (HP)',
+    basic: [
+      {name:'MediStim "Patch"', dice:'1d10', min:5, costTier:'guenstig', note:'Standard injector. Available everywhere.'},
+      {name:'TraumaTeam "Bounce"', dice:'1d20', min:10, costTier:'normal', note:'Blue nano-serum. The street standard.'},
+      {name:'MaxDoc "Volldosis"', dice:'2d20', min:20, costTier:'teuer', note:'Heavy dose. Brief dizziness after (-1 PW next round).'},
+    ],
+    premium: [
+      {name:'"Second Heart" Biochip', effect:'1x/24h: on falling to 0 HP, instantly rise to 50% Max HP. Consumed on use. (Implantable.)', costTier:'sehr teuer'},
+      {name:'"Berserker" Combat-Stim', effect:'3d20 min. 30 HP + 1 round pain immunity (no wound malus). After: -2 all PW for 2 rounds (Crash).', costTier:'sehr teuer'},
+      {name:'"Purge" Nano-Antidote', effect:'Instantly removes all Bleed/Poison/Burn/Malfunction effects. Also heals 1d10 HP.', costTier:'teuer'},
+      {name:'"Ghost" Regen-Ampoule', effect:'Over the next 3 rounds, 1d10 HP each (Heal-over-Time). Does not stack with itself.', costTier:'teuer'},
+      {name:'"Sandevistan" Emergency Reset', effect:'Netrunner/Solo with reflex cyberware only: instantly full Stamina + 1 extra secondary action this round. No HP.', costTier:'sehr teuer'},
+    ],
+  },
+  ip: {
+    label: 'Netrunner-Stims (IP)',
+    basic: [
+      {name:'Neuro-Booster "Spark"', dice:'1d10', min:5, costTier:'guenstig', note:'Cheap synapse kick. Slightly bitter aftertaste.'},
+      {name:'Neuro-Booster "Surge"', dice:'1d20', min:10, costTier:'normal', note:"The standard runner's supply. Blue ampoule."},
+      {name:'Neuro-Booster "Overflow"', dice:'2d20', min:20, costTier:'teuer', note:'Full charge. Brief nosebleed after (cosmetic).'},
+    ],
+    premium: [
+      {name:'"Kerenzikov" Flow-Chip', effect:'Over the next 3 rounds, 1d10 IP each (IP-over-Time). Does not stack.', costTier:'teuer'},
+      {name:'"ClearNet" Purge-Amp', effect:'Instantly removes Feedback Loop, trace markers, and ICE debuffs. Also 1d10 IP.', costTier:'teuer'},
+      {name:'"Blackwall" Overcharge', effect:'Instantly full Max IP + next hack this round costs 0 IP. After: 1 round no hacking (Backlash).', costTier:'sehr teuer'},
+    ],
+  },
+  stamina: {
+    label: 'Kampf-Stims (Stamina)',
+    basic: [
+      {name:'Adrenal-Shot "Kick"', dice:'1d10', min:5, costTier:'guenstig', note:'Quick adrenaline burst. Heart races briefly.'},
+      {name:'Adrenal-Shot "Rush"', dice:'1d20', min:10, costTier:'normal', note:'Military standard. Red auto-injector.'},
+      {name:'Adrenal-Shot "Fury"', dice:'2d20', min:20, costTier:'teuer', note:'Full dose. After: -1 PW next round (shaking).'},
+    ],
+    premium: [
+      {name:'"Berserk" Combat-Dose', effect:'Instantly full Max Stamina + 1 round: physical actions cost no Stamina. After: -2 PW for 2 rounds (Crash).', costTier:'sehr teuer'},
+      {name:'"Endure" Slow-Release', effect:'Over the next 3 rounds, 1d10 Stamina each (over-Time). Does not stack.', costTier:'teuer'},
+      {name:'"Second Wind" Ampoule', effect:'Instantly half Max Stamina + removes exhaustion/stagger effects. Secondary action.', costTier:'teuer'},
+    ],
+  },
+};
+function rollDiceExpr(expr) {
+  const m = /^(\d+)d(\d+)$/.exec(expr || '');
+  if (!m) return 0;
+  let sum = 0;
+  for (let i = 0; i < +m[1]; i++) sum += Math.floor(Math.random() * +m[2]) + 1;
+  return sum;
+}
+async function useConsumable(id, pool, itemName) {
+  const c = state.characters[id]; if (!c) return;
+  const item = (CONSUMABLE_CATALOG[pool]?.basic || []).find(x => x.name === itemName);
+  if (!item) return;
+  const roll = rollDiceExpr(item.dice);
+  const amount = Math.max(roll, item.min);
+  const max = c[pool + '_max'] ?? 0;
+  const newVal = Math.min(max, (c[pool + '_current'] ?? max) + amount);
+  await dbWrite('characters/' + id + '/' + pool + '_current', newVal);
+  showToast(`${c.name}: ${item.name} rolled ${roll} (min ${item.min}) → +${amount} ${pool.toUpperCase()} (${newVal}/${max})`);
+}
+
+// Cyberware Impact (§9, §21.3) — replaces the old flat "HL-Wert". Reduces
 // Humanity-Maximum. Same free-text-scan pattern as FIREWALL_ITEM_BONUS;
 // unrecognized/homebrew cyberware entries just don't count toward it.
 const CYBERWARE_IMPACT = {
@@ -4728,10 +4882,11 @@ const SMART_LEVEL_WEIGHTS = {
   THREAT: [[1,0.5],[2,0.35],[3,0.15]],
   BOSS:   [[1,0.05],[2,0.15],[3,0.30],[4,0.30],[5,0.20]],
 };
+// Capped at 3 (§8.1: normal firearms have 3 attachment slots, max).
 const ATTACHMENT_COUNT_WEIGHTS = {
   GRUNT:  [[0,0.85],[1,0.15]],
   THREAT: [[0,0.35],[1,0.40],[2,0.25]],
-  BOSS:   [[0,0.05],[1,0.15],[2,0.35],[3,0.30],[4,0.15]],
+  BOSS:   [[0,0.05],[1,0.15],[2,0.35],[3,0.45]],
 };
 const ATTACHMENT_QUALITY_WEIGHTS = {
   GRUNT:  [['guenstig',0.6],['normal',0.4]],
@@ -4909,6 +5064,11 @@ const WEAPON_SPECIFIC_OPTIONS = {
     {label:'Cryo Thrower', canonical:'Cryo Thrower'},
     {label:'Minigun', canonical:'Minigun'},
     {label:'Anti-Materiel Rifle', canonical:'Anti-Materiel Rifle'},
+  ],
+  'Shields': [
+    {label:'Ballistic Shield (Light)', canonical:'Ballistic Shield (Light)'},
+    {label:'Riot Shield', canonical:'Riot Shield'},
+    {label:'Ballistic Breacher (Heavy)', canonical:'Ballistic Breacher (Heavy)'},
   ],
 };
 
