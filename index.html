@@ -118,6 +118,12 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   border: 1px solid var(--gold);
   box-shadow: 0 0 8px var(--gold-glow);
 }
+.btn-purple {
+  background: linear-gradient(135deg, #1e0030, #2e0048);
+  color: var(--purple-bright);
+  border: 1px solid var(--purple);
+  box-shadow: 0 0 8px rgba(136,0,204,0.2);
+}
 .btn-small { padding: 5px 10px; font-size: 10px; }
 .btn-icon { padding: 6px 10px; font-size: 14px; line-height: 1; }
 .note { font-size: 10px; color: var(--text3); margin-top: 12px; line-height: 1.7; }
@@ -401,11 +407,21 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   border-bottom: 1px solid var(--border2);
   display: flex; justify-content: space-between; align-items: center;
   background: var(--surface2);
+  gap: 10px;
 }
 .modal-title { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
+.hdr-actions { display: flex; align-items: center; gap: 10px; }
+.icon-btn-danger { background: transparent; color: var(--text3); border: 1px solid var(--border2); font-size: 13px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: var(--radius); }
+.icon-btn-danger:hover { color: #ff6688; border-color: var(--red-bright); background: var(--red-glow); }
 .modal-close { background: transparent; color: var(--text2); border: none; font-size: 18px; cursor: pointer; padding: 0 4px; }
 .modal-body { padding: 16px; max-height: 75vh; overflow-y: auto; }
-.modal-footer { padding: 12px 16px; border-top: 1px solid var(--border2); display: flex; gap: 8px; justify-content: flex-end; background: var(--surface2); }
+.modal-footer { padding: 12px 16px; border-top: 1px solid var(--border2); display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; background: var(--surface2); }
+.modal-footer .spacer { flex: 1; }
+.footer-nav-btn { padding: 6px 8px; letter-spacing: 0.08em; }
+/* .btn-primary's width:100% is meant for the full-width login button — left
+   unscoped it stretches to fill the whole row the moment a modal footer's
+   buttons wrap, which then bumps CANCEL onto a row of its own too. */
+.modal-footer .btn-primary { width: auto; }
 .section-heading {
   font-size: 10px;
   letter-spacing: 0.25em;
@@ -902,7 +918,10 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   <div class="modal">
     <div class="modal-header">
       <span class="modal-title" id="char-modal-title">ADD CHARACTER</span>
-      <button class="modal-close" onclick="closeModal('char-modal')">✕</button>
+      <div class="hdr-actions">
+        <button class="icon-btn-danger" id="cm-delete-btn" style="display:none" onclick="deleteCharacter()" title="Delete character">🗑</button>
+        <button class="modal-close" onclick="closeModal('char-modal')">✕</button>
+      </div>
     </div>
     <div class="modal-body">
       <div class="inline-row" id="cm-portrait-row" style="display:none;align-items:center;gap:10px">
@@ -949,6 +968,49 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         <div class="field"><label>Player PIN (PCs only)</label><input type="text" id="cm-pin" placeholder="Optional" maxlength="8"></div>
       </div>
 
+      <div class="section-heading">Armor</div>
+      <div class="inline-row">
+        <div class="field"><label>Body Armor</label><input type="text" id="cm-armor-body-name" placeholder="Light Armorjack"></div>
+        <div class="field" style="max-width:70px"><label>SP</label><input type="number" id="cm-armor-body-sp" placeholder="11" min="0"></div>
+      </div>
+      <div class="inline-row">
+        <div class="field"><label>Head Armor</label><input type="text" id="cm-armor-head-name" placeholder="None"></div>
+        <div class="field" style="max-width:70px"><label>SP</label><input type="number" id="cm-armor-head-sp" placeholder="0" min="0"></div>
+      </div>
+      <div class="section-heading">Weapons</div>
+      <div id="cm-weapons-list" style="display:flex;flex-direction:column;gap:4px"></div>
+      <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addWeaponRow()">+ ADD WEAPON</button>
+      <div class="section-heading">Notes (shared with player)</div>
+      <textarea id="cm-notes" placeholder="Session notes, contacts, leads, reminders..." rows="6" style="resize:vertical"></textarea>
+      <div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border2)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <label style="font-size:10px;color:var(--text3);letter-spacing:0.18em">Image Prompt</label>
+          <button class="btn btn-ghost btn-small" style="font-size:10px;padding:2px 8px" onclick="copyImagePrompt({imagePrompt:document.getElementById('cm-image-prompt').value})">⎘ COPY</button>
+        </div>
+        <textarea id="cm-image-prompt" placeholder="No image prompt saved." rows="2" style="resize:vertical;font-size:10px;color:var(--text3);line-height:1.5;background:rgba(255,255,255,0.02)"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gold btn-small footer-nav-btn" id="cm-build-btn" style="display:none" onclick="openBuildModal()">🧬 Build</button>
+      <button class="btn btn-purple btn-small footer-nav-btn" id="cm-netrunning-btn" style="display:none" onclick="openNetrunningModal()">⚡ Netrunning</button>
+      <button class="btn btn-ghost btn-small footer-nav-btn" id="cm-items-btn" style="display:none" onclick="closeModal('char-modal'); openLootModal(editingCharId)">🎒 Items</button>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost btn-small" onclick="closeModal('char-modal')">CANCEL</button>
+      <button class="btn btn-primary btn-small" onclick="saveCharacter()">SAVE</button>
+    </div>
+  </div>
+</div>
+
+<!-- Build Modal (stats, cyberware, talents, progression — set at creation,
+     revisited at level-ups; split out of the character modal since it's
+     rarely touched mid-session) -->
+<div class="modal-overlay" id="build-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">BUILD — <span id="build-modal-name"></span></span>
+      <div class="hdr-actions"><button class="modal-close" onclick="closeBuildModal()">✕</button></div>
+    </div>
+    <div class="modal-body">
       <div class="section-heading">Stats — POWER Tree</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px" id="cm-power-grid">
         <div class="field"><label>Strength</label><input type="number" id="cs-strength" min="0" max="25" placeholder="4" oninput="recalcDerived()"></div>
@@ -993,10 +1055,6 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <div class="section-heading">Derived Values (auto-calculated)</div>
       <div id="cm-derived" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:4px"></div>
       <div style="font-size:10px;color:var(--text3);margin-bottom:4px">HP Max and Stamina Max are synced from stats. Override below only if needed (NPCs without full stats).</div>
-      <div id="cm-progression-section" style="display:none">
-        <div class="section-heading">Progression (GM only)</div>
-        <div id="cm-progression-body"></div>
-      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:6px">
         <div class="field"><label>HP Max (override)</label><input type="number" id="cm-hp" placeholder="auto" min="1"></div>
         <div class="field"><label>Stamina Max (override)</label><input type="number" id="cm-sta" placeholder="auto" min="1"></div>
@@ -1004,24 +1062,36 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         <div class="field"><label>IP Max (override)</label><input type="number" id="cm-ip" placeholder="auto" min="0"></div>
         <div class="field"><label>Humanity Max (override)</label><input type="number" id="cm-humanity" placeholder="auto" min="0"></div>
       </div>
-      <div class="section-heading">Armor</div>
-      <div class="inline-row">
-        <div class="field"><label>Body Armor</label><input type="text" id="cm-armor-body-name" placeholder="Light Armorjack"></div>
-        <div class="field" style="max-width:70px"><label>SP</label><input type="number" id="cm-armor-body-sp" placeholder="11" min="0"></div>
-      </div>
-      <div class="inline-row">
-        <div class="field"><label>Head Armor</label><input type="text" id="cm-armor-head-name" placeholder="None"></div>
-        <div class="field" style="max-width:70px"><label>SP</label><input type="number" id="cm-armor-head-sp" placeholder="0" min="0"></div>
-      </div>
-      <div class="section-heading">Weapons</div>
-      <div id="cm-weapons-list" style="display:flex;flex-direction:column;gap:4px"></div>
-      <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addWeaponRow()">+ ADD WEAPON</button>
+
+      <div class="section-heading">Cyberware</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Cyberware Impact feeds Humanity Max above.</div>
+      <textarea id="cm-cyberware" placeholder="One per line, e.g.: Reflex Booster (+2 Reflexes)" rows="3" style="resize:vertical"></textarea>
+
       <div class="section-heading">Talents & Techniques (max 10 slots)</div>
       <div id="cm-talents-list" style="display:flex;flex-direction:column;gap:4px"></div>
       <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addTalentRow()">+ ADD TALENT/TECHNIQUE</button>
-      <div class="section-heading">Cyberware</div>
-      <textarea id="cm-cyberware" placeholder="One per line, e.g.: Reflex Booster (+2 Reflexes)" rows="3" style="resize:vertical"></textarea>
-      <div class="section-heading">Netrunning</div>
+
+      <div id="cm-progression-section" style="display:none">
+        <div class="section-heading">Progression (GM only)</div>
+        <div id="cm-progression-body"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-small" onclick="closeBuildModal()">← BACK TO CHARACTER</button>
+    </div>
+  </div>
+</div>
+
+<!-- Netrunning Modal (deck setup — a one-time thing for the characters
+     who even use it; hacks are USED from the combat card, not here) -->
+<div class="modal-overlay" id="netrunning-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">NETRUNNING — <span id="netrunning-modal-name"></span></span>
+      <div class="hdr-actions"><button class="modal-close" onclick="closeNetrunningModal()">✕</button></div>
+    </div>
+    <div class="modal-body">
+      <div class="section-heading">Deck</div>
       <div class="inline-row">
         <div class="field"><label>Cyberdeck</label>
           <select id="cm-cyberdeck">
@@ -1034,26 +1104,12 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         </div>
         <div class="field" style="max-width:100px"><label>Firewall</label><input type="number" id="cm-firewall" placeholder="0" min="0"></div>
       </div>
+      <div class="section-heading">Hacks</div>
       <div id="cm-hacks-list" style="display:flex;flex-direction:column;gap:4px"></div>
       <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addHackRow()">+ ADD HACK</button>
-      <div class="section-heading">Inventory (max 40 slots)</div>
-      <div id="cm-inventory-list" style="display:flex;flex-direction:column;gap:4px"></div>
-      <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addInventoryRow()">+ ADD ITEM</button>
-      <div class="section-heading">Notes (shared with player)</div>
-      <textarea id="cm-notes" placeholder="Session notes, contacts, leads, reminders..." rows="6" style="resize:vertical"></textarea>
-      <div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border2)">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <label style="font-size:10px;color:var(--text3);letter-spacing:0.18em">Image Prompt</label>
-          <button class="btn btn-ghost btn-small" style="font-size:10px;padding:2px 8px" onclick="copyImagePrompt({imagePrompt:document.getElementById('cm-image-prompt').value})">⎘ COPY</button>
-        </div>
-        <textarea id="cm-image-prompt" placeholder="No image prompt saved." rows="2" style="resize:vertical;font-size:10px;color:var(--text3);line-height:1.5;background:rgba(255,255,255,0.02)"></textarea>
-      </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-danger btn-small" id="cm-delete-btn" style="display:none" onclick="deleteCharacter()">DELETE</button>
-      <button class="btn btn-gold btn-small" id="cm-items-btn" style="display:none;margin-right:auto" onclick="closeModal('char-modal'); openLootModal(editingCharId)">🎒 TRANSFER ITEMS</button>
-      <button class="btn btn-ghost btn-small" onclick="closeModal('char-modal')">CANCEL</button>
-      <button class="btn btn-primary btn-small" onclick="saveCharacter()">SAVE</button>
+      <button class="btn btn-ghost btn-small" onclick="closeNetrunningModal()">← BACK TO CHARACTER</button>
     </div>
   </div>
 </div>
@@ -1994,6 +2050,20 @@ async function removePortrait() {
 
 function renderLootAndItems(c, id) {
   let html = '';
+  html += `<div class="detail-row" style="align-items:flex-start">
+    <span class="detail-label" style="margin-top:4px">ITEMS</span>
+    <div style="display:flex;flex-direction:column;gap:4px;flex:1">
+      ${(c.inventory || []).map((it, i) => `<div class="inline-row" style="gap:4px">
+        <input type="text" value="${esc(it.name||'')}" placeholder="Item name" style="flex:2;font-size:11px" onchange="updateLootInvField('${id}',${i},'name',this.value)">
+        <input type="number" value="${it.qty||1}" placeholder="Qty" min="1" style="width:46px;font-size:11px" onchange="updateLootInvField('${id}',${i},'qty',this.value)">
+        <input type="number" value="${it.slots||1}" placeholder="Slots" min="1" style="width:46px;font-size:11px" onchange="updateLootInvField('${id}',${i},'slots',this.value)">
+        <input type="text" value="${esc(it.note||'')}" placeholder="Note" style="flex:1.5;font-size:11px" onchange="updateLootInvField('${id}',${i},'note',this.value)">
+        <button class="btn btn-ghost btn-small btn-icon" style="padding:2px 6px" onclick="openTransferModal('${id}','inventory',${i})" title="Give to...">→</button>
+        <button class="btn btn-danger btn-icon" onclick="removeLootInvRow('${id}',${i})" title="Remove">✕</button>
+      </div>`).join('')}
+      <button class="btn btn-ghost btn-small" style="margin-top:2px" onclick="addLootInvRow('${id}')">+ ADD ITEM</button>
+    </div>
+  </div>`;
   if (c.loot?.length) {
     html += `<div class="detail-row" style="align-items:flex-start">
       <span class="detail-label" style="margin-top:4px">LOOT</span>
@@ -2004,15 +2074,6 @@ function renderLootAndItems(c, id) {
         </div>`).join('')}</div>
         <button class="btn btn-gold btn-small" onclick="openGiveAllLootModal('${id}')">GIVE ALL LOOT</button>
       </div>
-    </div>`;
-  }
-  if (c.inventory?.length) {
-    html += `<div class="detail-row" style="align-items:flex-start">
-      <span class="detail-label" style="margin-top:4px">ITEMS</span>
-      <div style="display:flex;flex-direction:column;gap:3px">${c.inventory.map((it,i) => `<div style="display:flex;align-items:center;gap:6px">
-        <span style="font-size:10px;color:var(--text2);flex:1">${esc(it.name)}${it.qty>1?' ×'+it.qty:''}</span>
-        <button class="btn btn-ghost btn-small btn-icon" style="padding:2px 6px" onclick="openTransferModal('${id}','inventory',${i})" title="Give to...">→</button>
-      </div>`).join('')}</div>
     </div>`;
   }
   if (c.weapons?.length) {
@@ -3333,11 +3394,15 @@ function openCharModal(id) {
   editingCharId = id;
   const isNew = !id;
   document.getElementById('char-modal-title').textContent = isNew ? 'ADD CHARACTER' : 'EDIT CHARACTER';
-  document.getElementById('cm-delete-btn').style.display = isNew ? 'none' : 'inline-block';
+  document.getElementById('cm-delete-btn').style.display = isNew ? 'none' : 'flex';
   document.getElementById('cm-items-btn').style.display = isNew ? 'none' : 'inline-block';
+  document.getElementById('cm-build-btn').style.display = isNew ? 'none' : 'inline-block';
+  document.getElementById('cm-netrunning-btn').style.display = isNew ? 'none' : 'inline-block';
   document.getElementById('cm-portrait-row').style.display = isNew ? 'none' : 'flex';
   if (!isNew) { ensurePortraitListener(id); updatePortraitPreview(id); }
   const c = id ? (state.characters[id] || {}) : {};
+  document.getElementById('build-modal-name').textContent = c.name || '';
+  document.getElementById('netrunning-modal-name').textContent = c.name || '';
   document.getElementById('cm-name').value = c.name || '';
   document.getElementById('cm-type').value = c.isCompanion ? 'companion' : (c.isNPC ? 'npc' : 'pc');
   document.getElementById('cm-allegiance').value = c.isAlly ? 'ally' : 'enemy';
@@ -3389,9 +3454,28 @@ function openCharModal(id) {
   renderHackRows(c.hacks || []);
   // Talents
   renderTalentRows(c.talents || []);
-  // Inventory
-  renderInventoryRows(c.inventory || []);
   openModal('char-modal');
+}
+
+// Build/Netrunning are separate screens over the same shared form fields as
+// the character modal — no data reload needed, just swap which overlay is
+// visible so saveCharacter() (run from the character modal) still picks up
+// whatever was typed in either one.
+function openBuildModal() {
+  document.getElementById('char-modal').classList.remove('open');
+  openModal('build-modal');
+}
+function closeBuildModal() {
+  closeModal('build-modal');
+  document.getElementById('char-modal').classList.add('open');
+}
+function openNetrunningModal() {
+  document.getElementById('char-modal').classList.remove('open');
+  openModal('netrunning-modal');
+}
+function closeNetrunningModal() {
+  closeModal('netrunning-modal');
+  document.getElementById('char-modal').classList.add('open');
 }
 
 function onCmTypeChange() {
@@ -3430,9 +3514,9 @@ function applyCompanionTemplate(name) {
 
 function renderWeaponRows(weapons) {
   // Re-sync weaponData from the source every render (matches the
-  // talentData/inventoryData pattern below) — without this, opening a
-  // character whose weapons weren't touched last session leaves
-  // weaponData stale, and editing any field silently drops the rest.
+  // talentData pattern below) — without this, opening a character whose
+  // weapons weren't touched last session leaves weaponData stale, and
+  // editing any field silently drops the rest.
   weaponData = weapons.map(w => ({ ...w, attachments: (w.attachments || []).map(a => ({ ...a })) }));
   const el = document.getElementById('cm-weapons-list');
   el.innerHTML = weaponData.map((w, i) => weaponRow(i, w)).join('');
@@ -3620,21 +3704,30 @@ function updateTalentField(i, f, v) {
 }
 function removeTalentRow(i) { talentData.splice(i,1); renderTalentRows(talentData); }
 
-let inventoryData = [];
-function renderInventoryRows(items) {
-  inventoryData = [...items];
-  const el = document.getElementById('cm-inventory-list');
-  el.innerHTML = items.map((item, i) => `<div class="inline-row" style="gap:4px">
-    <input type="text" placeholder="Item name" value="${esc(item.name||'')}" style="flex:3" onchange="updateInvField(${i},'name',this.value)">
-    <input type="number" placeholder="Qty" value="${item.qty||1}" style="width:50px" min="1" onchange="updateInvField(${i},'qty',this.value)">
-    <input type="number" placeholder="Slots" value="${item.slots||1}" style="width:50px" min="1" onchange="updateInvField(${i},'slots',this.value)">
-    <input type="text" placeholder="Note" value="${esc(item.note||'')}" style="flex:2" onchange="updateInvField(${i},'note',this.value)">
-    <button class="btn btn-danger btn-icon" onclick="removeInvRow(${i})">✕</button>
-  </div>`).join('');
+// Inventory now lives entirely in the Items & Loot modal (openLootModal),
+// alongside the loot/transfer flow it shares — each edit writes straight to
+// Firebase (same instant-save pattern as Give/Transfer already use here)
+// instead of waiting on the character modal's Save button.
+async function updateLootInvField(id, i, field, val) {
+  const c = state.characters[id]; if (!c) return;
+  const items = [...(c.inventory || [])];
+  if (!items[i]) return;
+  items[i] = { ...items[i], [field]: (field === 'qty' || field === 'slots') ? (parseInt(val) || 1) : val };
+  await dbWrite('characters/' + id + '/inventory', items);
 }
-function addInventoryRow() { inventoryData.push({name:'',qty:1,slots:1}); renderInventoryRows(inventoryData); }
-function updateInvField(i, f, v) { if (!inventoryData[i]) inventoryData[i]={}; inventoryData[i][f] = (f==='qty'||f==='slots') ? (parseInt(v)||1) : v; }
-function removeInvRow(i) { inventoryData.splice(i,1); renderInventoryRows(inventoryData); }
+async function addLootInvRow(id) {
+  const c = state.characters[id]; if (!c) return;
+  const items = [...(c.inventory || []), { name: '', qty: 1, slots: 1 }];
+  await dbWrite('characters/' + id + '/inventory', items);
+  openLootModal(id);
+}
+async function removeLootInvRow(id, i) {
+  const c = state.characters[id]; if (!c) return;
+  const items = [...(c.inventory || [])];
+  items.splice(i, 1);
+  await dbWrite('characters/' + id + '/inventory', items);
+  openLootModal(id);
+}
 
 async function saveCharacter() {
   const name = document.getElementById('cm-name').value.trim();
@@ -3709,7 +3802,9 @@ async function saveCharacter() {
     cyberware: cyberwareList,
     weapons: weaponData.filter(w => w.name),
     talents: talentData.filter(t => t.name),
-    inventory: inventoryData.filter(i => i.name),
+    // Edited instantly from the Items & Loot modal now, not this form —
+    // preserve whatever's already there instead of silently dropping it.
+    inventory: existing.inventory ?? [],
     status_effects: existing.status_effects || [],
     // Neither has edit-modal UI today (generator-only fields) — preserve
     // whatever was already there instead of silently dropping it on save.
