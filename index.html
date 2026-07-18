@@ -778,6 +778,20 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
           </div>
         </div>
       </div>
+      <div class="player-card" id="player-humanity-card" style="display:none">
+        <div class="player-card-title">Humanity</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="big-stat">
+            <div class="big-stat-val" id="player-humanity-val" style="color:var(--cyan)">0</div>
+            <div class="big-stat-max">/ <span id="player-humanity-max">0</span></div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="adj-btn red" onclick="adjustPlayerStat('humanity',-1)">−</button>
+            <button class="adj-btn green" onclick="adjustPlayerStat('humanity',1)">+</button>
+          </div>
+        </div>
+        <div style="font-size:9px;color:var(--text3);margin-top:6px;line-height:1.5">Spend on Chrome Overload (−1) or Redline (−2). Ask your GM before other changes (trauma, therapy, anchor scenes).</div>
+      </div>
       <div class="player-card">
         <div class="player-card-title">Flink</div>
         <div id="player-flink-display" style="display:flex;gap:8px;align-items:center">
@@ -959,15 +973,15 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 
       <div class="section-heading">Special Stats</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
-        <div class="field"><label>EMP</label><input type="number" id="cs-emp" min="0" max="25" placeholder="4" oninput="recalcDerived()"></div>
         <div class="field"><label>Luck</label><input type="number" id="cs-luck" min="0" max="10" placeholder="0"></div>
       </div>
 
       <div class="section-heading">Origin Bonuses (from Ursprung)</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
         <div class="field"><label>HP Bonus</label><input type="number" id="cs-hp-bonus" min="0" placeholder="10" oninput="recalcDerived()"></div>
         <div class="field"><label>Stamina Bonus</label><input type="number" id="cs-sta-bonus" min="0" placeholder="10" oninput="recalcDerived()"></div>
         <div class="field"><label>IP Bonus</label><input type="number" id="cs-ip-bonus" min="0" placeholder="0" oninput="recalcDerived()"></div>
+        <div class="field"><label>Basis-Humanity Adj.</label><input type="number" id="cs-humanity-bonus" placeholder="0" oninput="recalcDerived()"></div>
       </div>
 
       <div class="section-heading">Derived Values (auto-calculated)</div>
@@ -977,11 +991,12 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         <div class="section-heading">Progression (GM only)</div>
         <div id="cm-progression-body"></div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:6px">
         <div class="field"><label>HP Max (override)</label><input type="number" id="cm-hp" placeholder="auto" min="1"></div>
         <div class="field"><label>Stamina Max (override)</label><input type="number" id="cm-sta" placeholder="auto" min="1"></div>
         <div class="field"><label>Initiative (override)</label><input type="number" id="cm-init" placeholder="auto" min="0"></div>
         <div class="field"><label>IP Max (override)</label><input type="number" id="cm-ip" placeholder="auto" min="0"></div>
+        <div class="field"><label>Humanity Max (override)</label><input type="number" id="cm-humanity" placeholder="auto" min="0"></div>
       </div>
       <div class="section-heading">Armor</div>
       <div class="inline-row">
@@ -2152,6 +2167,8 @@ function renderCombatantCard(id, isActive) {
   const staMax = c.stamina_max ?? 0;
   const ipCur = c.ip_current ?? c.ip_max ?? 0;
   const ipMax = c.ip_max ?? 0;
+  const humanityCur = c.humanity_current ?? c.humanity_max ?? 0;
+  const humanityMax = c.humanity_max ?? 0;
   return `<div class="combatant-card ${c.isCompanion ? 'is-companion' : (c.isAlly ? 'is-ally' : (c.isNPC ? 'is-npc' : 'is-pc'))} ${isActive ? 'active-turn' : ''} ${hpCur <= 0 ? 'is-dead' : ''}" id="cc-${id}">
     <div class="combatant-top" onclick="toggleDetail('${id}')">
       <div>
@@ -2187,6 +2204,14 @@ function renderCombatantCard(id, isActive) {
           <button class="adj-btn green" onclick="quickAdj('${id}','stamina',1)">+1</button>
         </div>
       </div>
+      ${humanityMax > 0 ? `<div class="detail-row">
+        <span class="detail-label">HUMANITY</span>
+        <div class="adj-group">
+          <button class="adj-btn red" onclick="quickAdj('${id}','humanity',-1)">−1</button>
+          <span style="font-size:12px;padding:0 6px;min-width:40px;text-align:center">${humanityCur}/${humanityMax}</span>
+          <button class="adj-btn green" onclick="quickAdj('${id}','humanity',1)">+1</button>
+        </div>
+      </div>` : ''}
       ${ipMax > 0 ? `<div class="detail-row">
         <span class="detail-label">IP</span>
         <div class="adj-group">
@@ -2317,6 +2342,12 @@ function renderPlayerView() {
   document.getElementById('player-ip-card').style.display = ipMax > 0 ? 'block' : 'none';
   document.getElementById('player-ip-val').textContent = ipCur;
   document.getElementById('player-ip-max').textContent = ipMax;
+  // Humanity
+  const humanityMax = c.humanity_max ?? 0;
+  const humanityCur = c.humanity_current ?? humanityMax;
+  document.getElementById('player-humanity-card').style.display = humanityMax > 0 ? 'block' : 'none';
+  document.getElementById('player-humanity-val').textContent = humanityCur;
+  document.getElementById('player-humanity-max').textContent = humanityMax;
   // Flink
   const flinkBtn = document.getElementById('player-flink-btn');
   if (c.has_flink) {
@@ -2401,8 +2432,8 @@ function renderPlayerView() {
   // ── Stats tab ─────────────────────────────────────────────────
   const st = c.stats;
   if (st) {
-    const hpB = c.origin_hp_bonus || 0, staB = c.origin_sta_bonus || 0, ipB = c.origin_ip_bonus || 0;
-    const d = calcDerived(st, hpB, staB, ipB);
+    const hpB = c.origin_hp_bonus || 0, staB = c.origin_sta_bonus || 0, ipB = c.origin_ip_bonus || 0, humanityB = c.origin_humanity_bonus || 0;
+    const d = calcDerived(st, hpB, staB, ipB, humanityB, computeLiveCyberwareImpact(c));
     document.getElementById('player-derived').innerHTML = d ? Object.entries(d).map(([k,v]) => `
       <div style="background:var(--surface2);border:1px solid var(--border);padding:7px 10px">
         <div style="font-size:9px;color:var(--text3);letter-spacing:0.1em;margin-bottom:2px">${k}</div>
@@ -2417,9 +2448,8 @@ function renderPlayerView() {
     document.getElementById('player-stats-mobility').innerHTML = STAT_KEYS.mobility.map(k => statRow(k.charAt(0).toUpperCase()+k.slice(1), st[k]??'—')).join('');
     document.getElementById('player-stats-mind').innerHTML = STAT_KEYS.mind.map(k => statRow(k.charAt(0).toUpperCase()+k.slice(1), st[k]??'—')).join('');
     document.getElementById('player-stats-special').innerHTML = [
-      statRow('EMP', st.emp??'—'),
       statRow('Luck', st.luck??'—'),
-      statRow('Humanity', (st.emp||0)*10),
+      statRow('Humanity (current/max)', `${c.humanity_current ?? '—'} / ${c.humanity_max ?? '—'}`),
     ].join('');
   } else {
     ['player-derived','player-stats-power','player-stats-mobility','player-stats-mind','player-stats-special'].forEach(id => {
@@ -2640,6 +2670,10 @@ async function quickAdj(id, stat, delta) {
   } else if (stat === 'ip') {
     const val = Math.min(c.ip_max || 0, Math.max(0, (c.ip_current ?? c.ip_max ?? 0) + delta));
     await dbWrite('characters/' + id + '/ip_current', val);
+  } else if (stat === 'humanity') {
+    // §25.2: 0 is the floor — negative Humanity no longer exists.
+    const val = Math.min(c.humanity_max || 0, Math.max(0, (c.humanity_current ?? c.humanity_max ?? 0) + delta));
+    await dbWrite('characters/' + id + '/humanity_current', val);
   }
 }
 
@@ -3055,19 +3089,28 @@ const STAT_KEYS = {
   power:   ['strength','dexterity','grit','drive','core'],
   mobility:['speed','agility','reflexes','stealth','senses'],
   mind:    ['intelligence','focus','creativity','will','cool','rep'],
-  special: ['emp','luck']
+  special: ['luck']
 };
 
-function calcDerived(s, hpBonus=0, staBonus=0, ipBonus=0) {
+// Basis-Humanity (§25.2): 12 + floor((Will+Cool)/2), clamped 15-30, plus any
+// permanent lifepath adjustment. Replaces the old EMP-based formula.
+function calcHumanityBase(s, humanityBonus=0) {
+  const g = v => parseInt(s?.[v]) || 0;
+  return Math.min(30, Math.max(15, 12 + Math.floor((g('will') + g('cool')) / 2))) + humanityBonus;
+}
+
+function calcDerived(s, hpBonus=0, staBonus=0, ipBonus=0, humanityBonus=0, cyberwareImpact=0) {
   if (!s) return null;
   const g = v => parseInt(s[v]) || 0;
   const mindSum = ['intelligence','focus','creativity','will','cool','rep'].reduce((a,k) => a + g(k), 0);
+  const humanityBase = calcHumanityBase(s, humanityBonus);
+  const humanityMax = Math.max(0, humanityBase - cyberwareImpact);
   return {
     'HP Max':     `${g('grit')}+${g('core')}+${hpBonus} = ${g('grit')+g('core')+hpBonus}`,
     'Stamina Max':`${g('drive')}+${g('core')}+${staBonus} = ${g('drive')+g('core')+staBonus}`,
     'Initiative': `${g('speed')}+${g('reflexes')} = ${g('speed')+g('reflexes')}`,
     'RW':         `${g('speed')}+${g('reflexes')} = ${g('speed')+g('reflexes')}`,
-    'Humanity':   `${g('emp')}×10 = ${g('emp')*10}`,
+    'Humanity (Base/Max)': `${humanityBase} / ${humanityMax}${cyberwareImpact ? ` (−${cyberwareImpact} Impact)` : ''}`,
     'Capacity':   `${g('grit')}×5 = ${g('grit')*5}`,
     'IP':         `floor(${mindSum}/5)×2+${ipBonus} = ${Math.floor(mindSum/5)*2+ipBonus}`,
     'POWER Lv':   `${['strength','dexterity','grit','drive','core'].reduce((a,k)=>a+g(k),0)}/2 = ${Math.floor(['strength','dexterity','grit','drive','core'].reduce((a,k)=>a+g(k),0)/2)}`,
@@ -3239,7 +3282,9 @@ function recalcDerived() {
   const hpB = parseInt(document.getElementById('cs-hp-bonus').value) || 0;
   const staB = parseInt(document.getElementById('cs-sta-bonus').value) || 0;
   const ipB = parseInt(document.getElementById('cs-ip-bonus').value) || 0;
-  const d = calcDerived(s, hpB, staB, ipB);
+  const humanityB = parseInt(document.getElementById('cs-humanity-bonus').value) || 0;
+  const cyberwareImpact = computeLiveCyberwareImpact({ cyberware: document.getElementById('cm-cyberware').value.trim().split('\n').filter(Boolean) });
+  const d = calcDerived(s, hpB, staB, ipB, humanityB, cyberwareImpact);
   if (!d) return;
   document.getElementById('cm-derived').innerHTML = Object.entries(d).map(([k,v]) => `
     <div style="background:var(--surface2);border:1px solid var(--border);padding:6px 8px">
@@ -3254,6 +3299,8 @@ function recalcDerived() {
   if (!document.getElementById('cm-hp').value) document.getElementById('cm-hp').placeholder = hpCalc || 'auto';
   if (!document.getElementById('cm-sta').value) document.getElementById('cm-sta').placeholder = staCalc || 'auto';
   if (!document.getElementById('cm-init').value) document.getElementById('cm-init').placeholder = initCalc || 'auto';
+  const humanityCalc = Math.max(0, calcHumanityBase(s, humanityB) - cyberwareImpact);
+  if (!document.getElementById('cm-humanity').value) document.getElementById('cm-humanity').placeholder = humanityCalc || 'auto';
   // Stat-cap warning (rulebook §7.1: no single stat may exceed its tree's
   // current Level). Warn only — never blocks saving, since the book also
   // says the cap doesn't apply during initial character creation.
@@ -3297,6 +3344,7 @@ function openCharModal(id) {
   document.getElementById('cm-sta').value = '';
   document.getElementById('cm-init').value = '';
   document.getElementById('cm-ip').value = '';
+  document.getElementById('cm-humanity').value = '';
   document.getElementById('cm-eb').value = c.eurodollar ?? '';
   document.getElementById('cm-flink').value = c.has_flink ? '1' : '0';
   document.getElementById('cm-pin').value = c.pin || '';
@@ -3314,11 +3362,13 @@ function openCharModal(id) {
   document.getElementById('cs-hp-bonus').value = c.origin_hp_bonus ?? '';
   document.getElementById('cs-sta-bonus').value = c.origin_sta_bonus ?? '';
   document.getElementById('cs-ip-bonus').value = c.origin_ip_bonus ?? '';
+  document.getElementById('cs-humanity-bonus').value = c.origin_humanity_bonus ?? '';
   // Show overrides if manually set
   if (c.hp_override) document.getElementById('cm-hp').value = c.hp_max;
   if (c.sta_override) document.getElementById('cm-sta').value = c.stamina_max;
   if (c.init_override) document.getElementById('cm-init').value = c.initiative;
   if (c.ip_override) document.getElementById('cm-ip').value = c.ip_max;
+  if (c.humanity_override) document.getElementById('cm-humanity').value = c.humanity_max;
   recalcDerived();
   renderProgressionSection(id);
   document.getElementById('cm-cyberware').value = (c.cyberware || []).join('\n');
@@ -3597,12 +3647,14 @@ async function saveCharacter() {
   const hpBonus = parseInt(document.getElementById('cs-hp-bonus').value) || 0;
   const staBonus = parseInt(document.getElementById('cs-sta-bonus').value) || 0;
   const ipBonus = parseInt(document.getElementById('cs-ip-bonus').value) || 0;
+  const humanityBonus = parseInt(document.getElementById('cs-humanity-bonus').value) || 0;
   const hasStats = Object.keys(stats).length > 0;
   // Derive or override HP/Stamina/Initiative
   const hpOverrideVal = parseInt(document.getElementById('cm-hp').value);
   const staOverrideVal = parseInt(document.getElementById('cm-sta').value);
   const initOverrideVal = parseInt(document.getElementById('cm-init').value);
   const ipOverrideVal = parseInt(document.getElementById('cm-ip').value);
+  const humanityOverrideVal = parseInt(document.getElementById('cm-humanity').value);
   const hpMax = !isNaN(hpOverrideVal) ? hpOverrideVal
     : hasStats ? (stats.grit||0) + (stats.core||0) + hpBonus : 10;
   const staMax = !isNaN(staOverrideVal) ? staOverrideVal
@@ -3612,6 +3664,10 @@ async function saveCharacter() {
   const mindSum = ['intelligence','focus','creativity','will','cool','rep'].reduce((a,k) => a + (stats[k]||0), 0);
   const ipMax = !isNaN(ipOverrideVal) ? ipOverrideVal
     : hasStats ? Math.floor(mindSum/5)*2 + ipBonus : 0;
+  const cyberwareList = document.getElementById('cm-cyberware').value.trim().split('\n').filter(Boolean);
+  const cyberwareImpact = computeLiveCyberwareImpact({ cyberware: cyberwareList });
+  const humanityMax = !isNaN(humanityOverrideVal) ? humanityOverrideVal
+    : Math.max(0, calcHumanityBase(hasStats ? stats : null, humanityBonus) - cyberwareImpact);
   const bodyName = document.getElementById('cm-armor-body-name').value.trim();
   const bodySP = parseInt(document.getElementById('cm-armor-body-sp').value) || 0;
   const headName = document.getElementById('cm-armor-head-name').value.trim();
@@ -3624,14 +3680,19 @@ async function saveCharacter() {
     firewall: parseInt(document.getElementById('cm-firewall').value) || 0,
     hacks: hackData.filter(h => h.name),
     stats: hasStats ? stats : (existing.stats || null),
-    origin_hp_bonus: hpBonus, origin_sta_bonus: staBonus, origin_ip_bonus: ipBonus,
+    origin_hp_bonus: hpBonus, origin_sta_bonus: staBonus, origin_ip_bonus: ipBonus, origin_humanity_bonus: humanityBonus,
     hp_override: !isNaN(hpOverrideVal), sta_override: !isNaN(staOverrideVal), init_override: !isNaN(initOverrideVal), ip_override: !isNaN(ipOverrideVal),
+    humanity_override: !isNaN(humanityOverrideVal),
     hp_max: hpMax,
     hp_current: existing.hp_current ?? hpMax,
     stamina_max: staMax,
     stamina_current: existing.stamina_current ?? staMax,
     ip_max: ipMax,
     ip_current: existing.ip_current ?? ipMax,
+    // §25.2: if new cyberware/edits drop Max below the current value, current
+    // instantly falls to the new Max — same clamp-on-save the other pools use.
+    humanity_max: humanityMax,
+    humanity_current: Math.min(existing.humanity_current ?? humanityMax, humanityMax),
     initiative,
     eurodollar: parseInt(document.getElementById('cm-eb').value) || 0,
     has_flink: document.getElementById('cm-flink').value === '1',
@@ -3639,7 +3700,7 @@ async function saveCharacter() {
     pin: document.getElementById('cm-pin').value.trim() || null,
     armor_body: bodyName ? { name: bodyName, sp_base: bodySP, sp_temp: existing.armor_body?.sp_temp ?? bodySP } : null,
     armor_head: headName ? { name: headName, sp_base: headSP, sp_temp: existing.armor_head?.sp_temp ?? headSP } : null,
-    cyberware: document.getElementById('cm-cyberware').value.trim().split('\n').filter(Boolean),
+    cyberware: cyberwareList,
     weapons: weaponData.filter(w => w.name),
     talents: talentData.filter(t => t.name),
     inventory: inventoryData.filter(i => i.name),
@@ -3698,6 +3759,9 @@ async function adjustPlayerStat(stat, delta) {
   } else if (stat === 'ip') {
     const val = Math.min(c.ip_max || 0, Math.max(0, (c.ip_current ?? c.ip_max ?? 0) + delta));
     await dbWrite('characters/' + id + '/ip_current', val);
+  } else if (stat === 'humanity') {
+    const val = Math.min(c.humanity_max || 0, Math.max(0, (c.humanity_current ?? c.humanity_max ?? 0) + delta));
+    await dbWrite('characters/' + id + '/humanity_current', val);
   }
 }
 
@@ -4081,6 +4145,29 @@ function computeLiveFirewall(c) {
   return fw;
 }
 
+// Cyberware Impact (§9, §25.3) — replaces the old flat "HL-Wert". Reduces
+// Humanity-Maximum. Same free-text-scan pattern as FIREWALL_ITEM_BONUS;
+// unrecognized/homebrew cyberware entries just don't count toward it.
+const CYBERWARE_IMPACT = {
+  'reinforced frame i': 1, 'reinforced frame ii': 1, 'reinforced frame iii': 2, 'reinforced frame iv': 2, 'reinforced frame v': 3,
+  'neural link': 1, 'reflex booster': 2, 'kerenzikov': 2, 'sandevistan': 3, 'memory booster': 1, 'cyberdeck': 1, 'interface plugs': 1,
+  'cybereye': 1, 'cybereye (basis)': 1, 'thermovision': 1, 'targeting system': 1, 'zoom optics': 1, 'kiroshi owl': 2,
+  'cyberaudio suite': 1, 'level dampener': 0, 'radio scanner': 0, 'threat detector': 1,
+  'cyberarm': 1, 'cyberleg': 1, 'gorilla arm': 1, 'mantis blades': 1, 'weapon mount': 1, 'grip strength': 0, 'hydraulic rams': 1, 'grip feet': 0,
+  'subdermal armor': 1, 'stamina booster': 1, 'pain editor': 2, 'adrenaline booster': 1, 'toxin binders': 1,
+  'titanium bones': 1, 'muscle & bone lace': 1, 'optical camo': 2, 'grafted muscles': 1,
+  'techhair': 0, 'light tattoos': 0, 'chemskin': 0, 'nasal filters': 0,
+  'full cyberarm': 2, 'full conversion': 5, 'full conversion (torso)': 5, 'cyberpsycho frame': 8,
+};
+function computeLiveCyberwareImpact(c) {
+  let impact = 0;
+  (c.cyberware || []).forEach(cw => {
+    const val = CYBERWARE_IMPACT[String(cw).trim().toLowerCase()];
+    if (val) impact += val;
+  });
+  return impact;
+}
+
 const TECH_CHANCE = { GRUNT:0.05, THREAT:0.25, BOSS:0.70 };
 const TECH_TYPE_WEIGHTS = {
   GRUNT:  [['power',1.0]],
@@ -4159,7 +4246,7 @@ function computeAttributes(tier, archetype) {
     ...distribute(lead.power * 2, arch.power, lead.power),
     ...distribute(lead.mobility * 2, arch.mobility, lead.mobility),
     ...distribute(lead.mind * 2, arch.mind, lead.mind),
-    rep: 0, emp: 0, luck: 0,
+    rep: 0, luck: 0,
   };
 }
 
