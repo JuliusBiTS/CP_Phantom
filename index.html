@@ -720,7 +720,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       </div>
       <div style="color:var(--text2);font-size:11px;margin-bottom:14px;line-height:1.6">Generated NPCs are added straight to the <strong>Characters</strong> tab. Queue them for combat from there when you're ready.</div>
       <!-- Faction toggle -->
-      <div style="display:flex;gap:0;margin-bottom:8px;border:1px solid var(--border2)">
+      <div id="gen-faction-toggle" style="display:flex;gap:0;margin-bottom:8px;border:1px solid var(--border2)">
         <button id="gen-faction-enemy" style="flex:1;background:var(--surface2);color:var(--red-bright);border:none;padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenFaction('enemy')">⚔ ENEMY</button>
         <button id="gen-faction-ally" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenFaction('ally')">🤝 ALLY</button>
       </div>
@@ -728,6 +728,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <div style="display:flex;gap:0;margin-bottom:12px;border:1px solid var(--border2)">
         <button id="gen-mode-single" style="flex:1;background:var(--surface2);color:var(--cyan);border:none;padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('single')">SINGLE ENEMY</button>
         <button id="gen-mode-encounter" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('encounter')">FULL ENCOUNTER</button>
+        <button id="gen-mode-loot" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('loot')">🎲 LOOT ROLLER</button>
       </div>
       <!-- Controls -->
       <div id="gen-single-controls">
@@ -748,14 +749,35 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
           </div>
         </div>
       </div>
-      <div style="display:flex;gap:8px;margin-bottom:6px">
-        <textarea id="gen-prompt" placeholder="Describe the enemy or scenario..." rows="3" style="flex:1;resize:none;font-size:12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();runGenerator()}"></textarea>
-        <button id="gen-btn" style="background:var(--surface);border:1px solid var(--border2);color:var(--text2);padding:0 14px;font-size:10px;letter-spacing:0.12em;cursor:pointer;font-family:var(--font);white-space:nowrap;align-self:stretch" onclick="runGenerator()">GEN</button>
+
+      <!-- Loot Roller controls -->
+      <div id="gen-loot-controls" style="display:none;margin-bottom:14px">
+        <div class="field">
+          <label>Roll For (optional — sets tier suggestion + apply target)</label>
+          <select id="loot-target" onchange="onLootTargetChange(this.value)">
+            <option value="">— no target, just roll —</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <button class="loot-tier-btn" id="ltier-1" onclick="setLootTier(1)" style="flex:1;padding:6px;font-size:10px;letter-spacing:0.1em;background:var(--cyan-dim);border:1px solid var(--cyan);color:var(--cyan);cursor:pointer;font-family:var(--font)">T1 STREET</button>
+          <button class="loot-tier-btn" id="ltier-2" onclick="setLootTier(2)" style="flex:1;padding:6px;font-size:10px;letter-spacing:0.1em;background:transparent;border:1px solid var(--border2);color:var(--text3);cursor:pointer;font-family:var(--font)">T2 MERC</button>
+          <button class="loot-tier-btn" id="ltier-3" onclick="setLootTier(3)" style="flex:1;padding:6px;font-size:10px;letter-spacing:0.1em;background:transparent;border:1px solid var(--border2);color:var(--text3);cursor:pointer;font-family:var(--font)">T3 CORPO</button>
+          <button class="loot-tier-btn" id="ltier-4" onclick="setLootTier(4)" style="flex:1;padding:6px;font-size:10px;letter-spacing:0.1em;background:transparent;border:1px solid var(--border2);color:var(--text3);cursor:pointer;font-family:var(--font)">T4 ELITE</button>
+        </div>
+        <button class="btn btn-primary btn-small" style="width:100%;margin-bottom:12px" onclick="rollLoot()">🎲 ROLL LOOT</button>
+        <div id="loot-roll-result"></div>
       </div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:14px">Enter = generate · Shift+Enter = newline</div>
-      <div id="gen-loading" style="display:none;font-size:10px;color:var(--text3);letter-spacing:0.2em;text-align:center;padding:24px">SCANNING THREAT DATABASE...</div>
-      <div id="gen-error" style="display:none;color:var(--red-bright);font-size:11px;margin-bottom:10px"></div>
-      <div id="gen-results" style="display:flex;flex-direction:column;gap:16px"></div>
+
+      <div id="gen-ai-section">
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <textarea id="gen-prompt" placeholder="Describe the enemy or scenario..." rows="3" style="flex:1;resize:none;font-size:12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();runGenerator()}"></textarea>
+          <button id="gen-btn" style="background:var(--surface);border:1px solid var(--border2);color:var(--text2);padding:0 14px;font-size:10px;letter-spacing:0.12em;cursor:pointer;font-family:var(--font);white-space:nowrap;align-self:stretch" onclick="runGenerator()">GEN</button>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:14px">Enter = generate · Shift+Enter = newline</div>
+        <div id="gen-loading" style="display:none;font-size:10px;color:var(--text3);letter-spacing:0.2em;text-align:center;padding:24px">SCANNING THREAT DATABASE...</div>
+        <div id="gen-error" style="display:none;color:var(--red-bright);font-size:11px;margin-bottom:10px"></div>
+        <div id="gen-results" style="display:flex;flex-direction:column;gap:16px"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -4159,6 +4181,342 @@ const CYBERWARE_STAT_BONUS = {
 const FALLBACK_WEAPON_BONUS = { GRUNT:3, THREAT:8, BOSS:12 };
 const FALLBACK_ARMOR_SP = { GRUNT:6, THREAT:12, BOSS:16 };
 
+// Base SP catalog (rulebook §6.3) — used by the Loot Roller to resolve an
+// armor name into real SP values; quality (Poor/Average/Excellent) has no
+// defined numeric SP modifier in the rulebook, so it's kept as flavor text
+// on the item rather than adjusting these base numbers.
+const ARMOR_CATALOG = {
+  'Leathers': { body: 4 },
+  'Kevlar Vest': { body: 7 },
+  'Light Armorjack': { body: 11, head: 11 },
+  'Medium Armorjack': { body: 13, head: 13 },
+  'Heavy Armorjack': { body: 15, head: 15 },
+  'MetalGear': { body: 18, head: 18 },
+  'Body Weight Suit': { body: 11 },
+};
+
+// ═══════════════════════════════════════════════════════════════
+// LOOT TABLES — rulebook §24, all four tiers transcribed verbatim.
+// Each row is tagged with a `type` so the Loot Roller knows how (and
+// whether) to expand/apply it:
+//   cash       — eb range (or flat amount), optionally with an extra
+//                narrative item tacked on (extraItem)
+//   weapon     — a generic weapon category + quality per the book; the
+//                specific flavor name is rolled (or taken from the book's
+//                own named style, e.g. "Fenrir-Style") and, if the row
+//                grants attachments, which ones are rolled too — the book
+//                states how many but never which
+//   armor      — armor name + quality + which slot(s)
+//   cyberware  — one or more named cyberware items; `choice:true` means
+//                the book says "oder" (GM picks one), otherwise all listed
+//                items are granted together
+//   text       — flavor/narrative loot, Iconic weapons, Prototype, and
+//                JACKPOT results. These are intentionally NOT randomized —
+//                turning "Malorian Arms 3516" into a random roll would
+//                defeat the point of it being iconic — but still get a
+//                generic "log as item" one-click fallback.
+// ═══════════════════════════════════════════════════════════════
+const LOOT_TABLES = {
+  1: { label: 'Tier 1 — Straße', context: 'Gangster, Strassenkriminelle, tote Stadtstreicher.', rows: [
+    { text: '3 eb und eine Büroklammer', type: 'cash', cashMin: 3, cashMax: 3, extraItem: 'Büroklammer' },
+    { text: 'Halbgegessene Synth-Mahlzeit und eine kaputte Sonnenbrille', type: 'text' },
+    { text: 'Gefälschter Credchip (leer) und eine einzelne Socke', type: 'text' },
+    { text: "Billiges Handy mit 47 ungelesenen Nachrichten von 'Mama'", type: 'text' },
+    { text: '20-50 eb Bargeld', type: 'cash', cashMin: 20, cashMax: 50 },
+    { text: 'Billige Drogen oder Synthetik-Alkohol', type: 'text' },
+    { text: 'Messer (Poor Quality)', type: 'weapon', weapon: 'Knife', quality: 'Poor', attachments: 0 },
+    { text: '50-100 eb Bargeld', type: 'cash', cashMin: 50, cashMax: 100 },
+    { text: 'Hollow Point Munition (6 Schuss)', type: 'text' },
+    { text: 'Big Knucks (Average)', type: 'weapon', weapon: 'Big Knucks', quality: 'Average', attachments: 0 },
+    { text: 'Medium Pistol (Poor)', type: 'weapon', weapon: 'Medium Pistol', quality: 'Poor', attachments: 0 },
+    { text: '100-150 eb Bargeld', type: 'cash', cashMin: 100, cashMax: 150 },
+    { text: 'Armor-Piercing Munition (6 Schuss)', type: 'text' },
+    { text: 'Leathers Rüstung Body (Average)', type: 'armor', armorName: 'Leathers', quality: 'Average', slot: 'body' },
+    { text: 'SMG (Poor)', type: 'weapon', weapon: 'SMG', quality: 'Poor', attachments: 0 },
+    { text: '150-250 eb Bargeld + Schmuck (50 eb Schrottpreis)', type: 'cash', cashMin: 150, cashMax: 250, extraItem: 'Schmuck (50 eb Schrottpreis)' },
+    { text: 'Heavy Pistol (Poor) + 1 Magazin', type: 'weapon', weapon: 'Heavy Pistol', quality: 'Poor', attachments: 0, extraItem: '+1 Magazin' },
+    { text: 'Kevlar Vest (Poor)', type: 'armor', armorName: 'Kevlar Vest', quality: 'Poor', slot: 'body' },
+    { text: 'Heavy Pistol (Average)', type: 'weapon', weapon: 'Heavy Pistol', quality: 'Average', attachments: 0 },
+    { text: 'TIER 2 hinaufsteigen und neu würfeln', type: 'bump' },
+  ]},
+  2: { label: 'Tier 2 — Söldner', context: 'Erfahrene Söldner, private Security, organisiertes Verbrechen.', rows: [
+    { text: 'Kaputtes Datapad mit teilverschlüsselten Infos - vielleicht was wert, vielleicht nicht', type: 'text' },
+    { text: 'Credchip mit 200 eb - jemandem anderem gehörend (Konsequenzen möglich)', type: 'cash', cashMin: 200, cashMax: 200, extraItem: 'gehört jemand anderem — Konsequenzen möglich' },
+    { text: 'Kevlar Vest (Average)', type: 'armor', armorName: 'Kevlar Vest', quality: 'Average', slot: 'body' },
+    { text: 'Medium Pistol (Excellent) - Lizzie-Style, neonbeleuchtet', type: 'weapon', weapon: 'Medium Pistol', quality: 'Excellent', attachments: 0, flavorName: 'Lizzie-Style' },
+    { text: 'Attachment: Laser Sight oder Foregrip', type: 'text' },
+    { text: 'Heavy Pistol (Average)', type: 'weapon', weapon: 'Heavy Pistol', quality: 'Average', attachments: 0 },
+    { text: '400-700 eb Bargeld', type: 'cash', cashMin: 400, cashMax: 700 },
+    { text: 'SMG (Average) - Fenrir-Style', type: 'weapon', weapon: 'SMG', quality: 'Average', attachments: 0, flavorName: 'Fenrir-Style' },
+    { text: 'Attachment: Suppressor oder Muzzle Brake', type: 'text' },
+    { text: 'Cyberware: Basic ICE', type: 'cyberware', cyberwareOptions: ['Basic ICE'] },
+    { text: 'Light Armorjack Body (Average)', type: 'armor', armorName: 'Light Armorjack', quality: 'Average', slot: 'body' },
+    { text: '700-1000 eb Bargeld', type: 'cash', cashMin: 700, cashMax: 1000 },
+    { text: 'Heavy Pistol (Excellent)', type: 'weapon', weapon: 'Heavy Pistol', quality: 'Excellent', attachments: 0 },
+    { text: 'Light Armorjack Body + Head (Average)', type: 'armor', armorName: 'Light Armorjack', quality: 'Average', slot: 'both' },
+    { text: 'SMG (Excellent) + 1 Attachment', type: 'weapon', weapon: 'SMG', quality: 'Excellent', attachments: 1 },
+    { text: 'Heavy SMG (Average)', type: 'weapon', weapon: 'Heavy SMG', quality: 'Average', attachments: 0 },
+    { text: '1000-1500 eb Bargeld + kleiner Diamant (300 eb Schrottpreis)', type: 'cash', cashMin: 1000, cashMax: 1500, extraItem: 'kleiner Diamant (300 eb Schrottpreis)' },
+    { text: 'Light Armorjack Komplett-Set (Average) + Attachment', type: 'armor', armorName: 'Light Armorjack', quality: 'Average', slot: 'both', extraItem: '+ 1 Attachment (GM\'s choice, attach via the weapon editor)' },
+    { text: 'Heavy SMG (Excellent)', type: 'weapon', weapon: 'Heavy SMG', quality: 'Excellent', attachments: 0 },
+    { text: 'TIER 3 hinaufsteigen und neu würfeln', type: 'bump' },
+  ]},
+  3: { label: 'Tier 3 — Corpo-Security', context: 'Corpo-Sicherheitskräfte, professionelle Söldner, mittlere Offiziere.', rows: [
+    { text: '1500-2500 eb Bargeld', type: 'cash', cashMin: 1500, cashMax: 2500 },
+    { text: 'Medium Armorjack Body + Head (Average)', type: 'armor', armorName: 'Medium Armorjack', quality: 'Average', slot: 'both' },
+    { text: 'Assault Rifle (Average) - Tactician-Style', type: 'weapon', weapon: 'Assault Rifle', quality: 'Average', attachments: 0, flavorName: 'Tactician-Style' },
+    { text: 'Heavy SMG (Excellent) + 2 Attachments', type: 'weapon', weapon: 'Heavy SMG', quality: 'Excellent', attachments: 2 },
+    { text: '2500-4000 eb Bargeld', type: 'cash', cashMin: 2500, cashMax: 4000 },
+    { text: 'Cyberware: Reflex Booster oder Cyberaudio Suite', type: 'cyberware', cyberwareOptions: ['Reflex Booster', 'Cyberaudio Suite'], choice: true },
+    { text: 'Assault Rifle (Excellent) - Ajax-Style', type: 'weapon', weapon: 'Assault Rifle', quality: 'Excellent', attachments: 0, flavorName: 'Ajax-Style' },
+    { text: 'Netrunner Helm + Basic Deck', type: 'cyberware', cyberwareOptions: ['Netrunner Helm'], cyberdeck: 'Basic' },
+    { text: '4000-6000 eb Bargeld', type: 'cash', cashMin: 4000, cashMax: 6000 },
+    { text: 'Sniper Rifle (Average) - Widowmaker-Style', type: 'weapon', weapon: 'Sniper Rifle', quality: 'Average', attachments: 0, flavorName: 'Widowmaker-Style' },
+    { text: 'Heavy Armorjack Body + Head (Average)', type: 'armor', armorName: 'Heavy Armorjack', quality: 'Average', slot: 'both' },
+    { text: 'Cyberware: Cybereye (Basis) + 1 Option', type: 'cyberware', cyberwareOptions: ['Cybereye (Basis)'], extraItem: '+ 1 Option (GM picks: Thermovision / Targeting System / Zoom Optics)' },
+    { text: '6000-9000 eb Bargeld + Diamanten (500 eb Wert)', type: 'cash', cashMin: 6000, cashMax: 9000, extraItem: 'Diamanten (500 eb Wert)' },
+    { text: "Sniper Rifle (Excellent) - O'Five-Style", type: 'weapon', weapon: 'Sniper Rifle', quality: 'Excellent', attachments: 0, flavorName: "O'Five-Style" },
+    { text: 'Assault Rifle (Excellent) + 3 Attachments', type: 'weapon', weapon: 'Assault Rifle', quality: 'Excellent', attachments: 3 },
+    { text: 'Heavy Armorjack Komplett-Set (Excellent)', type: 'armor', armorName: 'Heavy Armorjack', quality: 'Excellent', slot: 'both' },
+    { text: '9000-12000 eb Bargeld', type: 'cash', cashMin: 9000, cashMax: 12000 },
+    { text: 'Cyberware: Mantis Blades oder Kiroshi Owl', type: 'cyberware', cyberwareOptions: ['Mantis Blades', 'Kiroshi Owl'], choice: true },
+    { text: 'Military Deck + 3 Hacks', type: 'cyberware', cyberwareOptions: [], cyberdeck: 'Military', extraItem: '+ 3 Hacks (GM\'s choice, add via the Netrunning screen)' },
+    { text: 'TIER 4 hinaufsteigen und neu würfeln', type: 'bump' },
+  ]},
+  4: { label: 'Tier 4 — Elite / Legendär', context: 'Spezialeinheiten, Corpo-Direktoren, Top-Netrunner, militärische Eliten.', rows: [
+    { text: '12000-20000 eb Bargeld', type: 'cash', cashMin: 12000, cashMax: 20000 },
+    { text: 'Cyberware: Sandevistan + Neural Link', type: 'cyberware', cyberwareOptions: ['Sandevistan', 'Neural Link'] },
+    { text: 'Malorian Arms 3516 (Excellent, ikonisch)', type: 'text' },
+    { text: 'MetalGear Komplett-Set (Excellent)', type: 'armor', armorName: 'MetalGear', quality: 'Excellent', slot: 'both' },
+    { text: '20000-30000 eb Bargeld', type: 'cash', cashMin: 20000, cashMax: 30000 },
+    { text: 'Cyberware: Optical Camo + Kiroshi Owl', type: 'cyberware', cyberwareOptions: ['Optical Camo', 'Kiroshi Owl'] },
+    { text: 'Faraday Helm + Heavy Armorjack Set (Excellent)', type: 'armor', armorName: 'Heavy Armorjack', quality: 'Excellent', slot: 'both', extraCyberware: ['Faraday Helm'] },
+    { text: "Comrade's Hammer (Very Heavy Pistol, Excellent - ein Schuss, massiver Schaden)", type: 'text' },
+    { text: '30000-40000 eb Bargeld + Diamanten (3000 eb Wert)', type: 'cash', cashMin: 30000, cashMax: 40000, extraItem: 'Diamanten (3000 eb Wert)' },
+    { text: 'Cyberware: Blackwall Fragment', type: 'cyberware', cyberwareOptions: ['Blackwall Fragment'] },
+    { text: 'Blackmarket Deck + 6 Hacks komplett', type: 'cyberware', cyberwareOptions: [], cyberdeck: 'Blackmarket', extraItem: '+ 6 Hacks (GM\'s choice, add via the Netrunning screen)' },
+    { text: 'Prototype Weapon (Excellent, alle Slots belegt, DM wählt Typ)', type: 'text' },
+    { text: '40000-55000 eb Bargeld', type: 'cash', cashMin: 40000, cashMax: 55000 },
+    { text: 'Cyberware: Full Cyberarm (beidseitig) + Mantis Blades', type: 'cyberware', cyberwareOptions: ['Full Cyberarm (beidseitig)', 'Mantis Blades'] },
+    { text: 'Militärische Geheiminfos (Plotmaterial + 10000 eb Verkaufswert)', type: 'cash', cashMin: 10000, cashMax: 10000, extraItem: 'Militärische Geheiminfos (Plot-Material)' },
+    { text: 'Cyberware: Titanium Bones + Muscle & Bone Lace + Subdermal Armor', type: 'cyberware', cyberwareOptions: ['Titanium Bones', 'Muscle & Bone Lace', 'Subdermal Armor'] },
+    { text: '55000-70000 eb oder Corporate Kontozugang', type: 'cash', cashMin: 55000, cashMax: 70000, extraItem: 'Alternative: Corporate Kontozugang statt Bargeld' },
+    { text: 'Elite-Komplettausrüstung: Excellent Waffe + Rüstung + 3 Cyberware', type: 'text' },
+    { text: 'Corporate Access Codes + Militärisches Geheimarchiv (Plot-Material)', type: 'text' },
+    { text: 'JACKPOT - DM wählt etwas völlig Einzigartiges', type: 'jackpot' },
+  ]},
+};
+
+let lootTier = 1;
+let lootTargetId = '';
+let lootLastResult = null;
+
+function populateLootTargetDropdown() {
+  const sel = document.getElementById('loot-target');
+  const current = sel.value;
+  const chars = Object.entries(state.characters);
+  sel.innerHTML = '<option value="">— no target, just roll —</option>' +
+    chars.map(([id, c]) => `<option value="${id}">${esc(c.name)}${c.tier ? ' (' + c.tier + ')' : ''}</option>`).join('');
+  if (chars.some(([id]) => id === current)) sel.value = current;
+}
+
+function onLootTargetChange(id) {
+  lootTargetId = id;
+  const c = state.characters[id];
+  const tierMap = { GRUNT: 1, THREAT: 2, BOSS: 3 };
+  if (c?.tier && tierMap[c.tier]) setLootTier(tierMap[c.tier]);
+}
+
+function setLootTier(n) {
+  lootTier = n;
+  [1, 2, 3, 4].forEach(t => {
+    const btn = document.getElementById('ltier-' + t);
+    btn.style.background = t === n ? 'var(--cyan-dim)' : 'transparent';
+    btn.style.borderColor = t === n ? 'var(--cyan)' : 'var(--border2)';
+    btn.style.color = t === n ? 'var(--cyan)' : 'var(--text3)';
+  });
+}
+
+function rollCashAmount(min, max) {
+  if (min >= max) return min;
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+// Picks n unique attachments from the catalog — the loot tables state how
+// many a roll grants but never which, so this fills that gap.
+function rollRandomAttachments(n) {
+  const pool = [...ATTACHMENT_CATALOG];
+  const picked = [];
+  for (let i = 0; i < n && pool.length; i++) {
+    const idx = Math.floor(Math.random() * pool.length);
+    picked.push(pool.splice(idx, 1)[0]);
+  }
+  return picked.map(a => ({ name: a.name, effect: a.effect || '' }));
+}
+
+// Uses the book's own named style (e.g. "Fenrir-Style") when the table row
+// gives one; otherwise rolls a random flavor label from whichever weapon
+// family shares that canonical entry (e.g. rolling "Heavy Pistol" might
+// come back "Revolver" or "Desert Eagle" — same stats, different name).
+function rollWeaponFlavorName(canonical, bookFlavor) {
+  if (bookFlavor) return bookFlavor;
+  const matches = [];
+  Object.values(WEAPON_SPECIFIC_OPTIONS).forEach(list => {
+    list.forEach(opt => { if (opt.canonical === canonical) matches.push(opt.label); });
+  });
+  if (!matches.length) return canonical;
+  return matches[Math.floor(Math.random() * matches.length)];
+}
+
+// Rolls 1d20 against the given tier's table. A natural 20 on tiers 1-3
+// bumps to the next tier and rerolls immediately (per the rulebook); a
+// natural 20 on tier 4 is JACKPOT and returned as-is.
+function rollLootRow(startTier) {
+  let tier = startTier;
+  while (true) {
+    const roll = Math.floor(Math.random() * 20) + 1;
+    if (roll === 20 && tier < 4) { tier++; continue; }
+    return { tier, roll, row: LOOT_TABLES[tier].rows[roll - 1] };
+  }
+}
+
+function rollLoot() {
+  const { tier, roll, row } = rollLootRow(lootTier);
+  const result = { tier, roll, row };
+  if (row.type === 'weapon') {
+    const catalogEntry = WEAPON_TABLE[row.weapon];
+    const bonus = (catalogEntry?.bonus || 0) + (row.quality === 'Excellent' ? 1 : 0);
+    result.rolledWeapon = {
+      name: rollWeaponFlavorName(row.weapon, row.flavorName),
+      bonus, pw: catalogEntry?.label || '',
+      tags: [catalogEntry?.tags?.join(', '), row.quality === 'Poor' ? 'Poor Quality: natural 1 on first die = malfunction, not Crit' : ''].filter(Boolean).join(' · '),
+      attachments: row.attachments > 0 ? rollRandomAttachments(row.attachments) : [],
+    };
+  } else if (row.type === 'cash') {
+    result.rolledCash = rollCashAmount(row.cashMin, row.cashMax);
+  }
+  lootLastResult = result;
+  renderLootResult(result);
+}
+
+function renderLootResult(result) {
+  const { tier, roll, row } = result;
+  const el = document.getElementById('loot-roll-result');
+  const target = state.characters[lootTargetId];
+  const targetName = target ? esc(target.name) : '...';
+  const disabled = !target ? 'disabled' : '';
+  const pickTargetNote = !target ? '<div style="font-size:10px;color:var(--text3);margin-top:4px">Pick a target above to enable one-click apply.</div>' : '';
+  const extraItemHtml = row.extraItem
+    ? `<div style="font-size:10px;color:var(--text3);margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span>Also: ${esc(row.extraItem)}</span><button class="btn btn-ghost btn-small" ${disabled} onclick="applyLootExtraItem()">+ LOG</button></div>`
+    : '';
+
+  let bodyHtml = `<div style="font-size:10px;color:var(--text3);letter-spacing:0.1em;margin-bottom:4px">TIER ${tier} · ROLL ${roll}</div>
+    <div style="font-size:12px;color:var(--text);margin-bottom:8px">${esc(row.text)}</div>`;
+
+  if (row.type === 'jackpot') {
+    bodyHtml += `<div style="font-size:11px;color:var(--gold-bright)">JACKPOT — invent something unique for this moment.</div>`;
+  } else if (row.type === 'weapon') {
+    const w = result.rolledWeapon;
+    bodyHtml += `<div style="background:var(--surface2);border:1px solid var(--border);padding:8px 10px;margin-bottom:8px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="flex:1;font-size:12px;font-weight:700">${esc(w.name)}</span>
+        <span style="color:var(--gold-bright);font-weight:700">+${w.bonus}</span>
+        <span style="font-size:10px;color:var(--cyan)">${esc(row.quality)}</span>
+      </div>
+      <div style="font-size:10px;color:var(--text2);margin-top:2px">${esc(w.pw)}</div>
+      ${w.tags ? `<div style="font-size:10px;color:var(--text2);margin-top:2px">${esc(w.tags)}</div>` : ''}
+      ${w.attachments.length ? `<div style="margin-top:6px">${w.attachments.map(a => `<div style="font-size:10px;color:var(--text3)">↳ ${esc(a.name)}${a.effect ? ': ' + esc(a.effect) : ''}</div>`).join('')}</div>` : ''}
+    </div>
+    <button class="btn btn-primary btn-small" ${disabled} onclick="applyLootWeapon()">+ ADD TO ${targetName}</button>
+    ${extraItemHtml}${pickTargetNote}`;
+  } else if (row.type === 'cash') {
+    bodyHtml += `<div style="font-size:16px;font-weight:700;color:var(--gold-bright);margin-bottom:8px">${result.rolledCash.toLocaleString()} eb</div>
+    <button class="btn btn-primary btn-small" ${disabled} onclick="applyLootCash()">+ ADD TO ${targetName}</button>
+    ${extraItemHtml}${pickTargetNote}`;
+  } else if (row.type === 'armor') {
+    const cat = ARMOR_CATALOG[row.armorName] || {};
+    const spLine = [row.slot !== 'head' && cat.body != null ? `Body SP ${cat.body}` : '', row.slot !== 'body' && cat.head != null ? `Head SP ${cat.head}` : ''].filter(Boolean).join(' · ');
+    bodyHtml += `<div style="background:var(--surface2);border:1px solid var(--border);padding:8px 10px;margin-bottom:8px">
+      <div style="font-size:12px;font-weight:700">${esc(row.armorName)} <span style="font-size:10px;color:var(--cyan)">(${esc(row.quality)})</span></div>
+      <div style="font-size:10px;color:var(--text2);margin-top:2px">${esc(spLine)}</div>
+    </div>
+    <button class="btn btn-primary btn-small" ${disabled} onclick="applyLootArmor()">+ APPLY TO ${targetName}</button>
+    ${extraItemHtml}${pickTargetNote}`;
+  } else if (row.type === 'cyberware') {
+    const names = row.cyberwareOptions || [];
+    if (row.choice && names.length > 1) {
+      bodyHtml += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${names.map((n, i) => `<button class="btn btn-primary btn-small" ${disabled} onclick="applyLootCyberware(${i})">+ ${esc(n)}</button>`).join('')}</div>`;
+    } else {
+      if (names.length) bodyHtml += `<div style="font-size:11px;color:var(--text2);margin-bottom:8px">${names.map(esc).join(', ')}</div>`;
+      const label = row.cyberdeck && !names.length ? `+ SET ${esc(row.cyberdeck)} DECK ON ${targetName}` : `+ ADD TO ${targetName}`;
+      bodyHtml += `<button class="btn btn-primary btn-small" ${disabled} onclick="applyLootCyberware()">${label}</button>`;
+    }
+    bodyHtml += `${extraItemHtml}${pickTargetNote}`;
+  } else {
+    bodyHtml += `<button class="btn btn-ghost btn-small" ${disabled} onclick="applyLootGenericItem()">+ LOG AS ITEM</button>${pickTargetNote}`;
+  }
+
+  el.innerHTML = bodyHtml;
+}
+
+function requireLootTarget() {
+  const c = state.characters[lootTargetId];
+  if (!c) { showToast('Pick a target character first.'); return null; }
+  return c;
+}
+
+async function applyLootCash() {
+  const c = requireLootTarget(); if (!c || !lootLastResult) return;
+  const amount = lootLastResult.rolledCash || 0;
+  await dbWrite('characters/' + lootTargetId + '/eurodollar', (c.eurodollar || 0) + amount);
+  showToast(`+${amount} eb → ${c.name}`);
+}
+
+async function applyLootWeapon() {
+  const c = requireLootTarget(); if (!c || !lootLastResult?.rolledWeapon) return;
+  const w = lootLastResult.rolledWeapon;
+  const weapons = [...(c.weapons || []), { ...w, attachments: w.attachments.map(a => ({ ...a })) }];
+  await dbWrite('characters/' + lootTargetId + '/weapons', weapons);
+  showToast(`${w.name} → ${c.name}`);
+}
+
+async function applyLootArmor() {
+  const c = requireLootTarget(); if (!c || !lootLastResult) return;
+  const row = lootLastResult.row;
+  const cat = ARMOR_CATALOG[row.armorName] || {};
+  const updates = {};
+  if (row.slot !== 'head' && cat.body != null) updates['characters/' + lootTargetId + '/armor_body'] = { name: row.armorName, sp_base: cat.body, sp_temp: cat.body };
+  if (row.slot !== 'body' && cat.head != null) updates['characters/' + lootTargetId + '/armor_head'] = { name: row.armorName + ' (Head)', sp_base: cat.head, sp_temp: cat.head };
+  if (row.extraCyberware) updates['characters/' + lootTargetId + '/cyberware'] = [...(c.cyberware || []), ...row.extraCyberware];
+  await dbUpdate(updates);
+  showToast(`${row.armorName} → ${c.name}`);
+}
+
+async function applyLootCyberware(choiceIndex) {
+  const c = requireLootTarget(); if (!c || !lootLastResult) return;
+  const row = lootLastResult.row;
+  const toAdd = (typeof choiceIndex === 'number') ? [row.cyberwareOptions[choiceIndex]] : (row.cyberwareOptions || []);
+  const updates = {};
+  if (toAdd.length) updates['characters/' + lootTargetId + '/cyberware'] = [...(c.cyberware || []), ...toAdd];
+  if (row.cyberdeck) updates['characters/' + lootTargetId + '/cyberdeck'] = row.cyberdeck;
+  await dbUpdate(updates);
+  showToast(`Added to ${c.name}`);
+}
+
+async function applyLootExtraItem() {
+  const c = requireLootTarget(); if (!c || !lootLastResult?.row?.extraItem) return;
+  const items = [...(c.inventory || []), { name: lootLastResult.row.extraItem, qty: 1, slots: 1 }];
+  await dbWrite('characters/' + lootTargetId + '/inventory', items);
+  showToast(`Logged: ${lootLastResult.row.extraItem}`);
+}
+
+async function applyLootGenericItem() {
+  const c = requireLootTarget(); if (!c || !lootLastResult) return;
+  const items = [...(c.inventory || []), { name: lootLastResult.row.text, qty: 1, slots: 1 }];
+  await dbWrite('characters/' + lootTargetId + '/inventory', items);
+  showToast(`Logged to ${c.name}'s inventory`);
+}
+
 // ═══════════════════════════════════════════════════════════════
 // WEAPON ATTACHMENTS & TECHNOLOGY — rulebook §7a/§8. Power/Tech stay
 // flat single variants (no levels) per the rulebook; only Smart has
@@ -4685,8 +5043,14 @@ function setGenMode(mode) {
   document.getElementById('gen-mode-single').style.color = mode === 'single' ? 'var(--cyan)' : 'var(--text3)';
   document.getElementById('gen-mode-encounter').style.background = mode === 'encounter' ? 'var(--surface2)' : 'transparent';
   document.getElementById('gen-mode-encounter').style.color = mode === 'encounter' ? 'var(--cyan)' : 'var(--text3)';
+  document.getElementById('gen-mode-loot').style.background = mode === 'loot' ? 'var(--surface2)' : 'transparent';
+  document.getElementById('gen-mode-loot').style.color = mode === 'loot' ? 'var(--cyan)' : 'var(--text3)';
   document.getElementById('gen-single-controls').style.display = mode === 'single' ? 'block' : 'none';
   document.getElementById('gen-encounter-controls').style.display = mode === 'encounter' ? 'block' : 'none';
+  document.getElementById('gen-loot-controls').style.display = mode === 'loot' ? 'block' : 'none';
+  document.getElementById('gen-ai-section').style.display = mode === 'loot' ? 'none' : 'block';
+  document.getElementById('gen-faction-toggle').style.display = mode === 'loot' ? 'none' : 'flex';
+  if (mode === 'loot') populateLootTargetDropdown();
 }
 
 function setGenTier(tier) {
