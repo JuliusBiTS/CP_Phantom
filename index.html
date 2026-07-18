@@ -360,6 +360,23 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .char-item-name { flex: 1; font-size: 14px; font-weight: 700; }
 .char-item-sub { font-size: 10px; color: var(--text2); }
 .char-item-hp { font-size: 12px; color: var(--green-bright); }
+.mission-group-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--cyan-dim);
+  cursor: pointer;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text2);
+}
+.mission-group-header:hover { border-left-color: var(--cyan); color: var(--text); }
+.mission-group-header .chevron { transition: transform 0.15s; color: var(--cyan-dim); }
+.mission-group-header.open .chevron { transform: rotate(90deg); }
+.mission-group-count { margin-left: auto; color: var(--text3); font-size: 10px; }
+.mission-group-body { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 .add-char-btn {
   margin: 0 16px 16px;
   display: flex;
@@ -644,6 +661,12 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 
   <!-- CHARACTERS TAB -->
   <div id="tab-characters" class="tab-content main-scroll">
+    <div style="padding:12px 16px 0">
+      <div class="field" style="margin-bottom:10px">
+        <label>Current Mission</label>
+        <input type="text" id="current-mission-input" placeholder="e.g. Mission 1: Neon Bridge" onchange="onCurrentMissionChange(this.value)">
+      </div>
+    </div>
     <div class="char-list" id="char-list"></div>
     <button class="add-char-btn" onclick="openCharModal(null)">+ ADD CHARACTER / NPC</button>
   </div>
@@ -936,6 +959,12 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         <div class="field"><label>Name</label><input type="text" id="cm-name" placeholder="Character name"></div>
         <div class="field" style="max-width:110px"><label>Type</label>
           <select id="cm-type" onchange="onCmTypeChange()"><option value="pc">PC</option><option value="npc">NPC</option><option value="companion">Companion</option></select>
+        </div>
+      </div>
+      <div class="inline-row">
+        <div class="field"><label>Mission (blank = always visible)</label>
+          <input type="text" id="cm-mission" placeholder="e.g. Mission 2: Corpo Heist" list="mission-tags-datalist">
+          <datalist id="mission-tags-datalist"></datalist>
         </div>
       </div>
       <div class="inline-row" id="cm-allegiance-row" style="display:none">
@@ -1521,6 +1550,7 @@ function startSync() {
     state.characters = data.characters || {};
     state.combat = data.combat || { active: false, round: 1, currentTurn: 0, order: [] };
     state.campaignName = data.campaignName || 'Campaign';
+    state.currentMission = data.currentMission || '';
     state.encounterQueue = data.encounterQueue || [];
     state.map = data.map || { tokens: {} };
     renderAll();
@@ -1613,6 +1643,7 @@ async function doLogin() {
       state.characters = data.characters || {};
       state.combat = data.combat || { active: false, round: 1, currentTurn: 0, order: [] };
       state.campaignName = data.campaignName || 'Campaign';
+      state.currentMission = data.currentMission || '';
       state.encounterQueue = data.encounterQueue || [];
       startSync();
       showGM();
@@ -2336,30 +2367,84 @@ function combatToggleButtonHtml(id) {
   return `<button class="btn btn-ghost btn-small" style="white-space:nowrap" onclick="event.stopPropagation(); toggleCombatQueue('${id}')" title="Add to combat">${label}</button>`;
 }
 
+// Mission grouping (§ roster organization): characters tagged with a
+// .mission stay grouped and collapsed out of the way until that mission
+// is actually current, so prepping NPCs for a future session doesn't
+// clutter today's roster. Untagged characters (PCs, by convention) always
+// show ungrouped at the top. Nothing here restricts what can be added to
+// combat — it's purely a display grouping, not a hard partition.
+let expandedMissionGroups = new Set();
+
+function charItemRow(id, c) {
+  const color = c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)'));
+  const portrait = portraits[id];
+  const avatar = portrait
+    ? `<div style="width:32px;height:32px;border-radius:50%;background-image:url('${portrait}');background-size:cover;background-position:center;border:2px solid ${color};flex-shrink:0"></div>`
+    : `<div style="width:8px;height:8px;border-radius:50%;background:${color}"></div>`;
+  return `
+  <div class="char-item" onclick="openCharModal('${id}')">
+    ${avatar}
+    <div style="flex:1">
+      <div class="char-item-name">${esc(c.name)}</div>
+      <div class="char-item-sub">${c.isCompanion ? 'COM' : (c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC'))}${c.pin ? ' · PIN set' : ''} · INI ${c.initiative ?? 0}</div>
+    </div>
+    <div class="char-item-hp">${c.hp_current ?? c.hp_max}/${c.hp_max}</div>
+    ${combatToggleButtonHtml(id)}
+    <button class="btn btn-gold btn-small" style="white-space:nowrap" onclick="event.stopPropagation(); openLootModal('${id}')" title="Give away inventory or loot">🎒 ITEMS</button>
+    <div style="font-size:16px;color:var(--text3)">›</div>
+  </div>`;
+}
+
+function toggleMissionGroup(tag) {
+  if (expandedMissionGroups.has(tag)) expandedMissionGroups.delete(tag);
+  else expandedMissionGroups.add(tag);
+  renderCharList();
+}
+
+async function onCurrentMissionChange(value) {
+  const tag = value.trim();
+  if (tag) expandedMissionGroups.add(tag); // switching "current" always opens that group
+  await dbWrite('currentMission', tag || null);
+}
+
 function renderCharList() {
+  const missionInput = document.getElementById('current-mission-input');
+  if (document.activeElement !== missionInput) missionInput.value = state.currentMission || '';
   const el = document.getElementById('char-list');
   const chars = Object.entries(state.characters);
   if (!chars.length) { el.innerHTML = '<div style="padding:16px;color:var(--text3);font-size:11px">No characters yet.</div>'; return; }
   chars.forEach(([id]) => ensurePortraitListener(id));
-  el.innerHTML = chars.map(([id, c]) => {
-    const color = c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)'));
-    const portrait = portraits[id];
-    const avatar = portrait
-      ? `<div style="width:32px;height:32px;border-radius:50%;background-image:url('${portrait}');background-size:cover;background-position:center;border:2px solid ${color};flex-shrink:0"></div>`
-      : `<div style="width:8px;height:8px;border-radius:50%;background:${color}"></div>`;
+
+  const untagged = chars.filter(([, c]) => !c.mission);
+  const tagged = chars.filter(([, c]) => c.mission);
+  const groups = {};
+  tagged.forEach(([id, c]) => { (groups[c.mission] = groups[c.mission] || []).push([id, c]); });
+  const sortedTags = Object.keys(groups).sort((a, b) => {
+    if (a === state.currentMission) return -1;
+    if (b === state.currentMission) return 1;
+    return a.localeCompare(b);
+  });
+
+  let html = untagged.map(([id, c]) => charItemRow(id, c)).join('');
+  html += sortedTags.map(tag => {
+    const isOpen = expandedMissionGroups.has(tag);
+    const entries = groups[tag];
     return `
-    <div class="char-item" onclick="openCharModal('${id}')">
-      ${avatar}
-      <div style="flex:1">
-        <div class="char-item-name">${esc(c.name)}</div>
-        <div class="char-item-sub">${c.isCompanion ? 'COM' : (c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC'))}${c.pin ? ' · PIN set' : ''} · INI ${c.initiative ?? 0}</div>
-      </div>
-      <div class="char-item-hp">${c.hp_current ?? c.hp_max}/${c.hp_max}</div>
-      ${combatToggleButtonHtml(id)}
-      <button class="btn btn-gold btn-small" style="white-space:nowrap" onclick="event.stopPropagation(); openLootModal('${id}')" title="Give away inventory or loot">🎒 ITEMS</button>
-      <div style="font-size:16px;color:var(--text3)">›</div>
-    </div>`;
+    <div class="mission-group-header ${isOpen ? 'open' : ''}" data-mission="${esc(tag)}" onclick="toggleMissionGroup(this.dataset.mission)">
+      <span class="chevron">▶</span>
+      <span>${esc(tag)}</span>
+      <span class="mission-group-count">${entries.length}</span>
+    </div>
+    ${isOpen ? `<div class="mission-group-body">${entries.map(([id, c]) => charItemRow(id, c)).join('')}</div>` : ''}`;
   }).join('');
+
+  el.innerHTML = html;
+
+  const datalist = document.getElementById('mission-tags-datalist');
+  if (datalist) {
+    const allTags = [...new Set(chars.map(([, c]) => c.mission).filter(Boolean))];
+    datalist.innerHTML = allTags.map(t => `<option value="${esc(t)}">`).join('');
+  }
 }
 
 function renderSettings() {
@@ -3404,6 +3489,10 @@ function openCharModal(id) {
   document.getElementById('build-modal-name').textContent = c.name || '';
   document.getElementById('netrunning-modal-name').textContent = c.name || '';
   document.getElementById('cm-name').value = c.name || '';
+  // New characters default to whatever mission is currently active, so
+  // freshly-generated NPCs land in the right group without an extra step;
+  // existing characters just show whatever they were already tagged with.
+  document.getElementById('cm-mission').value = isNew ? (state.currentMission || '') : (c.mission || '');
   document.getElementById('cm-type').value = c.isCompanion ? 'companion' : (c.isNPC ? 'npc' : 'pc');
   document.getElementById('cm-allegiance').value = c.isAlly ? 'ally' : 'enemy';
   onCmTypeChange();
@@ -3773,6 +3862,7 @@ async function saveCharacter() {
   const headSP = parseInt(document.getElementById('cm-armor-head-sp').value) || 0;
   const char = {
     name, isNPC, isAlly, isCompanion,
+    mission: document.getElementById('cm-mission').value.trim() || null,
     owner_char_id: isCompanion ? (document.getElementById('cm-owner').value || null) : null,
     useOwnerStatsForPW: isCompanion ? document.getElementById('cm-use-owner-stats').checked : true,
     cyberdeck: document.getElementById('cm-cyberdeck').value || null,
