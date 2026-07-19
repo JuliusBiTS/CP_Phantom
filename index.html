@@ -297,6 +297,24 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
    triangle above. A hexagon's inscribed area is much closer to a circle's
    than a triangle's, so it doesn't need the same size bump. */
 .map-token.shape-hexagon { clip-path: polygon(50% 5%, 90% 30%, 90% 70%, 50% 95%, 10% 70%, 10% 30%); }
+/* Security objects (§25) — deliberately NOT one of the character shapes
+   above, so a camera/lock/trap marker never reads as a character. Small,
+   square, icon-only; drag to reposition, click (no drag) to edit. */
+.security-token {
+  position: absolute;
+  width: 22px; height: 22px;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.75);
+  border: 2px solid;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  z-index: 2;
+}
+.security-token:active { cursor: grabbing; }
 /* ── COMBATANT CARD ── */
 .combatant-card {
   background: var(--surface);
@@ -649,6 +667,10 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 
   <!-- COMBAT TAB -->
   <div id="tab-combat" class="tab-content active main-scroll">
+    <!-- Alarm Level (§25.1) — visible regardless of combat state, since
+         stealth/security tension exists before a fight starts. GM-only
+         control; not shown to players via the player screen. -->
+    <div id="alarm-level-widget" style="padding:10px 16px;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:10px;flex-wrap:wrap"></div>
     <div id="combat-idle" style="padding:20px 16px">
       <div style="color:var(--text3);font-size:11px;letter-spacing:0.15em;margin-bottom:16px">QUEUED FOR NEXT COMBAT</div>
       <div id="pre-combat-chars" style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px"></div>
@@ -745,12 +767,13 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         <button id="gen-faction-ally" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenFaction('ally')">🤝 ALLY</button>
       </div>
       <!-- Mode toggle -->
-      <div style="display:flex;gap:0;margin-bottom:12px;border:1px solid var(--border2)">
-        <button id="gen-mode-single" style="flex:1;background:var(--surface2);color:var(--cyan);border:none;padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('single')">SINGLE ENEMY</button>
-        <button id="gen-mode-encounter" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('encounter')">FULL ENCOUNTER</button>
-        <button id="gen-mode-loot" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('loot')">🎲 LOOT ROLLER</button>
-        <button id="gen-mode-vehicle" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('vehicle')">🚗 VEHICLE</button>
-        <button id="gen-mode-drone" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('drone')">⬡ DRONE</button>
+      <div style="display:flex;flex-wrap:wrap;gap:0;margin-bottom:12px;border:1px solid var(--border2)">
+        <button id="gen-mode-single" style="flex:1;min-width:90px;background:var(--surface2);color:var(--cyan);border:none;padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('single')">SINGLE ENEMY</button>
+        <button id="gen-mode-encounter" style="flex:1;min-width:90px;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('encounter')">FULL ENCOUNTER</button>
+        <button id="gen-mode-loot" style="flex:1;min-width:90px;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('loot')">🎲 LOOT ROLLER</button>
+        <button id="gen-mode-vehicle" style="flex:1;min-width:90px;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('vehicle')">🚗 VEHICLE</button>
+        <button id="gen-mode-drone" style="flex:1;min-width:90px;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('drone')">⬡ DRONE</button>
+        <button id="gen-mode-security" style="flex:1;min-width:90px;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('security')">🛡 SECURITY</button>
       </div>
       <!-- Controls -->
       <div id="gen-single-controls">
@@ -815,6 +838,11 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
           </select>
         </div>
         <div style="font-size:10px;color:var(--text3);line-height:1.5">Defaults to the exact rulebook stat block for whichever named drone fits your description best.</div>
+      </div>
+
+      <!-- Security controls -->
+      <div id="gen-security-controls" style="display:none;margin-bottom:10px">
+        <div style="font-size:10px;color:var(--text3);line-height:1.5">Describe a location — picks a realistic mix of cameras/sensors/locks/traps (placed on the map, hidden from players until you reveal them) and turrets/automated units (added to Characters) sized to the location's actual security tier. All devices/units are named rulebook entries, not invented numbers.</div>
       </div>
 
       <div id="gen-ai-section">
@@ -1385,6 +1413,35 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   </div>
 </div>
 
+<!-- Add Security Device Modal -->
+<div class="modal-overlay" id="security-add-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">ADD SECURITY DEVICE</span>
+      <button class="modal-close" onclick="closeModal('security-add-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="security-add-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-small" onclick="closeModal('security-add-modal')">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Security Device Modal -->
+<div class="modal-overlay" id="security-edit-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="security-edit-modal-title">DEVICE</span>
+      <button class="modal-close" onclick="closeModal('security-edit-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="security-edit-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-small" onclick="removeSecurityObject(securityEditId)">DELETE</button>
+      <button class="btn btn-primary btn-small" onclick="closeModal('security-edit-modal')">DONE</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
@@ -1396,7 +1453,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 // ═══════════════════════════════════════════════════════════════
 let db = null;
 let session = { role: null, charId: null, gmPin: null };
-let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} } };
+let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} }, securityObjects: {}, alarmLevel: 0 };
 let combatViewMode = 'list';
 let mapImage = null;       // fetched from a Firebase path OUTSIDE 'campaign' — kept separate from `state`
 let portraits = {};        // { charId: dataUrl }, each fetched from its own sibling path, outside 'campaign'
@@ -1624,6 +1681,8 @@ function startSync() {
     state.currentMission = data.currentMission || '';
     state.encounterQueue = data.encounterQueue || [];
     state.map = data.map || { tokens: {} };
+    state.securityObjects = data.securityObjects || {};
+    state.alarmLevel = data.alarmLevel ?? 0;
     renderAll();
   });
   // Map image and portraits live OUTSIDE the 'campaign' tree on purpose — see
@@ -1813,9 +1872,35 @@ function renderAll() {
     document.getElementById('combat-active').style.display = combatActive ? 'block' : 'none';
     if (combatActive) renderCombat(); else renderPreCombat();
     renderCharList();
+    renderAlarmWidget();
   } else if (session.role === 'player') {
     renderPlayerView();
   }
+}
+
+// Alarm Level (§25.1) — a manual GM tracker, not automated. The book ties
+// specific triggers (failed hacks, spotted bodies, destroyed sensors) to
+// escalation, but those are judgment calls the GM makes in the moment,
+// not something this app can safely infer — so it's a button, not a rule.
+const ALARM_COLORS = ['var(--green-bright)', '#ffdd00', 'var(--gold-bright)', 'var(--red-bright)'];
+function renderAlarmWidget() {
+  const el = document.getElementById('alarm-level-widget');
+  if (!el) return;
+  const lvl = state.alarmLevel || 0;
+  const info = ALARM_LEVELS[lvl];
+  const color = ALARM_COLORS[lvl];
+  el.innerHTML = `
+    <span style="font-size:10px;color:var(--text3);letter-spacing:0.15em;white-space:nowrap">ALARM LEVEL</span>
+    <div class="adj-group">
+      <button class="adj-btn red" style="width:26px" onclick="setAlarmLevel(${Math.max(0, lvl - 1)})" ${lvl <= 0 ? 'disabled' : ''}>−</button>
+      <span style="font-size:11px;font-weight:700;color:${color};padding:0 8px;white-space:nowrap">${esc(info.name)}</span>
+      <button class="adj-btn green" style="width:26px" onclick="setAlarmLevel(${Math.min(3, lvl + 1)})" ${lvl >= 3 ? 'disabled' : ''}>+</button>
+    </div>
+    <span style="font-size:10px;color:var(--text2);flex:1;min-width:160px">${esc(info.desc)}</span>
+  `;
+}
+async function setAlarmLevel(lvl) {
+  await dbWrite('alarmLevel', Math.max(0, Math.min(3, lvl)));
 }
 
 function renderPreCombat() {
@@ -1960,12 +2045,14 @@ function renderMapView() {
   el.innerHTML = `
     <div id="map-container" style="position:relative;width:100%;overflow:hidden;border:1px solid var(--border2);background:#000">
       <img src="${mapImage}" style="display:block;width:100%;height:auto;user-select:none;pointer-events:none" draggable="false">
+      ${buildSecurityObjectsHtml(true)}
       ${buildMapTokensHtml(true)}
     </div>
-    <div style="display:flex;gap:8px;margin-top:8px">
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
       <input type="file" accept="image/*" id="map-upload-input" style="display:none" onchange="handleMapUpload(event)">
       <button class="btn btn-ghost btn-small" onclick="document.getElementById('map-upload-input').click()">CHANGE MAP</button>
       <button class="btn btn-danger btn-small" onclick="removeMap()">REMOVE MAP</button>
+      <button class="btn btn-primary btn-small" onclick="openAddSecurityObjectModal()">+ ADD DEVICE</button>
     </div>`;
 }
 
@@ -1979,6 +2066,7 @@ function renderPlayerMapView() {
   el.innerHTML = `
     <div style="position:relative;width:100%;overflow:hidden;border:1px solid var(--border2);background:#000">
       <img src="${mapImage}" style="display:block;width:100%;height:auto;user-select:none;pointer-events:none" draggable="false">
+      ${buildSecurityObjectsHtml(false)}
       ${buildMapTokensHtml(false)}
     </div>`;
 }
@@ -2009,6 +2097,207 @@ async function onTokenDragEnd() {
     await dbWrite('map/tokens/' + id, { x, y });
   }
   mapDragState = null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SECURITY OBJECTS (§25) — cameras/sensors/locks/traps placed on the map.
+// Unlike character tokens (fixed 40x40px circle, position-only), these
+// need a detection-shape overlay (cone/radius) that stays a true circle
+// regardless of the map image's aspect ratio. A plain percentage-based
+// SVG viewBox stretched with preserveAspectRatio="none" would turn
+// circles into ellipses on a non-square map — so each overlay is instead
+// a fixed-pixel-space SVG box (320x320) centered on the object's
+// position via the same left/top% + translate(-50%,-50%) trick as
+// character tokens, keeping the geometry accurate no matter the map's
+// dimensions.
+// ═══════════════════════════════════════════════════════════════
+// Compass-style angle (0 = up/north, clockwise-positive) to a point
+// offset from a center — used for both the cone wedge and its drag-handle.
+function polarOffset(angleDeg, radius) {
+  const rad = (angleDeg * Math.PI) / 180;
+  return { x: Math.sin(rad) * radius, y: -Math.cos(rad) * radius };
+}
+function buildConePath(cx, cy, rotation, coneAngle, radius) {
+  const half = coneAngle / 2;
+  const p1 = polarOffset(rotation - half, radius);
+  const p2 = polarOffset(rotation + half, radius);
+  const largeArc = coneAngle > 180 ? 1 : 0;
+  return `M ${cx},${cy} L ${cx+p1.x},${cy+p1.y} A ${radius},${radius} 0 ${largeArc} 1 ${cx+p2.x},${cy+p2.y} Z`;
+}
+const SECURITY_CATEGORY_COLOR = { sensor: 'var(--cyan)', lock: 'var(--gold-bright)', trap: 'var(--red-bright)' };
+const SECURITY_CATEGORY_ICON = { sensor: '📷', lock: '🔒', trap: '⚠' };
+function buildSecurityObjectsHtml(interactive) {
+  const objects = state.securityObjects || {};
+  return Object.entries(objects).map(([id, o]) => {
+    // Players only ever see revealed objects; the GM always sees
+    // everything, with unrevealed ones dimmed as a reminder.
+    if (!interactive && !o.revealed) return '';
+    const cat = o.category || 'sensor';
+    const color = SECURITY_CATEGORY_COLOR[cat] || 'var(--text2)';
+    const icon = SECURITY_CATEGORY_ICON[cat] || '●';
+    const dimStyle = (interactive && !o.revealed) ? 'opacity:0.45;filter:grayscale(60%);' : '';
+    const shape = o.detectionShape || 'point';
+    const visualRange = o.visualRange ?? 30;
+    const radiusPx = visualRange * 3;
+    let overlay = '';
+    if (shape === 'cone' && radiusPx > 0) {
+      const path = buildConePath(160, 160, o.rotation || 0, o.coneAngle ?? 70, radiusPx);
+      overlay = `<svg class="security-overlay" data-id="${id}" width="320" height="320" viewBox="0 0 320 320" style="position:absolute;left:${o.pos?.x??50}%;top:${o.pos?.y??50}%;transform:translate(-50%,-50%);pointer-events:none;${dimStyle}">
+        <path d="${path}" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="1.5" stroke-opacity="0.6"/>
+      </svg>`;
+    } else if (shape === 'radius' && radiusPx > 0) {
+      overlay = `<svg class="security-overlay" data-id="${id}" width="320" height="320" viewBox="0 0 320 320" style="position:absolute;left:${o.pos?.x??50}%;top:${o.pos?.y??50}%;transform:translate(-50%,-50%);pointer-events:none;${dimStyle}">
+        <circle cx="160" cy="160" r="${radiusPx}" fill="${color}" fill-opacity="0.12" stroke="${color}" stroke-width="1.5" stroke-opacity="0.6"/>
+      </svg>`;
+    }
+    const dragAttr = interactive ? ` onpointerdown="startSecurityDrag(event,'${id}')"` : '';
+    const marker = `<div class="security-token" data-id="${id}" title="${esc(o.name || o.deviceType || 'Device')}"
+      style="left:${o.pos?.x??50}%;top:${o.pos?.y??50}%;border-color:${color};color:${color};${dimStyle}"${dragAttr}>${icon}</div>`;
+    return overlay + marker;
+  }).join('');
+}
+let securityDragState = null;
+function startSecurityDrag(e, id) {
+  e.preventDefault();
+  const mapEl = document.getElementById('map-container');
+  if (!mapEl) return;
+  securityDragState = { id, mapEl, x: undefined, y: undefined, moved: false, startX: e.clientX, startY: e.clientY };
+  document.addEventListener('pointermove', onSecurityDragMove);
+  document.addEventListener('pointerup', onSecurityDragEnd);
+}
+function onSecurityDragMove(e) {
+  if (!securityDragState) return;
+  if (Math.abs(e.clientX - securityDragState.startX) > 4 || Math.abs(e.clientY - securityDragState.startY) > 4) securityDragState.moved = true;
+  const rect = securityDragState.mapEl.getBoundingClientRect();
+  const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+  const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+  securityDragState.x = x; securityDragState.y = y;
+  const { id, mapEl } = securityDragState;
+  const marker = mapEl.querySelector(`.security-token[data-id="${id}"]`);
+  if (marker) { marker.style.left = x + '%'; marker.style.top = y + '%'; }
+  const overlay = mapEl.querySelector(`.security-overlay[data-id="${id}"]`);
+  if (overlay) { overlay.style.left = x + '%'; overlay.style.top = y + '%'; }
+}
+async function onSecurityDragEnd() {
+  document.removeEventListener('pointermove', onSecurityDragMove);
+  document.removeEventListener('pointerup', onSecurityDragEnd);
+  const st = securityDragState;
+  securityDragState = null;
+  if (!st) return;
+  if (st.moved && st.x !== undefined) {
+    await dbWrite('securityObjects/' + st.id + '/pos', { x: st.x, y: st.y });
+  } else {
+    // A click, not a drag — open the edit panel instead of repositioning.
+    openSecurityObjectModal(st.id);
+  }
+}
+
+function openAddSecurityObjectModal() {
+  const groups = [['sensor', 'Cameras & Sensors'], ['lock', 'Locks & Access'], ['trap', 'Traps & Passive Defense']];
+  document.getElementById('security-add-modal-body').innerHTML = groups.map(([cat, label]) => {
+    const items = Object.entries(SECURITY_DEVICE_CATALOG).filter(([, d]) => d.category === cat);
+    return `<div style="margin-bottom:12px">
+      <div class="section-heading">${esc(label)}</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        ${items.map(([name, d]) => `<button class="btn btn-ghost btn-small" style="text-align:left;justify-content:flex-start" onclick="addSecurityObject('${name}')">${esc(name)}${d.range ? ` <span style="color:var(--text3);font-size:10px">· ${esc(d.range)}</span>` : ''}</button>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+  openModal('security-add-modal');
+}
+function createSecurityObjectRecord(deviceType) {
+  const cat = SECURITY_DEVICE_CATALOG[deviceType];
+  if (!cat) return null;
+  return {
+    name: deviceType, deviceType, category: cat.category,
+    detectionShape: cat.detectionShape || 'point',
+    pos: { x: 50, y: 50 }, revealed: false,
+    rotation: 0, coneAngle: cat.coneAngleDefault ?? 70, visualRange: 30,
+    firewall: cat.firewall ?? null, sp: cat.sp ?? null,
+    sdp_max: cat.sdp ?? null, sdp_current: cat.sdp ?? null,
+    rangeLabel: cat.range || (cat.rangeMeters ? cat.rangeMeters + 'm' : ''),
+    note: cat.note || cat.effect || '', trigger: cat.trigger || '',
+    detection: cat.detection || '', breakDV: cat.breakDV || '',
+    perceptionDV: cat.perceptionDV ?? null,
+  };
+}
+async function addSecurityObject(deviceType) {
+  const obj = createSecurityObjectRecord(deviceType);
+  if (!obj) return;
+  const id = 'sec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  state.securityObjects[id] = obj;
+  await dbWrite('securityObjects/' + id, obj);
+  closeModal('security-add-modal');
+  renderMapView();
+  openSecurityObjectModal(id);
+}
+let securityEditId = null;
+function openSecurityObjectModal(id) {
+  const o = state.securityObjects?.[id]; if (!o) return;
+  securityEditId = id;
+  document.getElementById('security-edit-modal-title').textContent = (o.name || o.deviceType || 'DEVICE').toUpperCase();
+  const canSdp = o.sdp_max != null;
+  const shape = o.detectionShape;
+  document.getElementById('security-edit-modal-body').innerHTML = `
+    <div class="field">
+      <label>Name</label>
+      <input type="text" value="${esc(o.name||'')}" onchange="updateSecurityObjectField('${id}','name',this.value)">
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:10px;line-height:1.6">
+      ${esc(o.deviceType||'')} · ${esc((o.category||'').toUpperCase())}${o.firewall!=null?' · Firewall '+o.firewall:''}${o.sp!=null?' · SP '+o.sp:''}${o.rangeLabel?' · Range '+esc(o.rangeLabel):''}${o.perceptionDV!=null?' · Perception DV '+o.perceptionDV:''}${o.breakDV?' · Break: '+esc(o.breakDV):''}
+    </div>
+    ${o.note ? `<div style="font-size:11px;color:var(--text2);margin-bottom:10px;line-height:1.5">${esc(o.note)}</div>` : ''}
+    ${o.trigger ? `<div style="font-size:11px;color:var(--text2);margin-bottom:4px"><strong>Trigger:</strong> ${esc(o.trigger)}</div>` : ''}
+    ${o.detection ? `<div style="font-size:11px;color:var(--text2);margin-bottom:10px"><strong>Detection:</strong> ${esc(o.detection)}</div>` : ''}
+    ${canSdp ? `<div class="detail-row" style="margin-bottom:10px">
+      <span class="detail-label">SDP</span>
+      <div class="adj-group">
+        <button class="adj-btn red" onclick="quickAdjSecurityObject('${id}',-1)">−1</button>
+        <span style="font-size:12px;padding:0 6px;min-width:50px;text-align:center">${o.sdp_current}/${o.sdp_max}</span>
+        <button class="adj-btn green" onclick="quickAdjSecurityObject('${id}',1)">+1</button>
+      </div>
+    </div>` : ''}
+    ${shape === 'cone' ? `
+    <div class="field">
+      <label>Rotation (${o.rotation||0}°)</label>
+      <input type="range" min="0" max="359" value="${o.rotation||0}" oninput="this.previousElementSibling.textContent='Rotation ('+this.value+'°)'" onchange="updateSecurityObjectField('${id}','rotation',parseInt(this.value))">
+    </div>
+    <div class="field">
+      <label>Cone Angle (${o.coneAngle??70}°)</label>
+      <input type="range" min="10" max="180" value="${o.coneAngle??70}" oninput="this.previousElementSibling.textContent='Cone Angle ('+this.value+'°)'" onchange="updateSecurityObjectField('${id}','coneAngle',parseInt(this.value))">
+    </div>` : ''}
+    ${(shape === 'cone' || shape === 'radius') ? `
+    <div class="field">
+      <label>Visual Size (${o.visualRange??30})</label>
+      <input type="range" min="0" max="100" value="${o.visualRange??30}" oninput="this.previousElementSibling.textContent='Visual Size ('+this.value+')'" onchange="updateSecurityObjectField('${id}','visualRange',parseInt(this.value))">
+    </div>` : ''}
+    <div class="field" style="margin-top:10px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" ${o.revealed?'checked':''} onchange="updateSecurityObjectField('${id}','revealed',this.checked)">
+        Revealed to players
+      </label>
+    </div>
+  `;
+  openModal('security-edit-modal');
+}
+async function updateSecurityObjectField(id, field, value) {
+  if (!state.securityObjects[id]) return;
+  state.securityObjects[id][field] = value;
+  await dbWrite('securityObjects/' + id + '/' + field, value);
+  renderMapView();
+}
+async function quickAdjSecurityObject(id, delta) {
+  const o = state.securityObjects[id]; if (!o || o.sdp_max == null) return;
+  const val = Math.max(0, Math.min(o.sdp_max, (o.sdp_current ?? o.sdp_max) + delta));
+  await dbWrite('securityObjects/' + id + '/sdp_current', val);
+  openSecurityObjectModal(id);
+}
+async function removeSecurityObject(id) {
+  if (!confirm('Remove this device?')) return;
+  delete state.securityObjects[id];
+  await dbWrite('securityObjects/' + id, null);
+  closeModal('security-edit-modal');
+  renderMapView();
 }
 
 async function handleMapUpload(event) {
@@ -2495,6 +2784,10 @@ function renderCombatantCard(id, isActive) {
       ${(c.isDrone && c.drone_abilities?.length) ? `<div class="detail-row" style="align-items:flex-start">
         <span class="detail-label" style="margin-top:4px">ABILITIES</span>
         <div style="flex:1">${c.drone_abilities.map(a => `<div style="font-size:10px;color:var(--text2);margin-bottom:4px;line-height:1.5">▸ ${esc(a)}</div>`).join('')}</div>
+      </div>` : ''}
+      ${(c.isSecurityUnit && c.security_abilities?.length) ? `<div class="detail-row" style="align-items:flex-start">
+        <span class="detail-label" style="margin-top:4px">ABILITIES</span>
+        <div style="flex:1">${c.security_abilities.map(a => `<div style="font-size:10px;color:var(--text2);margin-bottom:4px;line-height:1.5">▸ ${esc(a)}</div>`).join('')}</div>
       </div>` : ''}
       ${renderHacksSection(c, id)}
       ${renderConsumablesSection(c, id)}
@@ -4177,6 +4470,7 @@ function closeModal(id) {
   document.getElementById(id).classList.remove('open');
   if (id === 'loot-modal') lootModalCharId = null;
   if (id === 'portrait-crop-modal') cropState = null;
+  if (id === 'security-edit-modal') securityEditId = null;
 }
 function esc(str) { return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function showToast(msg, dur=2200) {
@@ -4266,7 +4560,21 @@ Autonomous (have their OWN initiative, no operator needed): Autonome Begleiter-D
 Note: the GREMLIN Support Drone is NOT in this catalog — it's a talent-bound Companion, generate it as an ally NPC concept instead if asked for GREMLIN specifically.
 
 DRONE JSON (respond ONLY with this when asked for a drone, no backticks):
-{"name":"string (flavor name/callsign, can differ from the template name)","droneTemplate":"string, EXACT name from DRONE CATALOG above","flavor":"2-3 sentences noir","imagePrompt":"string, see IMAGE PROMPT rule above but for a drone, not a person","tactics":"string","gmNote":null}`;
+{"name":"string (flavor name/callsign, can differ from the template name)","droneTemplate":"string, EXACT name from DRONE CATALOG above","flavor":"2-3 sentences noir","imagePrompt":"string, see IMAGE PROMPT rule above but for a drone, not a person","tactics":"string","gmNote":null}
+
+SECURITY GENERATION: Used when the user describes a location and wants its security setup. Pick a REALISTIC MIX of devices/units for the location's actual security tier — a back-alley chop shop might just have one camera, while a corporate server room could have several sensors, a lock, and a turret. DO NOT INVENT STATS — every item is a named entry from the catalogs below, numbers are resolved from those, not from you. Don't over-stuff a low-security location just to fill the list.
+
+SECURITY DEVICE CATALOG (exact names — each entry in "devices" must match one of these exactly):
+Cameras/Sensors: Standard-Kamera (basic cone-view camera), Vollspektrum-Kamera (thermal/IR camera, sees through dark/camo), Bewegungsmelder (motion sensor, radius), Laser-Gitter (tripwire beam across a doorway/hall), Druck-Sensor (Boden) (floor pressure plate), Biometrie-Scanner (iris/DNA door scanner), Audio-Sensor (detects gunshots/shouting/glass breaking, radius), Metalldetektor (detects metal weapons at a gate/passage)
+Locks: Elektronisches Schloss (standard electronic door lock), Maglock (verstärkt) (reinforced magnetic lock), Blast-Tür (heavy blast door, military/vault-grade), Keycard-Leser (keycard reader), Biometrie-Schloss (biometric door lock), Netrunner-versiegelt (sealed by an on-site netrunner, only opens via Duel)
+Traps: Elektro-Bodenplatte (electrified floor plate), Gas-Falle (gas trap, radius), Neuralstörer (neural feedback trap on failed hacks), Sprengladung (Claymore) (lethal tripwire explosive, radius), Kill-Box (Gang) (seals room + activates all turrets in it)
+
+SECURITY UNIT CATALOG (exact names — each entry in "units" must match one of these exactly; these become NPC characters, not map devices):
+Turrets (fire automatically once Alarm Level 2+): Wandturret (Standard) (common ceiling MG turret), Schweres Turret (Twin-Link) (armored double-barrel turret guarding vaults/server rooms), Raketen-Turret (Anti-Vehicle) (rare, devastating, hits vehicles and people), Getarntes Pop-Up-Turret (hidden ambush turret)
+Automated units (mobile, patrol/pursue): Wach-Drohne "Sentry" (patrolling spotter drone, rarely fights directly), Kampf-Roboter "Enforcer" (armored bipedal security robot), Jagd-Drohne "Bloodhound" (fast pursuit drone, deployed after alarm)
+
+SECURITY JSON (respond ONLY with this when asked for a location's security, no backticks):
+{"locationName":"string","devices":["string, 0+ EXACT names from SECURITY DEVICE CATALOG"],"units":["string, 0+ EXACT names from SECURITY UNIT CATALOG"],"flavor":"1-2 sentences noir describing the setup","gmNote":null}`;
 
 // ═══════════════════════════════════════════════════════════════
 // DETERMINISTIC NPC STAT ENGINE
@@ -4798,7 +5106,13 @@ function computeLiveWeaponStats(c, w) {
   // uses. Everything else (bonus, mag, tags) still comes from the catalog.
   const pwPair = w.pwOverride || catalogMatch?.pw;
   const pwPairLabel = w.pwOverride ? (w.pwOverrideLabel || pwLabel) : catalogMatch?.label;
-  if (pwPair && c.stats) {
+  // Turrets/automated units (§25.4/25.6) have a flat, book-stated attack
+  // PW ("fest") — not derived from any stat block at all, unlike every
+  // other weapon in the app.
+  if (w.pwFixed != null) {
+    pw = w.pwFixed;
+    pwLabel = pwLabel || 'Fixed';
+  } else if (pwPair && c.stats) {
     pw = c.stats[pwPair[0]] + c.stats[pwPair[1]];
     pwLabel = pwPairLabel;
   }
@@ -5153,6 +5467,136 @@ const DRONE_TEMPLATES = {
     ],
   },
 };
+
+// ═══════════════════════════════════════════════════════════════
+// SECURITY SYSTEMS (§25) — split three ways, matching how differently
+// each piece actually behaves:
+//   Cameras/Sensors/Locks/Traps are NOT combatants — no PW, no turn.
+//   They're lightweight placed map objects (state.securityObjects, not
+//   state.characters) with a Firewall (hackable) and SP/SDP (destroyable)
+//   where the book gives one. `detectionShape` drives the map overlay:
+//   'cone' for cameras, 'radius' for area sensors/AoE traps, 'point' for
+//   devices tied to a doorway/plate/gate with no meaningful area to draw.
+//   The book gives range but not a cone ANGLE for cameras, so
+//   coneAngleDefault is this app's own reasonable default (70°) —
+//   fully GM-adjustable per placed instance, not a rulebook number.
+//   Turrets/Automated Units DO fight (PW/WB/Firewall/HP) — they're
+//   ordinary combatant NPCs generated from SECURITY_UNIT_TEMPLATES the
+//   same way vehicles/drones are, not part of the lightweight system.
+//   ICE/Daemons have no physical/map presence at all (§10.7 Duel only)
+//   — reference data only, shown alongside a building netrunner's
+//   Firewall rather than placed anywhere.
+// ═══════════════════════════════════════════════════════════════
+const SECURITY_DEVICE_CATALOG = {
+  // Cameras & Sensors (§25.2)
+  'Standard-Kamera':        { category:'sensor', firewall:10, sp:4,    sdp:8,    perceptionDV:12, range:'30m Kegel', detectionShape:'cone',   rangeMeters:30, coneAngleDefault:70, note:'Dead zone directly behind it. Pans slowly.' },
+  'Vollspektrum-Kamera':     { category:'sensor', firewall:15, sp:4,    sdp:8,    perceptionDV:15, range:'40m Kegel', detectionShape:'cone',   rangeMeters:40, coneAngleDefault:70, note:'Thermal + IR + night vision. Ignores darkness/camouflage.' },
+  'Bewegungsmelder':         { category:'sensor', firewall:12, sp:2,    sdp:4,    perceptionDV:14, range:'15m Radius', detectionShape:'radius', rangeMeters:15, note:'Motion only. Slow crawling (half Speed) bypasses it.' },
+  'Laser-Gitter':            { category:'sensor', firewall:14, sp:3,    sdp:6,    perceptionDV:16, range:'Door/hallway', detectionShape:'point', note:'Automatic alarm on breaking the beam. Visible with an optics scan.' },
+  'Druck-Sensor (Boden)':    { category:'sensor', firewall:10, sp:null, sdp:null, perceptionDV:13, range:'Floor plate', detectionShape:'point', note:'Triggers on weight. Jumping over it: Agility DV 14.' },
+  'Biometrie-Scanner':       { category:'sensor', firewall:18, sp:5,    sdp:10,   perceptionDV:18, range:'Door access', detectionShape:'point', note:'Checks iris/DNA. Only passable with a forged identity (DV 20) or a hack.' },
+  'Audio-Sensor':            { category:'sensor', firewall:12, sp:2,    sdp:4,    perceptionDV:15, range:'20m Radius', detectionShape:'radius', rangeMeters:20, note:'Picks up gunshots, shouting, breaking glass. A suppressor bypasses it.' },
+  'Metalldetektor':          { category:'sensor', firewall:13, sp:3,    sdp:6,    perceptionDV:16, range:'Gate/passage', detectionShape:'point', note:'Detects metal weapons. Polymer/printed weapons (§6.8) bypass it.' },
+  // Locks & Access Control (§25.3)
+  'Elektronisches Schloss':  { category:'lock', firewall:10, sp:5,    sdp:10,   breakDV:'Tech DV 14', detectionShape:'point', note:'Standard door. Hack or lockpick.' },
+  'Maglock (verstärkt)':     { category:'lock', firewall:15, sp:8,    sdp:16,   breakDV:'Tech DV 18', detectionShape:'point', note:'Holds against ramming up to +15. Cutting power bypasses it.' },
+  'Blast-Tür':               { category:'lock', firewall:20, sp:15,   sdp:40,   breakDV:'Not pickable', detectionShape:'point', note:'Only a hack (Firewall 20) or demolition (30+ damage).' },
+  'Keycard-Leser':           { category:'lock', firewall:12, sp:3,    sdp:6,    breakDV:'—', detectionShape:'point', note:'Needs a card (steal/clone: Tech DV 15) or a hack.' },
+  'Biometrie-Schloss':       { category:'lock', firewall:18, sp:5,    sdp:10,   breakDV:'—', detectionShape:'point', note:'Only a hack, forged biometrics (DV 20), or severed body parts (grimdark).' },
+  'Netrunner-versiegelt':    { category:'lock', firewall:25, sp:null, sdp:null, breakDV:'Not physical', detectionShape:'point', note:"Only opens by beating the building's netrunner in a Duel (§10.7)." },
+  // Traps & Passive Defense (§25.7) — not hackable/destroyable in the
+  // usual sense, so no firewall/sp/sdp; trigger+effect+detection instead.
+  'Elektro-Bodenplatte':     { category:'trap', detectionShape:'point', trigger:'Stepping on it', effect:'+12 electrical damage, target Staggered (loses secondary action).', detection:'Senses DV 15 (scan) or optics. Jump over with Agility DV 14.' },
+  'Gas-Falle':               { category:'trap', detectionShape:'radius', rangeMeters:3, trigger:'Motion sensor', effect:'3m cloud: Grit DV 15 or 2 rounds -4 PW (irritant gas) / unconsciousness (knockout gas).', detection:'Gas mask grants immunity. Audio/optics scan detects the nozzles.' },
+  'Neuralstörer':            { category:'trap', detectionShape:'point', trigger:'Failed hack attempt', effect:'The runner takes 1x roll neural damage (feedback).', detection:'Faraday Helm blocks it. System Expertise IV prevents Crit-Fail triggering.' },
+  'Sprengladung (Claymore)': { category:'trap', detectionShape:'radius', rangeMeters:4, trigger:'Tripwire / remote detonation', effect:'+18 WB, AoE 4m. Lethal.', detection:'Senses DV 17 (wire) or scan drone. Defuse: Tech DV 16.' },
+  'Kill-Box (Gang)':         { category:'trap', detectionShape:'point', trigger:'Entering the area', effect:'Seals entrances/exits, activates all turrets in the room simultaneously.', detection:'Spot the pattern: Int DV 16. Prop doors open (wedge/hack) before entering.' },
+};
+// Turrets (§25.4) & Automated Security Units (§25.6) — real combatants,
+// generated as ordinary NPC characters (see genSecurityUnitToCharacter),
+// not part of the lightweight securityObjects system above. `pwFixed`
+// means the attack PW is a flat number from the book, not stat-derived —
+// same treatment as an NPC generator's "primaryPW" once resolved.
+const SECURITY_UNIT_TEMPLATES = {
+  'Wandturret (Standard)': {
+    category:'turret', hp:12, sp:6, pw:14, wb:11, range:'40m', fireRate:'1 attack/round', firewall:14,
+    abilities:[
+      'Sichtlinie: fires only with direct line of sight. Cover (its SP value) blocks it. Dead zone directly beneath it.',
+      'Deaktivieren (Hack): Int+Focus vs Firewall 14. Success: 3 rounds offline. Crit: permanently taken over.',
+      'Zerstören: SDP 12. Armor-piercing/heavy weapons recommended. Loud — triggers an audio alarm.',
+      'Ziel-Priorität: fires at the nearest visible target. Can be distracted by a drone/decoy.',
+    ],
+  },
+  'Schweres Turret (Twin-Link)': {
+    category:'turret', hp:24, sp:12, pw:16, wb:18, range:'60m', fireRate:'2 attacks/round', firewall:18,
+    abilities:[
+      'Doppelfeuer: two attacks per round, can target two different targets.',
+      'Panzerung: SDP 24, SP 12. Needs armor-piercing or heavy weapons for real damage.',
+      'Deaktivieren (Hack): Int+Focus vs Firewall 18. Military hardware: +2 additional.',
+      'Überhitzung: after 3 rounds of sustained fire, 1 round cooldown — a window to push in or hack.',
+    ],
+  },
+  'Raketen-Turret (Anti-Vehicle)': {
+    category:'turret', hp:30, sp:15, pw:18, wb:30, range:'100m', fireRate:'1 missile / 2 rounds', firewall:20,
+    abilities:[
+      'Raketen: +30 WB, AoE 5m. Target RW DV 18 or a direct hit. Reload: 1 round between shots.',
+      'Anti-Air: can hit airborne targets (drones, AVs) — one of the few fixed AA defenses.',
+      'Zerstören: SDP 30. High-value target — taking it out often opens the whole perimeter.',
+      'Träger Schwenk: turns slowly — targets moving laterally at Speed >20 impose -3 PW on it.',
+    ],
+  },
+  'Getarntes Pop-Up-Turret': {
+    category:'turret', hp:10, sp:5, pw:15, wb:11, range:'35m', fireRate:'1 attack/round', firewall:15,
+    abilities:[
+      'Getarnt: invisible until Alarm Level 2 or triggered. Detecting it beforehand: Senses/Tech DV 18 (scan).',
+      "Überraschung: first shot after triggering gets +4 PW (the target isn't expecting it).",
+      "Rückzug: can retract as an action (unattackable, but doesn't fire). Cautious AI.",
+    ],
+  },
+  'Wach-Drohne "Sentry"': {
+    category:'unit', hp:15, sp:7, speed:16, pw:12, wb:11, wbWeapon:'SMG', firewall:12,
+    abilities:[
+      'Patrouille: flies a fixed route. On spotting (DV 14): Alarm Level +1, follows the target.',
+      'Spotlight: marks a target — all turrets/units get +2 PW against it.',
+      'Hackbar: Firewall 12. Taking it over makes it your own spotter/scout.',
+    ],
+  },
+  'Kampf-Roboter "Enforcer"': {
+    category:'unit', hp:60, sp:15, speed:12, pw:14, wb:14, firewall:16,
+    abilities:[
+      'Panzerung: SP 15. Small arms up to WB +11 only cause ablation. Armor-piercing needed for real damage.',
+      'Nicht-letal-Modus: below Alarm Level 3, uses electroshock (KO, not kill). At Red: goes lethal.',
+      'Unerbittlich: immune to fear/suppression. Pursues until destroyed or shut down.',
+      'Hackbar: Firewall 16. Taking it over gives you a powerful ally for 3 rounds.',
+    ],
+  },
+  'Jagd-Drohne "Bloodhound"': {
+    category:'unit', hp:25, sp:9, speed:24, pw:16, wb:14, firewall:14,
+    abilities:[
+      'Windvorteil: Speed 24 — faster than almost anything on foot. +3 for the pursuer in chases (§22.5).',
+      "Spuranker: permanently marks a target — it can't Stealth away until the drone is destroyed.",
+      'Rudel: often deployed in packs of 2-3, surrounding and holding targets for reinforcements to arrive.',
+    ],
+  },
+};
+// Netrunner Defense (§25.5) — Duel-only (§10.7), no physical map presence.
+// Reference data shown alongside a building netrunner's Firewall.
+const ICE_DAEMON_CATALOG = {
+  'Watchdog ICE':      { firewall:15, effect:'Passive. On intrusion: +1 Trace/round until defeated or disconnected.', counter:'Hack vs Firewall 15 to shut it down, or get in/out fast.' },
+  'Hellhound ICE':      { firewall:18, effect:"Active. Attacks the runner: 2x roll − runner's Firewall neural damage/round.", counter:'A Faraday Helm blocks it, or destroy the Hellhound first.' },
+  'Kraken ICE':         { firewall:22, effect:'Locks the runner into the system (no disconnect for 2 rounds), then neural damage.', counter:'Only a Duel victory. Very dangerous — no retreat.' },
+  'Wisp Daemon':        { firewall:12, effect:"Disrupts hacks: the runner's next hack is -4 PW.", counter:'Ignore it or quickly shut it down (Firewall 12).' },
+  'Sentinel Daemon':    { firewall:16, effect:'Alerts instantly on every hack: Alarm Level +1 per runner action in the system.', counter:'Shut it down first (Firewall 16), or everything escalates fast.' },
+  'Black ICE (lethal)': { firewall:25, effect:'Lethal — on a runner Crit Fail: 2x roll neural damage, ignores Firewall. Can cause brain death.', counter:'Elite runners only. A Blackwall Fragment softens it. Extremely rare.' },
+};
+// Alarm Levels (§25.1) — a single GM-controlled, manually-advanced state
+// (not automated) that gates when turrets/units/ICE actually activate.
+const ALARM_LEVELS = [
+  { level:0, name:'Green — Undetected', desc:'Normal operations. Cameras patrol, turrets on standby.' },
+  { level:1, name:'Yellow — Suspicion', desc:'A sensor/camera picked something up. Cameras focus in, patrol rerouted. 1 round until verification.' },
+  { level:2, name:'Orange — Alarm', desc:'Confirmed intruders. Turrets active, doors lock, security team alerted (arrives in 1d3 rounds).' },
+  { level:3, name:'Red — Lockdown', desc:'Full lockdown. All turrets fire, netrunner ICE active, reinforcements (corpo squad or AV) in 1d6 rounds. Trauma Team dispatched for corpo VIPs.' },
+];
 
 // ═══════════════════════════════════════════════════════════════
 // NETRUNNING — all 32 hacks from rulebook §10.4-10.8, verbatim. Only IP
@@ -5772,6 +6216,50 @@ function processGeneratedDrone(v) {
   return v;
 }
 
+// Security (§25) generation returns a MIX of two entirely different kinds
+// of thing in one response: passive devices (validated against
+// SECURITY_DEVICE_CATALOG, placed on the map — see
+// createSecurityObjectRecord) and combatant units/turrets (validated
+// against SECURITY_UNIT_TEMPLATES, added to Characters — see
+// genSecurityUnitToCharacter). Unrecognized names are dropped rather than
+// guessed at, same "don't invent stats" rule as everything else here.
+function processGeneratedSecurity(v) {
+  try {
+    v.devices = (Array.isArray(v.devices) ? v.devices : []).filter(name => SECURITY_DEVICE_CATALOG[name]);
+    v.units = (Array.isArray(v.units) ? v.units : []).filter(name => SECURITY_UNIT_TEMPLATES[name]);
+  } catch (err) {
+    console.error('processGeneratedSecurity failed, leaving raw LLM values in place:', err);
+  }
+  return v;
+}
+// Turrets/units are ordinary combatant NPCs — hostile by default (they're
+// a building's own defenses), with a flat book-stated PW (see pwFixed in
+// computeLiveWeaponStats) instead of a stat-derived one.
+function genSecurityUnitToCharacter(name) {
+  const tpl = SECURITY_UNIT_TEMPLATES[name];
+  if (!tpl) return null;
+  return {
+    name, isNPC: true, isAlly: false, isSecurityUnit: true,
+    stats: null,
+    hp_override: true,
+    hp_max: tpl.hp, hp_current: tpl.hp,
+    initiative: null,
+    armor_body: tpl.sp ? { name: 'Chassis', sp_base: tpl.sp, sp_temp: tpl.sp } : null,
+    armor_head: null,
+    weapons: [{
+      name: tpl.wbWeapon || name, bonus: tpl.wb, pw: 'Fixed', pwFixed: tpl.pw,
+      tags: [tpl.range, tpl.fireRate].filter(Boolean).join(', '),
+      attachments: [], tech: 'base', techLevel: null,
+    }],
+    security_abilities: tpl.abilities || [],
+    firewall: tpl.firewall ?? null,
+    cyberdeck: null, hacks: [],
+    loot: [], cyberware: [],
+    image_prompt: '',
+    status_effects: [], talents: [], inventory: [], eurodollar: 0
+  };
+}
+
 let genMode = 'single';
 let genFaction = 'enemy';
 let genTier = 'THREAT';
@@ -5801,13 +6289,16 @@ function setGenMode(mode) {
   document.getElementById('gen-mode-vehicle').style.color = mode === 'vehicle' ? 'var(--cyan)' : 'var(--text3)';
   document.getElementById('gen-mode-drone').style.background = mode === 'drone' ? 'var(--surface2)' : 'transparent';
   document.getElementById('gen-mode-drone').style.color = mode === 'drone' ? 'var(--cyan)' : 'var(--text3)';
+  document.getElementById('gen-mode-security').style.background = mode === 'security' ? 'var(--surface2)' : 'transparent';
+  document.getElementById('gen-mode-security').style.color = mode === 'security' ? 'var(--cyan)' : 'var(--text3)';
   document.getElementById('gen-single-controls').style.display = mode === 'single' ? 'block' : 'none';
   document.getElementById('gen-encounter-controls').style.display = mode === 'encounter' ? 'block' : 'none';
   document.getElementById('gen-loot-controls').style.display = mode === 'loot' ? 'block' : 'none';
   document.getElementById('gen-vehicle-controls').style.display = mode === 'vehicle' ? 'block' : 'none';
   document.getElementById('gen-drone-controls').style.display = mode === 'drone' ? 'block' : 'none';
+  document.getElementById('gen-security-controls').style.display = mode === 'security' ? 'block' : 'none';
   document.getElementById('gen-ai-section').style.display = mode === 'loot' ? 'none' : 'block';
-  document.getElementById('gen-faction-toggle').style.display = mode === 'loot' ? 'none' : 'flex';
+  document.getElementById('gen-faction-toggle').style.display = (mode === 'loot' || mode === 'security') ? 'none' : 'flex';
   if (mode === 'loot') populateLootTargetDropdown();
   if (mode === 'drone') populateDroneOperatorDropdown();
 }
@@ -5886,6 +6377,8 @@ async function runGenerator() {
     ? `Generate a Cyberpunk Phantom vehicle (${genFaction === 'ally' ? 'belongs to the party/an ally' : 'hostile/opposing'}).\nDescription: ${prompt}${vehicleCatScope}\nUse the VEHICLE JSON format. Return only the JSON object. No preamble, no backticks.`
     : genMode === 'drone'
     ? `Generate a Cyberpunk Phantom drone (${genFaction === 'ally' ? 'belongs to the party/an ally' : 'hostile/opposing'}).\nDescription: ${prompt}${droneCatScope}\nUse the DRONE JSON format. Return only the JSON object. No preamble, no backticks.`
+    : genMode === 'security'
+    ? `Generate the security setup for a Cyberpunk Phantom location.\nDescription: ${prompt}\nUse the SECURITY JSON format. Return only the JSON object. No preamble, no backticks.`
     : `Generate a Cyberpunk Phantom ${genFaction === 'ally' ? 'squad of allies' : 'encounter'} for ${genPS} PCs.\nContext: ${prompt}\nUse the ENCOUNTER JSON format. Return only the JSON object. No preamble, no backticks.`;
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -5918,6 +6411,9 @@ async function runGenerator() {
       parsed.operatorId = document.getElementById('gen-drone-operator').value || null;
       processGeneratedDrone(parsed);
       div.innerHTML = renderDroneResult(parsed);
+    } else if (genMode === 'security') {
+      processGeneratedSecurity(parsed);
+      div.innerHTML = renderSecurityResult(parsed);
     } else {
       // The LLM only picked tier/archetype/gear names — compute every
       // actual stat number deterministically from those choices.
@@ -6074,6 +6570,51 @@ function renderDroneResult(v) {
       ${v.gmNote ? `<div style="background:rgba(255,140,0,0.05);border:1px solid rgba(255,140,0,0.18);padding:7px 11px"><span style="color:#dd8800;font-size:10px">GM // </span><span style="color:#aa7700;font-size:11px">${esc(v.gmNote)}</span></div>` : ''}
     </div>
   </div>`;
+}
+
+function renderSecurityResult(v) {
+  const tc = SECURITY_CATEGORY_COLOR.lock; // gold — distinct from vehicle(gold-bright)/drone(blue) accents
+  const devices = (v.devices || []).map(name => {
+    const d = SECURITY_DEVICE_CATALOG[name] || {};
+    const color = SECURITY_CATEGORY_COLOR[d.category] || 'var(--text2)';
+    return `<div style="margin-bottom:6px"><span style="color:${color};font-weight:700">${esc(name)}</span> <span style="font-size:10px;color:var(--text3)">${esc(d.range || (d.rangeMeters?d.rangeMeters+'m':'') || '')}</span></div>`;
+  }).join('');
+  const units = (v.units || []).map(name => {
+    const u = SECURITY_UNIT_TEMPLATES[name] || {};
+    return `<div style="margin-bottom:6px"><span style="color:var(--red-bright);font-weight:700">${esc(name)}</span> <span style="font-size:10px;color:var(--text3)">HP ${u.hp} · PW +${u.pw} · WB +${u.wb}</span></div>`;
+  }).join('');
+  return `<div style="background:var(--surface);border:1px solid ${tc};overflow:hidden">
+    <div style="background:${tc}22;border-bottom:1px solid ${tc};padding:12px 14px;display:flex;justify-content:space-between;align-items:flex-start">
+      <div><div style="font-size:10px;letter-spacing:0.25em;color:${tc};margin-bottom:3px">SECURITY SETUP</div><div style="font-size:17px;font-weight:700">${esc(v.locationName||'')}</div></div>
+      <button onclick="addSecurityResultToMapAndRoster(${JSON.stringify(v).replace(/"/g,'&quot;')})" style="background:var(--cyan-dim);border:1px solid var(--cyan);color:var(--cyan);font-size:10px;padding:4px 10px;cursor:pointer;font-family:var(--font);letter-spacing:0.1em">+ ADD ALL</button>
+    </div>
+    <div style="padding:14px">
+      <p style="color:#666;font-size:11px;line-height:1.65;margin-bottom:12px;border-left:2px solid ${tc};padding-left:10px;font-style:italic">${esc(v.flavor||'')}</p>
+      ${devices ? `<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">DEVICES → placed on map, hidden until revealed</div>${devices}</div>` : ''}
+      ${units ? `<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">UNITS → added to Characters</div>${units}</div>` : ''}
+      ${!devices && !units ? `<div style="font-size:11px;color:var(--text3)">No devices or units picked for this location.</div>` : ''}
+      ${v.gmNote ? `<div style="background:rgba(255,140,0,0.05);border:1px solid rgba(255,140,0,0.18);padding:7px 11px"><span style="color:#dd8800;font-size:10px">GM // </span><span style="color:#aa7700;font-size:11px">${esc(v.gmNote)}</span></div>` : ''}
+    </div>
+  </div>`;
+}
+async function addSecurityResultToMapAndRoster(v) {
+  for (const deviceType of (v.devices || [])) {
+    const obj = createSecurityObjectRecord(deviceType);
+    if (!obj) continue;
+    const id = 'sec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+    state.securityObjects[id] = obj;
+    await dbWrite('securityObjects/' + id, obj);
+  }
+  for (const unitName of (v.units || [])) {
+    const char = genSecurityUnitToCharacter(unitName);
+    if (!char) continue;
+    const id = 'char_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+    state.characters[id] = char;
+    await dbWrite('characters/' + id, char);
+  }
+  renderMapView();
+  renderCharList();
+  showToast(`Added ${v.devices?.length||0} device(s) and ${v.units?.length||0} unit(s) — devices start hidden, reveal them from the map.`);
 }
 
 function renderEncounterResult(enc) {
