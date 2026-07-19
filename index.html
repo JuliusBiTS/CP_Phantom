@@ -4047,9 +4047,17 @@ function onCmTypeChange() {
 function populateOwnerDropdown() {
   const sel = document.getElementById('cm-owner');
   const current = sel.value;
-  const pcs = Object.entries(state.characters).filter(([id, c]) => !c.isNPC && !c.isCompanion);
-  sel.innerHTML = '<option value="">— none —</option>' + pcs.map(([id, c]) => `<option value="${id}">${esc(c.name)}</option>`).join('');
-  if (pcs.some(([id]) => id === current)) sel.value = current;
+  const type = document.getElementById('cm-type').value;
+  // Companions are personal to a specific PC (§11.7 GREMLIN-style
+  // binding) — PC-only. Drones are equipment anyone can operate,
+  // including a friendly NPC, matching the generator's own operator
+  // picker (populateDroneOperatorDropdown) — this row is shared between
+  // both types, so the filter has to switch based on which one is active.
+  const entries = type === 'drone'
+    ? Object.entries(state.characters).filter(([, c]) => !c.isVehicle && !c.isDrone)
+    : Object.entries(state.characters).filter(([, c]) => !c.isNPC && !c.isCompanion);
+  sel.innerHTML = '<option value="">— none —</option>' + entries.map(([id, c]) => `<option value="${id}">${esc(c.name)}</option>`).join('');
+  if (entries.some(([id]) => id === current)) sel.value = current;
 }
 
 function populateCompanionTemplateDropdown() {
