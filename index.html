@@ -1057,7 +1057,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <div class="inline-row">
         <div class="field"><label>Name</label><input type="text" id="cm-name" placeholder="Character name"></div>
         <div class="field" style="max-width:110px"><label>Type</label>
-          <select id="cm-type" onchange="onCmTypeChange()"><option value="pc">PC</option><option value="npc">NPC</option><option value="companion">Companion</option></select>
+          <select id="cm-type" onchange="onCmTypeChange()"><option value="pc">PC</option><option value="npc">NPC</option><option value="companion">Companion</option><option value="vehicle">Vehicle</option><option value="drone">Drone</option><option value="security-unit">Security Unit</option></select>
         </div>
       </div>
       <div class="inline-row">
@@ -1072,10 +1072,10 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         </div>
       </div>
       <div class="inline-row" id="cm-companion-row" style="display:none">
-        <div class="field"><label>Owner (PC)</label>
+        <div class="field"><label id="cm-owner-label">Owner (PC)</label>
           <select id="cm-owner"><option value="">— none —</option></select>
         </div>
-        <div class="field"><label>Template</label>
+        <div class="field" id="cm-companion-template-field"><label>Template</label>
           <select id="cm-companion-template" onchange="applyCompanionTemplate(this.value)">
             <option value="">— pick to prefill —</option>
           </select>
@@ -3947,7 +3947,7 @@ function openCharModal(id) {
   // freshly-generated NPCs land in the right group without an extra step;
   // existing characters just show whatever they were already tagged with.
   document.getElementById('cm-mission').value = isNew ? (state.currentMission || '') : (c.mission || '');
-  document.getElementById('cm-type').value = c.isCompanion ? 'companion' : (c.isNPC ? 'npc' : 'pc');
+  document.getElementById('cm-type').value = c.isVehicle ? 'vehicle' : (c.isDrone ? 'drone' : (c.isSecurityUnit ? 'security-unit' : (c.isCompanion ? 'companion' : (c.isNPC ? 'npc' : 'pc'))));
   document.getElementById('cm-allegiance').value = c.isAlly ? 'ally' : 'enemy';
   onCmTypeChange();
   document.getElementById('cm-owner').value = c.owner_char_id || '';
@@ -4023,9 +4023,20 @@ function closeNetrunningModal() {
 
 function onCmTypeChange() {
   const type = document.getElementById('cm-type').value;
-  document.getElementById('cm-allegiance-row').style.display = type === 'npc' ? 'flex' : 'none';
-  document.getElementById('cm-companion-row').style.display = type === 'companion' ? 'flex' : 'none';
-  if (type === 'companion') { populateOwnerDropdown(); populateCompanionTemplateDropdown(); }
+  // Vehicles/drones/security units are all NPC-side entities with a real
+  // ally/enemy distinction too (see genVehicleResultToCharacter etc.).
+  const showAllegiance = type === 'npc' || type === 'vehicle' || type === 'drone' || type === 'security-unit';
+  document.getElementById('cm-allegiance-row').style.display = showAllegiance ? 'flex' : 'none';
+  // Drones share the exact same "owner operates it, PW comes from their
+  // stats" concept as Companions (§7b.2) — reuse the same row so editing
+  // a drone here doesn't silently drop its operator link. The quick-fill
+  // Template dropdown is Companion-only (GREMLIN), so it's hidden for drones.
+  const showOwnerRow = type === 'companion' || type === 'drone';
+  document.getElementById('cm-companion-row').style.display = showOwnerRow ? 'flex' : 'none';
+  document.getElementById('cm-companion-template-field').style.display = type === 'companion' ? 'block' : 'none';
+  document.getElementById('cm-owner-label').textContent = type === 'drone' ? 'Operator' : 'Owner (PC)';
+  if (showOwnerRow) populateOwnerDropdown();
+  if (type === 'companion') populateCompanionTemplateDropdown();
   renderProgressionSection(editingCharId);
 }
 
@@ -4283,7 +4294,15 @@ async function saveCharacter() {
   const name = document.getElementById('cm-name').value.trim();
   if (!name) { showToast('Name required!'); return; }
   const typeVal = document.getElementById('cm-type').value;
-  const isNPC = typeVal === 'npc';
+  const isVehicle = typeVal === 'vehicle';
+  const isDrone = typeVal === 'drone';
+  const isSecurityUnit = typeVal === 'security-unit';
+  // Vehicles/drones/security units are all NPC-side entities (see
+  // genVehicleResultToCharacter/genDroneResultToCharacter/
+  // genSecurityUnitToCharacter, which all set isNPC:true) — folding them
+  // into isNPC here is what makes the existing isAlly/allegiance and
+  // "friendly-side reset" logic elsewhere in the app keep working for them.
+  const isNPC = typeVal === 'npc' || isVehicle || isDrone || isSecurityUnit;
   const isCompanion = typeVal === 'companion';
   const isAlly = isNPC && document.getElementById('cm-allegiance').value === 'ally';
   const existing = editingCharId ? (state.characters[editingCharId] || {}) : {};
@@ -4322,10 +4341,29 @@ async function saveCharacter() {
   const headName = document.getElementById('cm-armor-head-name').value.trim();
   const headSP = parseInt(document.getElementById('cm-armor-head-sp').value) || 0;
   const char = {
-    name, isNPC, isAlly, isCompanion,
+    name, isNPC, isAlly, isCompanion, isVehicle, isDrone, isSecurityUnit,
     mission: document.getElementById('cm-mission').value.trim() || null,
-    owner_char_id: isCompanion ? (document.getElementById('cm-owner').value || null) : null,
-    useOwnerStatsForPW: isCompanion ? document.getElementById('cm-use-owner-stats').checked : true,
+    owner_char_id: (isCompanion || isDrone) ? (document.getElementById('cm-owner').value || null) : null,
+    useOwnerStatsForPW: (isCompanion || isDrone) ? document.getElementById('cm-use-owner-stats').checked : true,
+    // Vehicles/drones/security units carry a bunch of generator-only
+    // metadata with no edit-modal UI (template name, abilities list,
+    // etc.) — preserve whatever's already there instead of silently
+    // dropping it on save, same pattern as tier/loot/treeXP below.
+    vehicle_template: existing.vehicle_template ?? null,
+    vehicle_category: existing.vehicle_category ?? null,
+    vehicle_speed: existing.vehicle_speed ?? null,
+    vehicle_seats: existing.vehicle_seats ?? null,
+    vehicle_price: existing.vehicle_price ?? null,
+    vehicle_abilities: existing.vehicle_abilities ?? [],
+    drone_template: existing.drone_template ?? null,
+    drone_mode: existing.drone_mode ?? null,
+    drone_initiative_note: existing.drone_initiative_note ?? null,
+    drone_loudness: existing.drone_loudness ?? null,
+    drone_range: existing.drone_range ?? null,
+    drone_chargeTime: existing.drone_chargeTime ?? null,
+    drone_price: existing.drone_price ?? null,
+    drone_abilities: existing.drone_abilities ?? [],
+    security_abilities: existing.security_abilities ?? [],
     cyberdeck: document.getElementById('cm-cyberdeck').value || null,
     firewall: parseInt(document.getElementById('cm-firewall').value) || 0,
     hacks: hackData.filter(h => h.name),
