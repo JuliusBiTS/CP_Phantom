@@ -729,6 +729,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         <button id="gen-mode-single" style="flex:1;background:var(--surface2);color:var(--cyan);border:none;padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('single')">SINGLE ENEMY</button>
         <button id="gen-mode-encounter" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('encounter')">FULL ENCOUNTER</button>
         <button id="gen-mode-loot" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('loot')">🎲 LOOT ROLLER</button>
+        <button id="gen-mode-vehicle" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('vehicle')">🚗 VEHICLE</button>
       </div>
       <!-- Controls -->
       <div id="gen-single-controls">
@@ -766,6 +767,16 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         </div>
         <button class="btn btn-primary btn-small" style="width:100%;margin-bottom:12px" onclick="rollLoot()">🎲 ROLL LOOT</button>
         <div id="loot-roll-result"></div>
+      </div>
+
+      <!-- Vehicle controls -->
+      <div id="gen-vehicle-controls" style="display:none;margin-bottom:10px">
+        <div style="display:flex;gap:6px;margin-bottom:6px">
+          <button class="gen-vcat-btn" id="gvcat-any" onclick="setGenVehicleCategory('any')" style="flex:1;padding:6px;font-size:10px;letter-spacing:0.1em;background:var(--cyan-dim);border:1px solid var(--cyan);color:var(--cyan);cursor:pointer;font-family:var(--font)">ANY</button>
+          <button class="gen-vcat-btn" id="gvcat-civilian" onclick="setGenVehicleCategory('civilian')" style="flex:1;padding:6px;font-size:10px;letter-spacing:0.1em;background:transparent;border:1px solid var(--border2);color:var(--text3);cursor:pointer;font-family:var(--font)">CIVILIAN</button>
+          <button class="gen-vcat-btn" id="gvcat-military" onclick="setGenVehicleCategory('military')" style="flex:1;padding:6px;font-size:10px;letter-spacing:0.1em;background:transparent;border:1px solid var(--border2);color:var(--text3);cursor:pointer;font-family:var(--font)">MILITARY</button>
+        </div>
+        <div style="font-size:10px;color:var(--text3);line-height:1.5">Defaults to the exact rulebook stat block for whichever named vehicle fits your description best. Only deviates (armament swap, battle damage, etc.) if you ask for it.</div>
       </div>
 
       <div id="gen-ai-section">
@@ -1779,9 +1790,9 @@ function renderPreCombat() {
     return;
   }
   el.innerHTML = entries.map(([id, c]) => `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid ${c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red)' : 'var(--cyan)'))}">
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid ${c.isVehicle ? 'var(--gold-bright)' : (c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red)' : 'var(--cyan)')))}">
       <div style="flex:1;font-size:13px;font-weight:700">${esc(c.name)}</div>
-      <div style="font-size:10px;color:var(--text2)">${c.isCompanion ? 'COM' : (c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC'))}</div>
+      <div style="font-size:10px;color:var(--text2)">${c.isVehicle ? 'VEH' : (c.isCompanion ? 'COM' : (c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC')))}</div>
       <div style="font-size:11px;color:var(--green-bright)">${c.hp_current ?? c.hp_max}/${c.hp_max} HP</div>
       <div style="font-size:10px;color:var(--text2)">INI: ${c.initiative ?? 0}</div>
       <button class="btn btn-danger btn-small btn-icon" onclick="toggleCombatQueue('${id}')" title="Remove from queue">✕</button>
@@ -2319,17 +2330,17 @@ function renderCombatantCard(id, isActive) {
   const ipMax = c.ip_max ?? 0;
   const humanityCur = c.humanity_current ?? c.humanity_max ?? 0;
   const humanityMax = c.humanity_max ?? 0;
-  return `<div class="combatant-card ${c.isCompanion ? 'is-companion' : (c.isAlly ? 'is-ally' : (c.isNPC ? 'is-npc' : 'is-pc'))} ${isActive ? 'active-turn' : ''} ${hpCur <= 0 ? 'is-dead' : ''}" id="cc-${id}">
+  return `<div class="combatant-card ${c.isVehicle ? 'is-vehicle' : (c.isCompanion ? 'is-companion' : (c.isAlly ? 'is-ally' : (c.isNPC ? 'is-npc' : 'is-pc')))} ${isActive ? 'active-turn' : ''} ${hpCur <= 0 ? 'is-dead' : ''}" id="cc-${id}">
     <div class="combatant-top" onclick="toggleDetail('${id}')">
       <div>
-        <div class="combatant-name">${esc(c.name)}</div>
+        <div class="combatant-name">${esc(c.name)}${c.isVehicle ? ' 🚗' : ''}</div>
         <div style="display:flex;gap:6px;align-items:center;margin-top:3px">
           ${statusHtml || '<span style="font-size:10px;color:var(--text3)">No effects</span>'}
         </div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
         <div class="hp-display">
-          <div class="hp-numbers ${hpClass}">${hpCur}/${hpMax}</div>
+          <div class="hp-numbers ${hpClass}">${hpCur}/${hpMax}${c.isVehicle ? ' SDP' : ''}</div>
           <div class="hp-bar"><div class="hp-bar-fill ${hpClass}" style="width:${hpPct}%"></div></div>
         </div>
         ${flinkHas ? `<span class="flink-badge ${flinkUsed ? 'flink-used' : 'flink-available'}">${flinkUsed ? 'FLINK ✓' : 'FLINK'}</span>` : ''}
@@ -2337,8 +2348,12 @@ function renderCombatantCard(id, isActive) {
     </div>
     <div class="combatant-detail ${expandedCombatants.has(id) ? 'open' : ''}" id="${detailId}">
       ${renderInitRow(id)}
+      ${c.isVehicle ? `<div class="detail-row" style="font-size:10px;color:var(--text3)">
+        <span class="detail-label">VEHICLE</span>
+        <span>${esc(c.vehicle_template||'')} · Speed ${c.vehicle_speed??'—'} (Ini = Speed+1d6) · Seats ${esc(String(c.vehicle_seats??'—'))}</span>
+      </div>` : ''}
       <div class="detail-row">
-        <span class="detail-label">HP</span>
+        <span class="detail-label">${c.isVehicle ? 'SDP' : 'HP'}</span>
         <div class="adj-group">
           <button class="adj-btn red" onclick="quickAdj('${id}','hp',-1)">−1</button>
           <button class="adj-btn red" onclick="openDmgModal('${id}')">DMG</button>
@@ -2346,14 +2361,14 @@ function renderCombatantCard(id, isActive) {
           <button class="adj-btn green" onclick="quickAdj('${id}','hp',1)">+1</button>
         </div>
       </div>
-      <div class="detail-row">
+      ${!c.isVehicle ? `<div class="detail-row">
         <span class="detail-label">STAMINA</span>
         <div class="adj-group">
           <button class="adj-btn red" onclick="quickAdj('${id}','stamina',-1)">−1</button>
           <span style="font-size:12px;padding:0 6px;min-width:40px;text-align:center">${staCur}/${staMax}</span>
           <button class="adj-btn green" onclick="quickAdj('${id}','stamina',1)">+1</button>
         </div>
-      </div>
+      </div>` : ''}
       ${humanityMax > 0 ? `<div class="detail-row">
         <span class="detail-label">HUMANITY</span>
         <div class="adj-group">
@@ -2371,9 +2386,9 @@ function renderCombatantCard(id, isActive) {
         </div>
       </div>` : ''}
       ${armorBody?.name ? `<div class="detail-row">
-        <span class="detail-label">ARMOR</span>
+        <span class="detail-label">${c.isVehicle ? 'KAROSSERIE-SP' : 'ARMOR'}</span>
         <div class="adj-group">
-          <span style="font-size:11px;margin-right:4px">${esc(armorBody.name)}</span>
+          ${c.isVehicle ? '' : `<span style="font-size:11px;margin-right:4px">${esc(armorBody.name)}</span>`}
           <span style="font-size:10px;color:var(--gold-bright)">SP ${armorBody.sp_temp ?? armorBody.sp_base}/${armorBody.sp_base}</span>
           <button class="adj-btn red btn-small" onclick="quickAdjArmor('${id}',-1)" style="width:24px;height:24px;font-size:12px">−</button>
           <button class="adj-btn green btn-small" onclick="quickAdjArmor('${id}',1)" style="width:24px;height:24px;font-size:12px">+</button>
@@ -2396,6 +2411,10 @@ function renderCombatantCard(id, isActive) {
         </div>
       </div>
       ${renderWeaponsSection(c, id)}
+      ${(c.isVehicle && c.vehicle_abilities?.length) ? `<div class="detail-row" style="align-items:flex-start">
+        <span class="detail-label" style="margin-top:4px">ABILITIES</span>
+        <div style="flex:1">${c.vehicle_abilities.map(a => `<div style="font-size:10px;color:var(--text2);margin-bottom:4px;line-height:1.5">▸ ${esc(a)}</div>`).join('')}</div>
+      </div>` : ''}
       ${renderHacksSection(c, id)}
       ${renderConsumablesSection(c, id)}
       ${renderLootAndItems(c, id)}
@@ -2429,7 +2448,7 @@ function combatToggleButtonHtml(id) {
 let expandedMissionGroups = new Set();
 
 function charItemRow(id, c) {
-  const color = c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)'));
+  const color = c.isVehicle ? 'var(--gold-bright)' : (c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)')));
   const portrait = portraits[id];
   const avatar = portrait
     ? `<div style="width:32px;height:32px;border-radius:50%;background-image:url('${portrait}');background-size:cover;background-position:center;border:2px solid ${color};flex-shrink:0"></div>`
@@ -2439,7 +2458,7 @@ function charItemRow(id, c) {
     ${avatar}
     <div style="flex:1">
       <div class="char-item-name">${esc(c.name)}</div>
-      <div class="char-item-sub">${c.isCompanion ? 'COM' : (c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC'))}${c.pin ? ' · PIN set' : ''} · INI ${c.initiative ?? 0}</div>
+      <div class="char-item-sub">${c.isVehicle ? 'VEH' : (c.isCompanion ? 'COM' : (c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC')))}${c.pin ? ' · PIN set' : ''} · INI ${c.initiative ?? 0}</div>
     </div>
     <div class="char-item-hp">${c.hp_current ?? c.hp_max}/${c.hp_max}</div>
     ${combatToggleButtonHtml(id)}
@@ -4129,7 +4148,18 @@ ENCOUNTER JSON (respond ONLY with this when asked for encounter, no backticks):
 {"encounterTitle":"string","encounterSummary":"string","partySize":number,"difficulty":"EASY|BALANCED|BRUTAL","enemies":[...same format as single enemy...],"encounterTactics":"string","gmNote":null}
 
 LOOT: Always include 3-6 items. Do NOT mention the enemy's equipped weapon or armor here — those are already recoverable directly from their weapon/armor slots. Only list separate found items: credchips, ammo, cyberware (needs Chirurgie roll to harvest), narrative items.
-LARGE ENCOUNTERS (5+ enemies): Keep flavor/tactics/gmNote short (1-2 sentences). JSON must be complete and valid.`;
+LARGE ENCOUNTERS (5+ enemies): Keep flavor/tactics/gmNote short (1-2 sentences). JSON must be complete and valid.
+
+VEHICLE GENERATION: Used when the user asks for a vehicle instead of an NPC. Every vehicle in Cyberpunk Phantom is a NAMED stat block from the rulebook — there is no attribute-distribution system for vehicles like there is for characters. DO NOT INVENT STATS. Your job is to pick the ONE named vehicle from the VEHICLE CATALOG below that best matches the request, and let the numbers come from that exact template. Only fill "weaponOverride" or "statOverride" fields when the user's request specifically asks for something different from the stock vehicle (a different weapon loadout, battle damage, a modified/reskinned version, etc.) — leave them null/empty otherwise so the vehicle uses the template's exact canonical stats. A vehicle's weapon systems are fired by whoever is manning them using their OWN character stats (not the vehicle's) — this is intentional, don't try to give the vehicle attributes.
+
+VEHICLE CATALOG (exact names — "vehicleTemplate" must match one of these exactly):
+Civilian: Roadbike, Superbike, Kompaktwagen, Sportwagen, Super-Wagen, Aerozep, AV-4, Militär-AV, Jetski, Schnellboot, Cabin Cruiser, Yacht
+Military: Militech "Behemoth" APC (armored troop transport, turret+MG, rams through cover), Militech "Coyote" ATAV (fast open-top escort/flanker), Militech "Drone Carrier" Truck (deploys Condor drones, carries the unit netrunner), Corporate "Militech Mackinaw" (gepanzert) (armored VIP/valuables transport, no fixed weapon), Militech "Kestrel" AV-7 (Gunship) (missile gunship, alpha-strike then retreats), Militech "Osprey" AV-4 (Transport) (troop-drop VTOL with door gunners), Militech "Condor" Drohnen-Schwarm (small armed drone swarm, SDP is per-drone), ACPA "Skirmisher" (Leichter Mech) (one-person power armor), Militech "Grad" (Schwerer Battle-Mech) (heavy two-legged battle-mech, a whole encounter by itself)
+
+VEHICLE WEAPON CATALOG (only used in "weaponOverride", names must match exactly): Heavy MG (12.7mm), Rotary Cannon (Minigun), 20mm Autocannon, 30mm Autocannon, Guided Missile, Tank Main Gun, Flechette/Swarm Launcher
+
+VEHICLE JSON (respond ONLY with this when asked for a vehicle, no backticks):
+{"name":"string (flavor name/callsign, can differ from the template name)","vehicleTemplate":"string, EXACT name from VEHICLE CATALOG above","flavor":"2-3 sentences noir","imagePrompt":"string, see IMAGE PROMPT rule above but for a vehicle, not a person","weaponOverride":["string, 0+ names from VEHICLE WEAPON CATALOG — ONLY if the request specifically calls for different armament than the template's stock loadout, otherwise omit/empty"],"statOverride":{"sdp":null,"sp":null,"speed":null},"tactics":"string","gmNote":null}`;
 
 // ═══════════════════════════════════════════════════════════════
 // DETERMINISTIC NPC STAT ENGINE
@@ -4700,6 +4730,137 @@ const COMPANION_TEMPLATES = {
 };
 
 // ═══════════════════════════════════════════════════════════════
+// VEHICLES (§22, §22a) — a vehicle character has two defenses instead of
+// one: SDP (structural health, stored in the normal hp_current/hp_max
+// pool — 0 SDP means it crashes/breaks down, not "dies," which happens to
+// match this app's existing floor-at-0 clamp with no death-save baggage)
+// and Karosserie-SP (occupant cover, stored in armor_body — mechanically
+// identical to personal armor ablation, just relabeled). Weapon systems
+// (§22a.1) are fired by whichever character is manning them using THEIR
+// OWN stats per RAW ("Der Schuetze wuerfelt den in Klammern genannten
+// PW") — a vehicle has no attribute block of its own, so its weapons
+// intentionally show bonus/PW-label as reference only, same as any
+// weapon on a character with no `stats` object.
+// ═══════════════════════════════════════════════════════════════
+const VEHICLE_WEAPON_TABLE = {
+  'Heavy MG (12.7mm)':          { bonus:18, pw:['strength','focus'], label:'Str+Foc', range:'800m',  tags:['Sustained fire', 'Can Suppress (§22a.6)'] },
+  'Rotary Cannon (Minigun)':    { bonus:24, pw:['strength','focus'], label:'Str+Foc', range:'1000m', tags:['Hits up to 2 targets/round', 'vs Infantry: AoE 3m'] },
+  '20mm Autocannon':            { bonus:22, pw:['strength','focus'], label:'Str+Foc', range:'1500m', tags:['Armor-piercing: target SP halved'] },
+  '30mm Autocannon':            { bonus:26, pw:['strength','focus'], label:'Str+Foc', range:'2000m', tags:['Armor-piercing: target SP halved', 'AoE 3m on impact'] },
+  'Guided Missile':             { bonus:30, pw:['focus','strength'], label:'Foc+Str', range:'4000m', tags:['AoE 5m', 'Target RW DV 18 or direct hit', '2-6 charges'] },
+  'Tank Main Gun':              { bonus:34, pw:['focus','strength'], label:'Foc+Str', range:'3000m', tags:['Ignores SP up to 20', 'AoE 6m', 'Reload: 1 round'] },
+  'Flechette/Swarm Launcher':   { bonus:16, pw:['strength','focus'], label:'Str+Foc', range:'400m',  tags:['AoE 8m vs soft targets', 'vs SDP: half bonus'] },
+};
+// Civilian (§22.1, no weapons/abilities) and military (§22a.3-22a.5, named
+// stat blocks with unique abilities) vehicles. SP for civilian vehicles
+// comes from the §22.2 class table (open/light=9, standard=13); military
+// SP is the vehicle's own stated Karosserie-SP. Condor is a drone swarm
+// treated as one unit — sdp is per-drone, noted in its abilities.
+const VEHICLE_TEMPLATES = {
+  'Roadbike':        { category:'civilian', sdp:35, sp:9,  speed:20, seats:2, price:'20000 eb', weapons:[], abilities:[] },
+  'Superbike':       { category:'civilian', sdp:35, sp:9,  speed:60, seats:2, price:'100000 eb', weapons:[], abilities:[] },
+  'Kompaktwagen':    { category:'civilian', sdp:50, sp:13, speed:20, seats:4, price:'30000 eb', weapons:[], abilities:[] },
+  'Sportwagen':      { category:'civilian', sdp:50, sp:13, speed:40, seats:4, price:'50000 eb', weapons:[], abilities:[] },
+  'Super-Wagen':     { category:'civilian', sdp:50, sp:13, speed:60, seats:2, price:'100000 eb', weapons:[], abilities:[] },
+  'Aerozep':         { category:'civilian', sdp:100, sp:13, speed:8,  seats:'4-8', price:'1000000 eb', weapons:[], abilities:[] },
+  'AV-4':            { category:'civilian', sdp:50, sp:13, speed:20, seats:4, price:'250000 eb', weapons:[], abilities:[] },
+  'Militär-AV':      { category:'civilian', sdp:100, sp:25, speed:30, seats:6, price:'Military only', weapons:[], abilities:[] },
+  'Jetski':          { category:'civilian', sdp:35, sp:9,  speed:20, seats:2, price:'20000 eb', weapons:[], abilities:[] },
+  'Schnellboot':     { category:'civilian', sdp:50, sp:13, speed:20, seats:4, price:'30000 eb', weapons:[], abilities:[] },
+  'Cabin Cruiser':   { category:'civilian', sdp:60, sp:13, speed:10, seats:'2/cabin', price:'30000 eb/cabin', weapons:[], abilities:[] },
+  'Yacht':           { category:'civilian', sdp:100, sp:13, speed:10, seats:'4/cabin', price:'50000 eb/cabin', weapons:[], abilities:[] },
+  'Militech "Behemoth" APC': {
+    category:'military', sdp:180, sp:25, speed:15, seats:8, price:'Military only',
+    weapons:['30mm Autocannon', 'Heavy MG (12.7mm)'],
+    abilities:[
+      'Rammbrecher: Rams at +18 instead of +11, takes only 1/4 counter-damage instead of half. Drives through cover/light structures.',
+      'Truppenluke: Action: up to 4 occupants disembark / fire from hatches (Cover-SP 25 while doing so).',
+      'Turm-Trägheit: The turret traverses slowly — targets moving >8m/round laterally impose -3 PW on it.',
+      'Schwachpunkt: A Crit Success or targeted hack on the drivetrain (Steuerungs-System) disables it for 1 round.',
+    ],
+  },
+  'Militech "Coyote" ATAV': {
+    category:'military', sdp:70, sp:15, speed:40, seats:2, price:'Military only',
+    weapons:['Heavy MG (12.7mm)'],
+    abilities:[
+      'Flankierer: +3 PW on driver maneuvers at Speed >20. Ideal for chases (§22.5).',
+      'Offenes Dach: Occupants only get SP 9 cover. Vulnerable to fire from above (drones, high ground): no cover at all.',
+      "Verborgene Waffe (optional, GM's call): hidden second weapon behind a panel — surprise shot +4 PW in round 1.",
+      'Verstärkung rufen: Action: calls a second Coyote, arriving in 1d3 rounds, unless comms are jammed/hacked.',
+    ],
+  },
+  'Militech "Drone Carrier" Truck': {
+    category:'military', sdp:100, sp:20, speed:15, seats:2, price:'Military only',
+    weapons:['Heavy MG (12.7mm)'],
+    abilities:[
+      'Drohnen-Bay: Deploys 1d3 Condor drones per round (up to the scene maximum). Destroying it stops resupply.',
+      'Koordinations-Knoten: While intact, all Condor drones get +2 PW. Destroyed or hacked: all active drones -3 PW for 2 rounds.',
+      "Netrunner an Bord: Often carries the unit's netrunner (Veteran) — their death immediately shifts the tactical balance.",
+    ],
+  },
+  'Corporate "Militech Mackinaw" (gepanzert)': {
+    category:'military', sdp:150, sp:25, speed:20, seats:4, price:'Very Expensive',
+    weapons:[],
+    abilities:[
+      'Panzerkabine: Occupants get SP 25. Windows fully stop small arms up to WB +14 (no penetration).',
+      'Run-Flat: Tire hits cause no Speed loss (no drivetrain crit via tires possible).',
+      "Notruf: Below 30% SDP, automatically calls for corporate backup (AV or Coyote) arriving in 1d6 rounds unless comms are jammed.",
+    ],
+  },
+  'Militech "Kestrel" AV-7 (Gunship)': {
+    category:'military', sdp:140, sp:22, speed:30, seats:2, price:'Military only',
+    weapons:['Guided Missile', 'Heavy MG (12.7mm)'],
+    abilities:[
+      'Anflug-Angriff: 1x/combat: concentrated missile run — all 4 missiles at up to 4 targets, or focused on 1 target (+25 WB, AoE 8m).',
+      'Höhenvorteil: Ground weapons under 400m range can\'t hit it. It retreats out of range for 1 round after striking.',
+      'Rotor-Schwachpunkt: A Crit Success or Aimed Shot (-4 PW) on the tail rotor forces an emergency landing (out of the fight, crew survives).',
+      'Jam-anfällig: Vehicle Override / EMP: on success, 1 round loss of control — drifts, can\'t fire.',
+    ],
+  },
+  'Militech "Osprey" AV-4 (Transport)': {
+    category:'military', sdp:110, sp:18, speed:20, seats:'8-12', price:'Military only',
+    weapons:['20mm Autocannon', 'Heavy MG (12.7mm)'],
+    abilities:[
+      'Truppenabwurf: Action: 4-8 soldiers rappel down (all in 2 rounds). While rappelling: soldiers are SP 9, -2 PW, vulnerable.',
+      'Türschützen: 2 occupants fire an MG (+18) from the doors during flight/hover.',
+      'Langsam im Hover: While dropping troops it hovers stationary: -4 on its own evasion RW, easy target for AA.',
+    ],
+  },
+  'Militech "Condor" Drohnen-Schwarm': {
+    category:'military', sdp:8, sp:7, speed:16, seats:0, price:'Military only',
+    weapons:['Flechette/Swarm Launcher'],
+    abilities:[
+      'SDP is PER DRONE (swarm of 6-12), treat the whole swarm as one unit for initiative/turns.',
+      'Schwarm-Feuer: The whole swarm fires as 1 action: one attack roll (+14) per 3 drones. Ablation hits all cover.',
+      'Zielmarkierung: Marks a target — allied Militech units get +4 PW against it until the next round.',
+      'Störbar: Vehicle Override / Jam / EMP disables 1d3 drones per success. Without Drone Carrier coordination: -3 PW.',
+      'Windvorteil: Speed 16 — faster than most ground vehicles at close range, but no armor damage vs SDP 25+.',
+    ],
+  },
+  'ACPA "Skirmisher" (Leichter Mech)': {
+    category:'military', sdp:140, sp:22, speed:16, seats:1, price:'Military / Corp',
+    weapons:['20mm Autocannon', 'Guided Missile'],
+    abilities:[
+      'Servo-Kraft: Melee strike: +18 WB, ignores SP up to 15. Can throw characters back 1d6m.',
+      'Zwei Waffensysteme: Can fire the autocannon AND missiles in the same round (2 attacks), but -3 PW on both.',
+      'Panzerung: Small arms up to WB +11 only cause ablation, no SDP damage (min. 1). Needs armor-piercing or heavy weapons.',
+      "Pilot-Schwachpunkt: Aimed Shot to the cockpit (-6 PW) hits the pilot directly (cover ignored). A netrunner can Control Hack cybered pilots.",
+    ],
+  },
+  'Militech "Grad" (Schwerer Battle-Mech)': {
+    category:'military', sdp:300, sp:30, speed:12, seats:1, price:'Military only',
+    weapons:['30mm Autocannon', 'Guided Missile', 'Heavy MG (12.7mm)'],
+    abilities:[
+      'Drei Waffensysteme: Fires up to 2 systems/round (-2 PW each). The anti-personnel MG can fire as a secondary action.',
+      'Festung: Small arms up to WB +14 only cause ablation. Tank main guns, guided missiles, and AP autocannons are the only real threats.',
+      'Raketen-Salve: 1x/combat: all 6 missiles — AoE 8m, +30 WB, target RW DV 18 or direct hit. Zone wipe.',
+      'Überhitzung: After 3 rounds of heavy dual-system fire: 1 round cooldown, -4 PW. A window for the counterattack.',
+      'Strukturschwachpunkte: Knees / cooling / sensor cluster (Aimed Shot -6 PW or a hack). A hit disables 1 system or immobilizes it. You beat a Grad through system attrition, not raw SDP.',
+    ],
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════
 // NETRUNNING — all 32 hacks from rulebook §10.4-10.8, verbatim. Only IP
 // cost and PW (which two Mind stats to sum) are computed live; durations,
 // stacks, combos, and the Duel/Trace mechanic are too varied to
@@ -5218,6 +5379,35 @@ function processGeneratedEnemy(e) {
   return e;
 }
 
+// Vehicles (§22, §22a) have no attribute-distribution system — every
+// number is a fixed named stat block. The LLM only picks which template
+// fits and, optionally, an explicit deviation from it; everything else
+// is resolved straight from VEHICLE_TEMPLATES/VEHICLE_WEAPON_TABLE so a
+// hallucinated stat can never slip through.
+function processGeneratedVehicle(v) {
+  try {
+    const tpl = VEHICLE_TEMPLATES[v.vehicleTemplate] || VEHICLE_TEMPLATES['Kompaktwagen'];
+    v.vehicleTemplate = VEHICLE_TEMPLATES[v.vehicleTemplate] ? v.vehicleTemplate : 'Kompaktwagen';
+    v.category = tpl.category;
+    v.sdp = v.statOverride?.sdp ?? tpl.sdp;
+    v.sp = v.statOverride?.sp ?? tpl.sp;
+    v.speed = v.statOverride?.speed ?? tpl.speed;
+    v.seats = tpl.seats;
+    v.price = tpl.price;
+    v.abilities = tpl.abilities || [];
+    const weaponNames = (Array.isArray(v.weaponOverride) && v.weaponOverride.length) ? v.weaponOverride : (tpl.weapons || []);
+    v.weapons = weaponNames.map(name => {
+      const match = VEHICLE_WEAPON_TABLE[name];
+      return match
+        ? { name, bonus: match.bonus, pwLabel: match.label, range: match.range, tags: match.tags || [] }
+        : { name, bonus: FALLBACK_WEAPON_BONUS.THREAT, pwLabel: '', range: '', tags: [] };
+    });
+  } catch (err) {
+    console.error('processGeneratedVehicle failed, leaving raw LLM values in place:', err);
+  }
+  return v;
+}
+
 let genMode = 'single';
 let genFaction = 'enemy';
 let genTier = 'THREAT';
@@ -5243,12 +5433,26 @@ function setGenMode(mode) {
   document.getElementById('gen-mode-encounter').style.color = mode === 'encounter' ? 'var(--cyan)' : 'var(--text3)';
   document.getElementById('gen-mode-loot').style.background = mode === 'loot' ? 'var(--surface2)' : 'transparent';
   document.getElementById('gen-mode-loot').style.color = mode === 'loot' ? 'var(--cyan)' : 'var(--text3)';
+  document.getElementById('gen-mode-vehicle').style.background = mode === 'vehicle' ? 'var(--surface2)' : 'transparent';
+  document.getElementById('gen-mode-vehicle').style.color = mode === 'vehicle' ? 'var(--cyan)' : 'var(--text3)';
   document.getElementById('gen-single-controls').style.display = mode === 'single' ? 'block' : 'none';
   document.getElementById('gen-encounter-controls').style.display = mode === 'encounter' ? 'block' : 'none';
   document.getElementById('gen-loot-controls').style.display = mode === 'loot' ? 'block' : 'none';
+  document.getElementById('gen-vehicle-controls').style.display = mode === 'vehicle' ? 'block' : 'none';
   document.getElementById('gen-ai-section').style.display = mode === 'loot' ? 'none' : 'block';
   document.getElementById('gen-faction-toggle').style.display = mode === 'loot' ? 'none' : 'flex';
   if (mode === 'loot') populateLootTargetDropdown();
+}
+let genVehicleCategory = 'any';
+function setGenVehicleCategory(cat) {
+  genVehicleCategory = cat;
+  ['any','civilian','military'].forEach(c => {
+    const btn = document.getElementById('gvcat-' + c);
+    const active = c === cat;
+    btn.style.background = active ? 'var(--cyan-dim)' : 'transparent';
+    btn.style.color = active ? 'var(--cyan)' : 'var(--text3)';
+    btn.style.borderColor = active ? 'var(--cyan)' : 'var(--border2)';
+  });
 }
 
 function setGenTier(tier) {
@@ -5285,8 +5489,11 @@ async function runGenerator() {
   loadEl.style.display = 'block';
   btn.textContent = '...'; btn.disabled = true;
   const factionLabel = genFaction === 'ally' ? 'ally (friendly NPC fighting alongside the party)' : 'enemy';
+  const vehicleCatScope = genVehicleCategory === 'any' ? '' : `\nOnly pick from ${genVehicleCategory.toUpperCase()} vehicles in the catalog.`;
   const userMsg = genMode === 'single'
     ? `Generate a Cyberpunk Phantom ${factionLabel} stat block.\nTier: ${genTier}\nDescription: ${prompt}\nReturn only the JSON object. No preamble, no backticks.`
+    : genMode === 'vehicle'
+    ? `Generate a Cyberpunk Phantom vehicle (${genFaction === 'ally' ? 'belongs to the party/an ally' : 'hostile/opposing'}).\nDescription: ${prompt}${vehicleCatScope}\nUse the VEHICLE JSON format. Return only the JSON object. No preamble, no backticks.`
     : `Generate a Cyberpunk Phantom ${genFaction === 'ally' ? 'squad of allies' : 'encounter'} for ${genPS} PCs.\nContext: ${prompt}\nUse the ENCOUNTER JSON format. Return only the JSON object. No preamble, no backticks.`;
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -5308,14 +5515,21 @@ async function runGenerator() {
     // "+ ENCOUNTER" carries it through into the character record.
     if (parsed.enemies) parsed.enemies.forEach(en => en.faction = genFaction);
     else parsed.faction = genFaction;
-    // The LLM only picked tier/archetype/gear names — compute every
-    // actual stat number deterministically from those choices.
-    if (parsed.enemies) parsed.enemies.forEach(en => processGeneratedEnemy(en));
-    else processGeneratedEnemy(parsed);
-    document.getElementById('gen-prompt').value = '';
     const container = document.getElementById('gen-results');
     const div = document.createElement('div');
-    div.innerHTML = parsed.enemies ? renderEncounterResult(parsed) : renderEnemyResult(parsed);
+    if (genMode === 'vehicle') {
+      // Unlike NPCs, vehicle stats are fixed named blocks, not computed
+      // from an attribute spread — resolve straight from the template.
+      processGeneratedVehicle(parsed);
+      div.innerHTML = renderVehicleResult(parsed);
+    } else {
+      // The LLM only picked tier/archetype/gear names — compute every
+      // actual stat number deterministically from those choices.
+      if (parsed.enemies) parsed.enemies.forEach(en => processGeneratedEnemy(en));
+      else processGeneratedEnemy(parsed);
+      div.innerHTML = parsed.enemies ? renderEncounterResult(parsed) : renderEnemyResult(parsed);
+    }
+    document.getElementById('gen-prompt').value = '';
     container.insertBefore(div, container.firstChild);
   } catch(e) {
     errEl.textContent = 'Error: ' + e.message;
@@ -5386,6 +5600,46 @@ function renderEnemyResult(e) {
   </div>`;
 }
 
+function renderVehicleResult(v) {
+  const tc = 'var(--gold-bright)';
+  const isAlly = v.faction === 'ally';
+  const wpns = (v.weapons || []).map(w => `<div style="margin-bottom:6px">
+    <div style="display:flex;gap:8px;align-items:center"><span style="flex:1;font-size:11px">${esc(w.name)}</span><span style="color:${tc};font-weight:700">+${w.bonus}</span><span style="font-size:10px;color:var(--cyan)">${esc(w.pwLabel||'')}</span>${w.range?`<span style="font-size:10px;color:var(--text3)">${esc(w.range)}</span>`:''}</div>
+    ${(w.tags||[]).map(t=>`<div style="font-size:10px;color:var(--text2);padding-left:10px;margin-top:1px">↳ ${esc(t)}</div>`).join('')}
+  </div>`).join('');
+  const abilities = (v.abilities||[]).map(a=>`<div style="color:var(--text2);font-size:11px;margin-bottom:4px;line-height:1.5">▸ ${esc(a)}</div>`).join('');
+  return `<div style="background:var(--surface);border:1px solid ${tc};${isAlly ? 'border-left:3px solid var(--green-bright);' : ''}overflow:hidden">
+    <div style="background:${tc}22;border-bottom:1px solid ${tc};padding:12px 14px;display:flex;justify-content:space-between;align-items:flex-start">
+      <div><div style="font-size:10px;letter-spacing:0.25em;color:${tc};margin-bottom:3px">${esc(v.category||'').toUpperCase()}${isAlly ? ' · ALLY' : ''} · ${esc(v.vehicleTemplate||'')}</div><div style="font-size:17px;font-weight:700">${esc(v.name)}</div></div>
+      <div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap">
+        ${isAlly ? '<span style="background:var(--green-bright);color:#000;font-size:10px;padding:2px 7px;letter-spacing:0.1em;font-weight:700">🤝 ALLY</span>' : ''}
+        <button onclick="addVehicleToCharacters(${JSON.stringify(v).replace(/"/g,'&quot;')})" style="background:var(--cyan-dim);border:1px solid var(--cyan);color:var(--cyan);font-size:10px;padding:4px 10px;cursor:pointer;font-family:var(--font);letter-spacing:0.1em">+ ADD TO CHARACTERS</button>
+      </div>
+    </div>
+    <div style="padding:14px">
+      <p style="color:#666;font-size:11px;line-height:1.65;margin-bottom:12px;border-left:2px solid ${tc};padding-left:10px;font-style:italic">${esc(v.flavor||'')}</p>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px">
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);padding:8px 12px;text-align:center;min-width:60px"><div style="font-size:10px;color:#484848;letter-spacing:0.12em;margin-bottom:2px">SDP</div><div style="font-size:18px;font-weight:700">${v.sdp??'—'}</div></div>
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);padding:8px 12px;text-align:center;min-width:60px"><div style="font-size:10px;color:#484848;letter-spacing:0.12em;margin-bottom:2px">SP</div><div style="font-size:18px;font-weight:700">${v.sp??'—'}</div></div>
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);padding:8px 12px;text-align:center;min-width:60px"><div style="font-size:10px;color:#484848;letter-spacing:0.12em;margin-bottom:2px">SPEED</div><div style="font-size:18px;font-weight:700">${v.speed??'—'}</div></div>
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);padding:8px 12px;text-align:center;min-width:60px"><div style="font-size:10px;color:#484848;letter-spacing:0.12em;margin-bottom:2px">SEATS</div><div style="font-size:18px;font-weight:700">${esc(String(v.seats??'—'))}</div></div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Initiative: Speed+1d6 · Price: ${esc(String(v.price||'—'))}</div>
+      ${wpns ? `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">WEAPON SYSTEMS</div>${wpns}</div>` : ''}
+      ${abilities ? `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">ABILITIES</div>${abilities}</div>` : ''}
+      <div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">TACTICS</div><p style="font-size:11px;color:#777;line-height:1.65">${esc(v.tactics||'')}</p></div>
+      ${v.imagePrompt ? `<div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+          <div style="font-size:10px;color:var(--text3);letter-spacing:0.18em">IMAGE PROMPT</div>
+          <button onclick="copyImagePrompt(${JSON.stringify(v).replace(/"/g,'&quot;')})" style="background:transparent;border:1px solid var(--border2);color:var(--text2);font-size:10px;padding:2px 8px;cursor:pointer;font-family:var(--font);letter-spacing:0.1em">⎘ COPY</button>
+        </div>
+        <p style="font-size:10px;color:var(--text2);line-height:1.6;background:rgba(255,255,255,0.03);border:1px solid var(--border2);padding:8px 10px">${esc(v.imagePrompt)}</p>
+      </div>` : ''}
+      ${v.gmNote ? `<div style="background:rgba(255,140,0,0.05);border:1px solid rgba(255,140,0,0.18);padding:7px 11px"><span style="color:#dd8800;font-size:10px">GM // </span><span style="color:#aa7700;font-size:11px">${esc(v.gmNote)}</span></div>` : ''}
+    </div>
+  </div>`;
+}
+
 function renderEncounterResult(enc) {
   const dc = { EASY: '#4a8a4a', BALANCED: '#c8a200', BRUTAL: '#c82020' }[enc.difficulty] || '#888';
   const enemyCards = (enc.enemies || []).map(e => renderEnemyResult(e)).join('');
@@ -5443,6 +5697,45 @@ function copyImagePrompt(enemy) {
   navigator.clipboard.writeText(text).then(() => showToast('Image prompt copied!')).catch(() => {
     prompt('Copy this image prompt:', text);
   });
+}
+
+// Vehicles reuse the normal hp_current/hp_max pool for SDP (0 SDP already
+// floors correctly with no death-save baggage, since a vehicle has no
+// `stats.grit` for the death-floor formula to read) and armor_body for
+// Karosserie-SP (identical ablation mechanic to personal armor). No
+// stats/talents/humanity/IP — none of that applies to a vehicle.
+function genVehicleResultToCharacter(v) {
+  return {
+    name: v.name, isNPC: true, isAlly: v.faction === 'ally', isVehicle: true,
+    stats: null,
+    hp_override: true,
+    hp_max: v.sdp || 1, hp_current: v.sdp || 1,
+    initiative: null, // computed live as vehicle Speed+1d6, not stored
+    vehicle_template: v.vehicleTemplate || '',
+    vehicle_category: v.category || 'civilian',
+    vehicle_speed: v.speed ?? null,
+    vehicle_seats: v.seats ?? null,
+    vehicle_price: v.price || '',
+    vehicle_abilities: v.abilities || [],
+    armor_body: v.sp ? { name: 'Karosserie', sp_base: v.sp, sp_temp: v.sp } : null,
+    armor_head: null,
+    weapons: (v.weapons || []).map(w => ({
+      name: w.name, bonus: w.bonus, pw: w.pwLabel, tags: [w.range, ...(w.tags||[])].filter(Boolean).join(', '),
+      attachments: [], tech: 'base', techLevel: null,
+    })),
+    loot: [], cyberware: [], cyberdeck: null, firewall: null, hacks: [],
+    image_prompt: v.imagePrompt || '',
+    status_effects: [], talents: [], inventory: [], eurodollar: 0
+  };
+}
+
+async function addVehicleToCharacters(v) {
+  const id = 'char_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  const char = genVehicleResultToCharacter(v);
+  state.characters[id] = char;
+  await dbWrite('characters/' + id, char);
+  renderCharList();
+  showToast(v.name + ' added to Characters!');
 }
 
 async function addGenToCharacters(enemy) {
