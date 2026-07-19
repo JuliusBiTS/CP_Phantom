@@ -4126,12 +4126,19 @@ ALLY GENERATION: When asked for an ALLY, write a character who assists or fights
 IMPORTANT — DO NOT INVENT NUMBERS: This tool computes all stats (attributes, HP, Stamina, PW, weapon bonus, armor SP) deterministically in code from the "tier" and "archetype" you choose, plus the real weapon/armor/cyberware names you pick. Do NOT include any stat numbers in your response — just the fields listed below. Picking accurate names from the catalogs matters; the numbers are handled for you.
 
 ARCHETYPE (pick the ONE that best fits the character's combat role):
-BRUISER — melee tank/brawler. GUNNER — ranged generalist (pistol/SMG/AR). SNIPER — precision long-range. NETRUNNER — hacker/tech specialist. STEALTH — infiltrator/assassin. SUPPORT — medic/social/utility (fits most allies well).
+BRUISER — melee tank/brawler. GUNNER — ranged generalist (pistol/SMG/AR). SNIPER — precision long-range. NETRUNNER — hacker/tech specialist. STEALTH — infiltrator/assassin. SUPPORT — medic/social/utility (fits most allies well). HEAVY — heavy/special weapons specialist (rocket launchers, miniguns, etc.) — RARE, only pick this for a THREAT or BOSS, never a GRUNT; most encounters shouldn't have one at all, reserve it for when the concept specifically calls for someone hauling serious ordnance.
 
 WEAPON CATALOG (pick names from this list where possible — pick 1 for GRUNT, 1-2 for THREAT, 2-3 for BOSS):
-Medium Pistol, Heavy Pistol, Very Heavy Pistol, Malorian Arms 3516, SMG, Heavy SMG, Assault Rifle, Shotgun, Sniper Rifle, Knife, Big Knucks, Mono-Filament Wire, Medium Melee, Rippers, Mantis Blades, Heavy Melee, Kendachi Mono-Three
+Medium Pistol, Heavy Pistol, Very Heavy Pistol, Malorian Arms 3516, SMG, Heavy SMG, Assault Rifle, Shotgun, Sniper Rifle, Knife, Big Knucks, Mono-Filament Wire, Medium Melee, Rippers, Mantis Blades, Heavy Melee, Kendachi Mono-Three, Ballistic Shield (Light), Riot Shield, Ballistic Breacher (Heavy), Grenade Launcher, Rocket Launcher, Flamethrower, Cryo Thrower, Minigun, Anti-Materiel Rifle
 
-WEAPON FIT (default, not a hard rule): the character's PRIMARY (first-listed) weapon should make sense for their archetype, so the two never contradict each other without reason — BRUISER → a melee weapon; GUNNER → pistol/SMG/AR; SNIPER → Sniper Rifle or another long-range option; STEALTH → a concealable pistol or light melee (Knife, Mono-Filament Wire); NETRUNNER/SUPPORT → whatever a tech/support character would plausibly carry, often a sidearm or light melee as backup rather than a heavy weapon. A second/third weapon can break from this for flavor (e.g. a BRUISER also carrying a sidearm). This is only a default — if the user's request explicitly asks for an off-archetype weapon (e.g. "a bruiser wielding a sniper rifle"), follow the request instead.
+WEAPON FIT (default, not a hard rule): the character's PRIMARY (first-listed) weapon should make sense for their archetype, so the two never contradict each other without reason:
+- BRUISER → usually a melee weapon. Occasionally (not the majority of the time) a Shield instead — if you give a BRUISER a shield, it MUST always be paired with a second one-handed weapon from this list ONLY: a Pistol (Medium/Heavy/Very Heavy/Malorian), Medium Melee, or Knife. Never pair a shield with a two-handed weapon (Heavy Melee, Kendachi Mono-Three, any rifle/heavy weapon), dual-wield it, or give a character two shields.
+- GUNNER → pistol/SMG/AR.
+- SNIPER → Sniper Rifle as primary. Give a SNIPER a noticeably higher-than-usual chance of a secondary sidearm pistol (Medium/Heavy Pistol) when their tier allows a second weapon — a sniper covering their own retreat with a pistol is the default expectation, not the exception.
+- STEALTH → a concealable pistol or light melee (Knife, Mono-Filament Wire).
+- NETRUNNER/SUPPORT → whatever a tech/support character would plausibly carry, often a sidearm or light melee as backup rather than a heavy weapon.
+- HEAVY → primary weapon from Grenade Launcher, Rocket Launcher, Flamethrower, Cryo Thrower, Minigun, or Anti-Materiel Rifle. Only ever appears at THREAT/BOSS.
+A second/third weapon can break from this for flavor (e.g. a BRUISER also carrying a sidearm). This is only a default — if the user's request explicitly asks for an off-archetype weapon (e.g. "a bruiser wielding a sniper rifle"), follow the request instead.
 
 ARMOR CATALOG (pick one name): Leathers, Kevlar Vest, Body Weight Suit, Light Armorjack, Medium Armorjack, Heavy Armorjack, MetalGear
 
@@ -4142,7 +4149,7 @@ FLINK: GRUNT NPCs never have Flink. BOSS NPCs always have Flink. For THREAT, dec
 IMAGE PROMPT: Write "imagePrompt" as a single self-contained paragraph a GM can paste directly into an image generator (Midjourney/DALL-E/Stable Diffusion) with zero editing. Describe ONLY visual, static appearance — build, face, skin/hair/eyes, exact clothing and colors, visible cyberware and where it's mounted, pose/expression, and end with an art-style clause (e.g. "cyberpunk noir illustration, dramatic neon rim lighting, detailed digital art, portrait framing"). Do NOT include stats, tactics, backstory, or anything not visible in a single still image. Must stay consistent with the character's tier, weapons, and cyberware listed elsewhere in the same JSON.
 
 SINGLE ENEMY JSON (respond ONLY with this, no backticks, no extra text):
-{"name":"string","tier":"GRUNT|THREAT|BOSS","archetype":"BRUISER|GUNNER|SNIPER|NETRUNNER|STEALTH|SUPPORT","flavor":"2-3 sentences noir","imagePrompt":"string, see IMAGE PROMPT rule above","armor":{"name":"string from ARMOR CATALOG"},"weapons":[{"name":"string from WEAPON CATALOG"}],"cyberware":["string, ideally from CYBERWARE CATALOG"],"flink":false,"tactics":"string","loot":["string"],"gmNote":null}
+{"name":"string","tier":"GRUNT|THREAT|BOSS","archetype":"BRUISER|GUNNER|SNIPER|NETRUNNER|STEALTH|SUPPORT|HEAVY","flavor":"2-3 sentences noir","imagePrompt":"string, see IMAGE PROMPT rule above","armor":{"name":"string from ARMOR CATALOG"},"weapons":[{"name":"string from WEAPON CATALOG"}],"cyberware":["string, ideally from CYBERWARE CATALOG"],"flink":false,"tactics":"string","loot":["string"],"gmNote":null}
 
 ENCOUNTER JSON (respond ONLY with this when asked for encounter, no backticks):
 {"encounterTitle":"string","encounterSummary":"string","partySize":number,"difficulty":"EASY|BALANCED|BRUTAL","enemies":[...same format as single enemy...],"encounterTactics":"string","gmNote":null}
@@ -4195,6 +4202,14 @@ const ARCHETYPES = {
                power:    {strength:.10, dexterity:.15, grit:.20, drive:.25, core:.30},
                mobility: {speed:.15, agility:.15, reflexes:.20, stealth:.15, senses:.35},
                mind:     {intelligence:.28, focus:.22, creativity:.17, will:.22, cool:.11} },
+  // Rare — reserved for the Heavy/Special Weapons catalog (Grenade/Rocket
+  // Launcher, Flamethrower, Cryo Thrower, Minigun, Anti-Materiel Rifle),
+  // whose PW pairs (Foc+Str/Str+Foc/Foc+Sen) all lean the same direction.
+  // Code-gated to THREAT/BOSS only — see processGeneratedEnemy.
+  HEAVY:     { lead: {power:22, mobility:8, mind:16},
+               power:    {strength:.35, dexterity:.10, grit:.30, drive:.15, core:.10},
+               mobility: {speed:.15, agility:.10, reflexes:.25, stealth:.10, senses:.40},
+               mind:     {intelligence:.11, focus:.50, creativity:.11, will:.17, cool:.11} },
 };
 const TIER_SCALE = { GRUNT: 0.55, THREAT: 1.0, BOSS: 2.0 };
 
@@ -5271,10 +5286,18 @@ function pwDiceCount(pw) {
   return Math.ceil(pw / 20);
 }
 
+// Shields (§6.5a) are one-handed and only legally combinable with another
+// one-handed weapon (Pistol family, Medium Melee, or Knife) — never a
+// two-hander, dual-wield, or a second shield. Used to auto-pair a Knife
+// onto any generated Bruiser who ends up with just a shield and nothing
+// else, so the generator never hands out a rules-illegal loadout.
+const SHIELD_COMPATIBLE_ONE_HANDED = new Set(['Medium Pistol','Heavy Pistol','Very Heavy Pistol','Malorian Arms 3516','Medium Melee','Knife']);
 function processGeneratedEnemy(e) {
   try {
     const tier = ['GRUNT','THREAT','BOSS'].includes(e.tier) ? e.tier : 'THREAT';
-    const archetype = ARCHETYPES[e.archetype] ? e.archetype : 'GUNNER';
+    let archetype = ARCHETYPES[e.archetype] ? e.archetype : 'GUNNER';
+    // HEAVY is intentionally rare and never shows up on rank-and-file GRUNTs.
+    if (archetype === 'HEAVY' && tier === 'GRUNT') archetype = 'GUNNER';
     e.tier = tier;
     e.archetype = archetype;
     const attrs = computeAttributes(tier, archetype);
@@ -5303,7 +5326,7 @@ function processGeneratedEnemy(e) {
     // per the rulebook so it's folded into the numbers here; Power/Tech and
     // all attachments are situational, so they stay descriptive-only.
     let neuralLinkNeeded = archetype === 'NETRUNNER';
-    e.weapons = (e.weapons || []).map(w => {
+    function resolveWeapon(w) {
       const match = matchWeaponName(w.name);
       // Weapon technology (Power/Tech/Smart, §7a "Fernkampfwaffen") and
       // attachments (scopes/muzzle/underbarrel/magazine, §8 "Exotische
@@ -5338,7 +5361,15 @@ function processGeneratedEnemy(e) {
         tech, techLevel, attachments: isRanged ? rollAttachments(tier) : [],
         _pw: finalPW,
       };
-    });
+    }
+    e.weapons = (e.weapons || []).map(resolveWeapon);
+    // Shield-pairing safety net (§6.5a): if a Bruiser (or anyone) ended up
+    // with a shield and no legally-combinable one-handed weapon alongside
+    // it, add a Knife so the loadout is never rules-illegal.
+    if (e.weapons.some(w => WEAPON_TABLE[w.name]?.slotType === 'shield')
+        && !e.weapons.some(w => SHIELD_COMPATIBLE_ONE_HANDED.has(w.name))) {
+      e.weapons.push(resolveWeapon({ name: 'Knife' }));
+    }
     // Neural Link push runs after the cyberware-stat-bonus loop above, which
     // is fine today since Neural Link has no entry in CYBERWARE_STAT_BONUS —
     // but revisit the ordering if that ever changes.
