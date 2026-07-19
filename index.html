@@ -264,7 +264,6 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .map-token {
   position: absolute;
   width: 40px; height: 40px;
-  border-radius: 50%;
   transform: translate(-50%, -50%);
   background-size: cover;
   background-position: center;
@@ -273,10 +272,16 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   font-size: 11px; font-weight: 700; color: #fff;
   cursor: grab;
   touch-action: none;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.6);
   user-select: none;
 }
 .map-token:active { cursor: grabbing; }
+/* Shape is a second, color-independent channel for token type — circle
+   stays the default (PC/NPC/Ally), companions get a triangle, vehicles a
+   square. box-shadow doesn't follow clip-path, so the drop-shadow is set
+   inline in JS instead (see buildMapTokensHtml) and applied uniformly. */
+.map-token.shape-circle { border-radius: 50%; }
+.map-token.shape-square { border-radius: 4px; }
+.map-token.shape-triangle { clip-path: polygon(50% 4%, 96% 92%, 4% 92%); }
 /* ── COMBATANT CARD ── */
 .combatant-card {
   background: var(--surface);
@@ -1844,15 +1849,18 @@ function buildMapTokensHtml(interactive) {
     ensurePortraitListener(id);
     const portrait = portraits[id];
     const color = c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)'));
+    // Shape is a second, color-independent channel: triangle=companion,
+    // square=vehicle, circle=everyone else (PC/NPC/Ally stay color-only).
+    const shape = c.isVehicle ? 'square' : (c.isCompanion ? 'triangle' : 'circle');
     const pos = state.map?.tokens?.[id] || { x: 50, y: 50 };
     const bg = portrait ? `background-image:url('${portrait}');` : '';
     const initials = esc(c.name.slice(0, 2).toUpperCase());
     const dragAttr = interactive ? ` onpointerdown="startTokenDrag(event,'${id}')"` : '';
     const cursorStyle = interactive ? '' : 'cursor:default;';
-    // Health ring: a full circle at max HP, retracting clockwise from 12
-    // o'clock as HP drops. SVG dasharray always draws its FIRST value as
-    // the visible segment, so a leading "0" is needed to force the pattern
-    // to start with the (invisible) gap before the (visible) remaining arc.
+    // Health ring: a full outline at max HP, retracting clockwise from the
+    // top as HP drops. SVG dasharray always draws its FIRST value as the
+    // visible segment, so a leading "0" is needed to force the pattern to
+    // start with the (invisible) gap before the (visible) remaining arc.
     const hpMax = c.hp_max || 1;
     const rawPct = Math.max(0, Math.min(1, (c.hp_current ?? hpMax) / hpMax));
     const isDead = (c.hp_current ?? 1) <= 0;
@@ -1861,14 +1869,26 @@ function buildMapTokensHtml(interactive) {
     // state in play already, not a leaked number) on the player-facing map.
     const isEnemy = c.isNPC && !c.isAlly;
     const pct = (!interactive && isEnemy) ? (isDead ? 0 : 1) : rawPct;
-    const r = 18.5, circ = 2 * Math.PI * r;
-    const dashLen = pct * circ, gapLen = circ - dashLen;
-    const ring = `<svg width="40" height="40" viewBox="0 0 40 40" style="position:absolute;inset:0;pointer-events:none">
-      <circle cx="20" cy="20" r="${r}" fill="none" stroke-width="3" style="stroke:${color}" stroke-dasharray="0 ${gapLen} ${dashLen}" transform="rotate(-90 20 20)"/>
-    </svg>`;
-    const deadFilter = isDead ? 'filter:grayscale(85%) brightness(0.65);' : '';
-    return `<div class="map-token" data-id="${id}" title="${esc(c.name)}"
-      style="left:${pos.x}%;top:${pos.y}%;${bg}${cursorStyle}${deadFilter}"${dragAttr}>${portrait ? '' : initials}${ring}</div>`;
+    // pathLength="100" normalizes dasharray to a fixed 0-100 scale for
+    // WHATEVER geometry the element traces, so the same dash/gap formula
+    // below works identically for the circle, the square path, and the
+    // triangle without hand-computing each shape's real perimeter.
+    const dashLen = pct * 100, gapLen = 100 - dashLen;
+    const ringAttrs = `pathLength="100" fill="none" stroke-width="3" style="stroke:${color}" stroke-dasharray="0 ${gapLen} ${dashLen}" transform="rotate(-90 20 20)"`;
+    const ringShape = shape === 'square'
+      // Explicit path (not <rect>) so it starts at top-center like the
+      // circle/triangle do, instead of a rect's default top-left start.
+      ? `<path d="M20,3 L37,3 L37,37 L3,37 L3,3 Z" ${ringAttrs}/>`
+      : shape === 'triangle'
+      ? `<polygon points="20,5 34,33 6,33" ${ringAttrs}/>`
+      : `<circle cx="20" cy="20" r="18.5" ${ringAttrs}/>`;
+    const ring = `<svg width="40" height="40" viewBox="0 0 40 40" style="position:absolute;inset:0;pointer-events:none">${ringShape}</svg>`;
+    // box-shadow doesn't respect clip-path (needed for the triangle), so
+    // the drop shadow is a filter here and applied to every shape alike.
+    const shadow = 'drop-shadow(0 2px 8px rgba(0,0,0,0.6))';
+    const filterStyle = isDead ? `filter:${shadow} grayscale(85%) brightness(0.65);` : `filter:${shadow};`;
+    return `<div class="map-token shape-${shape}" data-id="${id}" title="${esc(c.name)}"
+      style="left:${pos.x}%;top:${pos.y}%;${bg}${cursorStyle}${filterStyle}"${dragAttr}>${portrait ? '' : initials}${ring}</div>`;
   }).join('');
 }
 
@@ -4751,11 +4771,11 @@ const COMPANION_TEMPLATES = {
 // match this app's existing floor-at-0 clamp with no death-save baggage)
 // and Karosserie-SP (occupant cover, stored in armor_body — mechanically
 // identical to personal armor ablation, just relabeled). Weapon systems
-// (§22a.1) are fired by whichever character is manning them using THEIR
-// OWN stats per RAW ("Der Schuetze wuerfelt den in Klammern genannten
-// PW") — a vehicle has no attribute block of its own, so its weapons
-// intentionally show bonus/PW-label as reference only, same as any
-// weapon on a character with no `stats` object.
+// (§22a.1) are fired by "whoever is manning them" per RAW, but for a
+// generated vehicle that's rarely a specific named PC — so it gets its
+// own synthetic "crew" stats (see processGeneratedVehicle) instead of
+// leaving `stats` empty, letting its weapon systems roll a live PW like
+// any other character's.
 // ═══════════════════════════════════════════════════════════════
 const VEHICLE_WEAPON_TABLE = {
   'Heavy MG (12.7mm)':          { bonus:18, pw:['strength','focus'], label:'Str+Foc', range:'800m',  tags:['Sustained fire', 'Can Suppress (§22a.6)'] },
@@ -5198,6 +5218,11 @@ const WEAPON_ALIASES = {
 function matchWeaponName(name) {
   const direct = matchCatalogName(name, WEAPON_TABLE);
   if (direct) return direct;
+  // Vehicle weapon systems (§22a.1) live in a separate catalog since they're
+  // off the personal weapon scale — checked as a fallback so a vehicle's
+  // onboard weapons resolve a live PW/bonus the same way a character's do.
+  const vehicleMatch = matchCatalogName(name, VEHICLE_WEAPON_TABLE);
+  if (vehicleMatch) return vehicleMatch;
   const norm = String(name || '').trim().toLowerCase();
   const canonical = WEAPON_ALIASES[norm];
   return canonical ? WEAPON_TABLE[canonical] : null;
@@ -5433,6 +5458,12 @@ function processGeneratedVehicle(v) {
         ? { name, bonus: match.bonus, pwLabel: match.label, range: match.range, tags: match.tags || [] }
         : { name, bonus: FALLBACK_WEAPON_BONUS.THREAT, pwLabel: '', range: '', tags: [] };
     });
+    // A weapon system needs a live PW to actually be rollable at the table.
+    // Every entry in VEHICLE_WEAPON_TABLE only ever references
+    // Strength/Focus/Senses, so a synthetic "crew" statline reusing the
+    // deterministic HEAVY-archetype engine (built for exactly this stat
+    // lean) covers it — a competent operator, not a specific named PC.
+    v.stats = computeAttributes('THREAT', 'HEAVY');
   } catch (err) {
     console.error('processGeneratedVehicle failed, leaving raw LLM values in place:', err);
   }
@@ -5738,7 +5769,7 @@ function copyImagePrompt(enemy) {
 function genVehicleResultToCharacter(v) {
   return {
     name: v.name, isNPC: true, isAlly: v.faction === 'ally', isVehicle: true,
-    stats: null,
+    stats: v.stats || null,
     hp_override: true,
     hp_max: v.sdp || 1, hp_current: v.sdp || 1,
     initiative: null, // computed live as vehicle Speed+1d6, not stored
