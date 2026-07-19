@@ -4112,6 +4112,8 @@ BRUISER — melee tank/brawler. GUNNER — ranged generalist (pistol/SMG/AR). SN
 WEAPON CATALOG (pick names from this list where possible — pick 1 for GRUNT, 1-2 for THREAT, 2-3 for BOSS):
 Medium Pistol, Heavy Pistol, Very Heavy Pistol, Malorian Arms 3516, SMG, Heavy SMG, Assault Rifle, Shotgun, Sniper Rifle, Knife, Big Knucks, Mono-Filament Wire, Medium Melee, Rippers, Mantis Blades, Heavy Melee, Kendachi Mono-Three
 
+WEAPON FIT (default, not a hard rule): the character's PRIMARY (first-listed) weapon should make sense for their archetype, so the two never contradict each other without reason — BRUISER → a melee weapon; GUNNER → pistol/SMG/AR; SNIPER → Sniper Rifle or another long-range option; STEALTH → a concealable pistol or light melee (Knife, Mono-Filament Wire); NETRUNNER/SUPPORT → whatever a tech/support character would plausibly carry, often a sidearm or light melee as backup rather than a heavy weapon. A second/third weapon can break from this for flavor (e.g. a BRUISER also carrying a sidearm). This is only a default — if the user's request explicitly asks for an off-archetype weapon (e.g. "a bruiser wielding a sniper rifle"), follow the request instead.
+
 ARMOR CATALOG (pick one name): Leathers, Kevlar Vest, Body Weight Suit, Light Armorjack, Medium Armorjack, Heavy Armorjack, MetalGear
 
 CYBERWARE CATALOG (optional, pick 0-3 names where sensible; other cyberware names are allowed as flavor but won't affect stats): Reflex Booster, Memory Booster, Cybereye, Cyberaudio Suite, Cyberleg, Cyberarm, Subdermal Armor, Neural Link, Kerenzikov, Sandevistan
@@ -4924,6 +4926,35 @@ function rollWeaponTech(tier) {
   return { tech: type, techLevel: null };
 }
 
+// NETRUNNER-archetype gear (§10) — like attachments/tech above, this is
+// rolled deterministically from tier, never LLM-picked, so it stays
+// consistent with "the model picks the concept, the code picks the gear."
+// Firewall uses the rulebook's §10.2 NPC target bands (simple 8-12,
+// medium 15-20, elite/netrunner 22-30) rather than item bonuses, since a
+// generated enemy has no gear list for FIREWALL_ITEM_BONUS to scan.
+const NETRUNNER_DECK_BY_TIER = { GRUNT: 'Basic', THREAT: 'Standard', BOSS: 'Military' };
+const NETRUNNER_FIREWALL_BY_TIER = { GRUNT: 10, THREAT: 18, BOSS: 26 };
+const NETRUNNER_HACK_COUNT = { GRUNT: 2, THREAT: 3, BOSS: 4 };
+function rollNetrunnerHacks(tier, faction) {
+  const count = NETRUNNER_HACK_COUNT[tier] ?? 2;
+  const offensivePool = [...HACK_CATALOG.Combat, ...HACK_CATALOG.Control, ...HACK_CATALOG.Duel];
+  const supportPool = [...HACK_CATALOG.Utility, ...HACK_CATALOG.Environment];
+  const primaryPool = faction === 'ally' ? supportPool : offensivePool;
+  const secondaryPool = faction === 'ally' ? offensivePool : supportPool;
+  const used = new Set();
+  const picked = [];
+  for (let i = 0; i < count; i++) {
+    const useSecondary = Math.random() < 0.25;
+    const pool = (useSecondary ? secondaryPool : primaryPool).filter(h => !used.has(h.name));
+    const choices = pool.length ? pool : [...primaryPool, ...secondaryPool].filter(h => !used.has(h.name));
+    if (!choices.length) break;
+    const pick = choices[Math.floor(Math.random() * choices.length)];
+    used.add(pick.name);
+    picked.push({ name: pick.name });
+  }
+  return picked;
+}
+
 function distribute(pool, weights, cap) {
   const keys = Object.keys(weights);
   const raw = keys.map(k => pool * weights[k]);
@@ -5110,7 +5141,7 @@ function processGeneratedEnemy(e) {
     // attachments, tier-scaled. Smart's PW/bonus tradeoff is unconditional
     // per the rulebook so it's folded into the numbers here; Power/Tech and
     // all attachments are situational, so they stay descriptive-only.
-    let neuralLinkNeeded = false;
+    let neuralLinkNeeded = archetype === 'NETRUNNER';
     e.weapons = (e.weapons || []).map(w => {
       const match = matchWeaponName(w.name);
       // Weapon technology (Power/Tech/Smart, §7a "Fernkampfwaffen") and
@@ -5155,6 +5186,13 @@ function processGeneratedEnemy(e) {
       if (!e.cyberware.some(cw => String(cw).trim().toLowerCase() === 'neural link')) {
         e.cyberware.push('Neural Link');
       }
+    }
+    // Netrunner kit (§10): deck tier, Firewall, and hacks all rolled from
+    // tier/faction alone — see rollNetrunnerHacks for why this isn't LLM-picked.
+    if (archetype === 'NETRUNNER') {
+      e.cyberdeck = NETRUNNER_DECK_BY_TIER[tier] || 'Basic';
+      e.firewall = NETRUNNER_FIREWALL_BY_TIER[tier] || 10;
+      e.hacks = rollNetrunnerHacks(tier, e.faction);
     }
     if (e.weapons.length) {
       e.combat = { primaryPW: e.weapons[0]._pw, primaryPWLabel: e.weapons[0].pwLabel.split(' · ')[0], secondaryPW: null, secondaryPWLabel: null };
@@ -5305,6 +5343,7 @@ function renderEnemyResult(e) {
     </div>`;
   }).join('');
   const cyber = (e.cyberware||[]).map(c=>`<div style="color:#7aafc8;font-size:11px;margin-bottom:2px">⬡ ${esc(c)}</div>`).join('');
+  const hacksList = (e.hacks||[]).map(h=>`<div style="color:var(--cyan);font-size:11px;margin-bottom:2px">▸ ${esc(h.name)}</div>`).join('');
   const loot = (e.loot||[]).map(l=>`<div style="color:#9aaa7a;font-size:11px;margin-bottom:2px">◈ ${esc(l)}</div>`).join('');
   const pw2 = e.combat?.secondaryPW ? `<div style="background:rgba(255,255,255,0.04);padding:5px 11px;border:1px solid rgba(255,255,255,0.05)"><span style="color:var(--text2);font-size:10px">${esc(e.combat.secondaryPWLabel)} </span><span style="font-size:14px;font-weight:700">${e.combat.secondaryPW}</span></div>` : '';
   const isAlly = e.faction === 'ally';
@@ -5332,6 +5371,7 @@ function renderEnemyResult(e) {
       </div>
       ${wpns ? `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">WEAPONS</div>${wpns}</div>` : ''}
       ${cyber ? `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">CYBERWARE</div>${cyber}</div>` : ''}
+      ${hacksList ? `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">${esc(e.cyberdeck||'')} DECK · HACKS</div>${hacksList}</div>` : ''}
       <div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">TACTICS</div><p style="font-size:11px;color:#777;line-height:1.65">${esc(e.tactics||'')}</p></div>
       ${loot ? `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">LOOT</div>${loot}</div>` : ''}
       ${e.imagePrompt ? `<div style="margin-bottom:10px">
@@ -5389,7 +5429,9 @@ function genResultToCharacter(enemy) {
     })),
     loot: enemy.loot || [],
     cyberware: enemy.cyberware || [],
+    cyberdeck: enemy.cyberdeck || null,
     firewall: enemy.firewall || null,
+    hacks: enemy.hacks || [],
     image_prompt: enemy.imagePrompt || '',
     status_effects: [], talents: [], inventory: [], eurodollar: 0
   };
