@@ -29,6 +29,8 @@
   --green-glow: rgba(0,255,136,0.12);
   --purple: #8800cc;
   --purple-bright: #cc44ff;
+  --blue: #2255cc;
+  --blue-bright: #4488ff;
   --font: 'Courier New', monospace;
   --radius: 1px;
 }
@@ -290,6 +292,11 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
    inside is absolutely positioned with inset:0, so it stretches to match
    without any change to its 0-40 coordinate math. */
 .map-token.shape-triangle { clip-path: polygon(50% 5%, 95% 95%, 5% 95%); width: 52px; height: 52px; }
+/* Same hexagon as the ring's <polygon points="20,2 36,12 36,28 20,38 4,28
+   4,12"> in buildMapTokensHtml — same identical-shape requirement as the
+   triangle above. A hexagon's inscribed area is much closer to a circle's
+   than a triangle's, so it doesn't need the same size bump. */
+.map-token.shape-hexagon { clip-path: polygon(50% 5%, 90% 30%, 90% 70%, 50% 95%, 10% 70%, 10% 30%); }
 /* ── COMBATANT CARD ── */
 .combatant-card {
   background: var(--surface);
@@ -743,6 +750,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         <button id="gen-mode-encounter" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('encounter')">FULL ENCOUNTER</button>
         <button id="gen-mode-loot" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('loot')">🎲 LOOT ROLLER</button>
         <button id="gen-mode-vehicle" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('vehicle')">🚗 VEHICLE</button>
+        <button id="gen-mode-drone" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setGenMode('drone')">⬡ DRONE</button>
       </div>
       <!-- Controls -->
       <div id="gen-single-controls">
@@ -790,6 +798,23 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
           <button class="gen-vcat-btn" id="gvcat-military" onclick="setGenVehicleCategory('military')" style="flex:1;padding:6px;font-size:10px;letter-spacing:0.1em;background:transparent;border:1px solid var(--border2);color:var(--text3);cursor:pointer;font-family:var(--font)">MILITARY</button>
         </div>
         <div style="font-size:10px;color:var(--text3);line-height:1.5">Defaults to the exact rulebook stat block for whichever named vehicle fits your description best. Only deviates (armament swap, battle damage, etc.) if you ask for it.</div>
+      </div>
+
+      <!-- Drone controls -->
+      <div id="gen-drone-controls" style="display:none;margin-bottom:10px">
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <button class="gen-dcat-btn" id="gdcat-any" onclick="setGenDroneCategory('any')" style="flex:1;padding:6px;font-size:10px;letter-spacing:0.1em;background:var(--cyan-dim);border:1px solid var(--cyan);color:var(--cyan);cursor:pointer;font-family:var(--font)">ANY</button>
+          <button class="gen-dcat-btn" id="gdcat-standard" onclick="setGenDroneCategory('standard')" style="flex:1;padding:6px;font-size:10px;letter-spacing:0.1em;background:transparent;border:1px solid var(--border2);color:var(--text3);cursor:pointer;font-family:var(--font)">STANDARD</button>
+          <button class="gen-dcat-btn" id="gdcat-fpv" onclick="setGenDroneCategory('fpv')" style="flex:1;padding:6px;font-size:10px;letter-spacing:0.1em;background:transparent;border:1px solid var(--border2);color:var(--text3);cursor:pointer;font-family:var(--font)">FPV</button>
+          <button class="gen-dcat-btn" id="gdcat-autonomous" onclick="setGenDroneCategory('autonomous')" style="flex:1;padding:6px;font-size:10px;letter-spacing:0.1em;background:transparent;border:1px solid var(--border2);color:var(--text3);cursor:pointer;font-family:var(--font)">AUTONOMOUS</button>
+        </div>
+        <div class="field" style="margin-bottom:8px">
+          <label>Operator (optional — controlled/FPV drones roll PW off this character's Int/Focus/Senses; leave blank for autonomous drones)</label>
+          <select id="gen-drone-operator">
+            <option value="">— none —</option>
+          </select>
+        </div>
+        <div style="font-size:10px;color:var(--text3);line-height:1.5">Defaults to the exact rulebook stat block for whichever named drone fits your description best.</div>
       </div>
 
       <div id="gen-ai-section">
@@ -1803,9 +1828,9 @@ function renderPreCombat() {
     return;
   }
   el.innerHTML = entries.map(([id, c]) => `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid ${c.isVehicle ? 'var(--gold-bright)' : (c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red)' : 'var(--cyan)')))}">
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid ${c.isDrone ? 'var(--blue-bright)' : (c.isVehicle ? 'var(--gold-bright)' : (c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red)' : 'var(--cyan)'))))}">
       <div style="flex:1;font-size:13px;font-weight:700">${esc(c.name)}</div>
-      <div style="font-size:10px;color:var(--text2)">${c.isVehicle ? 'VEH' : (c.isCompanion ? 'COM' : (c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC')))}</div>
+      <div style="font-size:10px;color:var(--text2)">${c.isDrone ? 'DRN' : (c.isVehicle ? 'VEH' : (c.isCompanion ? 'COM' : (c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC'))))}</div>
       <div style="font-size:11px;color:var(--green-bright)">${c.hp_current ?? c.hp_max}/${c.hp_max} HP</div>
       <div style="font-size:10px;color:var(--text2)">INI: ${c.initiative ?? 0}</div>
       <button class="btn btn-danger btn-small btn-icon" onclick="toggleCombatQueue('${id}')" title="Remove from queue">✕</button>
@@ -1856,10 +1881,11 @@ function buildMapTokensHtml(interactive) {
     const c = state.characters[id]; if (!c) return '';
     ensurePortraitListener(id);
     const portrait = portraits[id];
-    const color = c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)'));
+    const color = c.isDrone ? 'var(--blue-bright)' : (c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)')));
     // Shape is a second, color-independent channel: triangle=companion,
-    // square=vehicle, circle=everyone else (PC/NPC/Ally stay color-only).
-    const shape = c.isVehicle ? 'square' : (c.isCompanion ? 'triangle' : 'circle');
+    // square=vehicle, hexagon=drone, circle=everyone else (PC/NPC/Ally
+    // stay color-only).
+    const shape = c.isDrone ? 'hexagon' : (c.isVehicle ? 'square' : (c.isCompanion ? 'triangle' : 'circle'));
     const pos = state.map?.tokens?.[id] || { x: 50, y: 50 };
     const bg = portrait ? `background-image:url('${portrait}');` : '';
     const initials = esc(c.name.slice(0, 2).toUpperCase());
@@ -1899,6 +1925,10 @@ function buildMapTokensHtml(interactive) {
       // 5% 95% of a 40x40 box == these px) so the ring hugs the actual
       // visible (image-clipped) edge instead of floating inside it.
       ? `<polygon points="20,2 38,38 2,38" ${ringAttrs}/>`
+      : shape === 'hexagon'
+      // Matches .shape-hexagon's clip-path exactly, same reasoning as
+      // the triangle above.
+      ? `<polygon points="20,2 36,12 36,28 20,38 4,28 4,12" ${ringAttrs}/>`
       : `<circle cx="20" cy="20" r="18.5" ${ringAttrs} transform="rotate(-90 20 20)"/>`;
     // width/height are set via CSS (100%), not the SVG's own attributes —
     // those act as a fixed intrinsic size that "inset:0" alone doesn't
@@ -2373,7 +2403,7 @@ function renderCombatantCard(id, isActive) {
   const ipMax = c.ip_max ?? 0;
   const humanityCur = c.humanity_current ?? c.humanity_max ?? 0;
   const humanityMax = c.humanity_max ?? 0;
-  return `<div class="combatant-card ${c.isVehicle ? 'is-vehicle' : (c.isCompanion ? 'is-companion' : (c.isAlly ? 'is-ally' : (c.isNPC ? 'is-npc' : 'is-pc')))} ${isActive ? 'active-turn' : ''} ${hpCur <= 0 ? 'is-dead' : ''}" id="cc-${id}">
+  return `<div class="combatant-card ${c.isDrone ? 'is-drone' : (c.isVehicle ? 'is-vehicle' : (c.isCompanion ? 'is-companion' : (c.isAlly ? 'is-ally' : (c.isNPC ? 'is-npc' : 'is-pc'))))} ${isActive ? 'active-turn' : ''} ${hpCur <= 0 ? 'is-dead' : ''}" id="cc-${id}">
     <div class="combatant-top" onclick="toggleDetail('${id}')">
       <div>
         <div class="combatant-name">${esc(c.name)}${c.isVehicle ? ' 🚗' : ''}</div>
@@ -2395,6 +2425,10 @@ function renderCombatantCard(id, isActive) {
         <span class="detail-label">VEHICLE</span>
         <span>${esc(c.vehicle_template||'')} · Speed ${c.vehicle_speed??'—'} (Ini = Speed+1d6) · Seats ${esc(String(c.vehicle_seats??'—'))}</span>
       </div>` : ''}
+      ${c.isDrone ? `<div class="detail-row" style="font-size:10px;color:var(--text3)">
+        <span class="detail-label">DRONE</span>
+        <span>${esc(c.drone_template||'')} · ${c.drone_mode === 'autonomous' ? `Autonomous (Ini = ${esc(c.drone_initiative_note||'—')})` : `Controlled — Operator: ${esc(state.characters[c.owner_char_id]?.name || '— none set —')}`}${c.drone_loudness ? ' · ' + esc(c.drone_loudness) : ''}${c.drone_range ? ' · Range ' + esc(c.drone_range) : ''}</span>
+      </div>` : ''}
       <div class="detail-row">
         <span class="detail-label">${c.isVehicle ? 'SDP' : 'HP'}</span>
         <div class="adj-group">
@@ -2404,7 +2438,7 @@ function renderCombatantCard(id, isActive) {
           <button class="adj-btn green" onclick="quickAdj('${id}','hp',1)">+1</button>
         </div>
       </div>
-      ${!c.isVehicle ? `<div class="detail-row">
+      ${(!c.isVehicle && !c.isDrone) ? `<div class="detail-row">
         <span class="detail-label">STAMINA</span>
         <div class="adj-group">
           <button class="adj-btn red" onclick="quickAdj('${id}','stamina',-1)">−1</button>
@@ -2458,6 +2492,10 @@ function renderCombatantCard(id, isActive) {
         <span class="detail-label" style="margin-top:4px">ABILITIES</span>
         <div style="flex:1">${c.vehicle_abilities.map(a => `<div style="font-size:10px;color:var(--text2);margin-bottom:4px;line-height:1.5">▸ ${esc(a)}</div>`).join('')}</div>
       </div>` : ''}
+      ${(c.isDrone && c.drone_abilities?.length) ? `<div class="detail-row" style="align-items:flex-start">
+        <span class="detail-label" style="margin-top:4px">ABILITIES</span>
+        <div style="flex:1">${c.drone_abilities.map(a => `<div style="font-size:10px;color:var(--text2);margin-bottom:4px;line-height:1.5">▸ ${esc(a)}</div>`).join('')}</div>
+      </div>` : ''}
       ${renderHacksSection(c, id)}
       ${renderConsumablesSection(c, id)}
       ${renderLootAndItems(c, id)}
@@ -2491,7 +2529,7 @@ function combatToggleButtonHtml(id) {
 let expandedMissionGroups = new Set();
 
 function charItemRow(id, c) {
-  const color = c.isVehicle ? 'var(--gold-bright)' : (c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)')));
+  const color = c.isDrone ? 'var(--blue-bright)' : (c.isVehicle ? 'var(--gold-bright)' : (c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)'))));
   const portrait = portraits[id];
   const avatar = portrait
     ? `<div style="width:32px;height:32px;border-radius:50%;background-image:url('${portrait}');background-size:cover;background-position:center;border:2px solid ${color};flex-shrink:0"></div>`
@@ -2501,7 +2539,7 @@ function charItemRow(id, c) {
     ${avatar}
     <div style="flex:1">
       <div class="char-item-name">${esc(c.name)}</div>
-      <div class="char-item-sub">${c.isVehicle ? 'VEH' : (c.isCompanion ? 'COM' : (c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC')))}${c.pin ? ' · PIN set' : ''} · INI ${c.initiative ?? 0}</div>
+      <div class="char-item-sub">${c.isDrone ? 'DRN' : (c.isVehicle ? 'VEH' : (c.isCompanion ? 'COM' : (c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC'))))}${c.pin ? ' · PIN set' : ''} · INI ${c.initiative ?? 0}</div>
     </div>
     <div class="char-item-hp">${c.hp_current ?? c.hp_max}/${c.hp_max}</div>
     ${combatToggleButtonHtml(id)}
@@ -2812,25 +2850,33 @@ function initCompareKey(id, initRolls) {
   return [1, -(c?.initiative || 0)]; // guard: shouldn't normally happen
 }
 
-// Sorts non-companions by the crit/hit/miss/crit-fail rule above, then
-// slots each companion in right after its owner (end of order if the
-// owner isn't in this combat yet).
+// A companion always rides its owner's turn slot; a drone only does when
+// it's "controlled" (§7b.1: "Sie hat keine eigene Initiative — sie
+// handelt wenn der Operator ihr eine Aktion gibt"). An autonomous drone
+// (§7b.4) rolls its own Speed+Xd6 like anything else and sorts normally.
+function slotsNextToOwner(c) {
+  return !!(c?.isCompanion || (c?.isDrone && c.drone_mode !== 'autonomous'));
+}
+
+// Sorts everyone else by the crit/hit/miss/crit-fail rule above, then
+// slots each companion/controlled-drone in right after its owner (end of
+// order if the owner isn't in this combat yet).
 function sortCombatOrder(ids, initRolls) {
-  const companions = ids.filter(id => state.characters[id]?.isCompanion);
-  const nonCompanions = ids.filter(id => !state.characters[id]?.isCompanion);
-  nonCompanions.sort((a, b) => {
+  const riders = ids.filter(id => slotsNextToOwner(state.characters[id]));
+  const others = ids.filter(id => !slotsNextToOwner(state.characters[id]));
+  others.sort((a, b) => {
     const [ca, va] = initCompareKey(a, initRolls);
     const [cb, vb] = initCompareKey(b, initRolls);
     return ca !== cb ? ca - cb : va - vb;
   });
-  const result = [...nonCompanions];
-  for (const compId of companions) {
-    const ownerId = state.characters[compId]?.owner_char_id;
+  const result = [...others];
+  for (const riderId of riders) {
+    const ownerId = state.characters[riderId]?.owner_char_id;
     const ownerIdx = result.indexOf(ownerId);
-    if (ownerIdx === -1) { result.push(compId); continue; }
+    if (ownerIdx === -1) { result.push(riderId); continue; }
     let insertAt = ownerIdx + 1;
-    while (insertAt < result.length && state.characters[result[insertAt]]?.isCompanion && state.characters[result[insertAt]]?.owner_char_id === ownerId) insertAt++;
-    result.splice(insertAt, 0, compId);
+    while (insertAt < result.length && slotsNextToOwner(state.characters[result[insertAt]]) && state.characters[result[insertAt]]?.owner_char_id === ownerId) insertAt++;
+    result.splice(insertAt, 0, riderId);
   }
   return result;
 }
@@ -2844,7 +2890,7 @@ async function startCombat() {
   const initRolls = {};
   validIds.forEach(id => {
     const c = state.characters[id];
-    if (!c.isCompanion) {
+    if (!slotsNextToOwner(c)) {
       const rolled = rollInitiativeFor(c);
       initRolls[id] = { category: rolled.category, value: rolled.value, rolls: rolled.rolls };
     }
@@ -2861,7 +2907,7 @@ async function endCombat() {
   // the round/turn tracker and PC-only combat state. Nothing is deleted.
   const updates = { 'combat': { active: false, round: 1, currentTurn: 0, order: [], initRolls: {} } };
   for (const [id, c] of Object.entries(state.characters)) {
-    if (!c.isNPC || c.isCompanion) {
+    if (!c.isNPC || c.isAlly || c.isCompanion) {
       updates['characters/' + id + '/flink_used'] = false;
       updates['characters/' + id + '/status_effects'] = [];
       if (c.armor_body) updates['characters/' + id + '/armor_body/sp_temp'] = c.armor_body.sp_base;
@@ -3019,7 +3065,7 @@ async function toggleCombatQueue(id) {
     } else {
       order.push(id);
       const c = state.characters[id];
-      if (c && !c.isCompanion) {
+      if (c && !slotsNextToOwner(c)) {
         const rolled = rollInitiativeFor(c);
         initRolls[id] = { category: rolled.category, value: rolled.value, rolls: rolled.rolls };
         showToast(`${c.name} rolled initiative: ${rolled.rolls.join('+')} → ${initRollLabel(rolled.category, rolled.value)}`);
@@ -4109,7 +4155,7 @@ async function setPlayerPin(charId, pin) {
 async function resetAllHP() {
   const updates = {};
   for (const [id, c] of Object.entries(state.characters)) {
-    if (!c.isNPC || c.isCompanion) {
+    if (!c.isNPC || c.isAlly || c.isCompanion) {
       updates['characters/' + id + '/hp_current'] = c.hp_max;
       updates['characters/' + id + '/stamina_current'] = c.stamina_max;
       if (c.ip_max) updates['characters/' + id + '/ip_current'] = c.ip_max;
@@ -4209,7 +4255,18 @@ Military: Militech "Behemoth" APC (armored troop transport, turret+MG, rams thro
 VEHICLE WEAPON CATALOG (only used in "weaponOverride", names must match exactly): Heavy MG (12.7mm), Rotary Cannon (Minigun), 20mm Autocannon, 30mm Autocannon, Guided Missile, Tank Main Gun, Flechette/Swarm Launcher
 
 VEHICLE JSON (respond ONLY with this when asked for a vehicle, no backticks):
-{"name":"string (flavor name/callsign, can differ from the template name)","vehicleTemplate":"string, EXACT name from VEHICLE CATALOG above","flavor":"2-3 sentences noir","imagePrompt":"string, see IMAGE PROMPT rule above but for a vehicle, not a person","weaponOverride":["string, 0+ names from VEHICLE WEAPON CATALOG — ONLY if the request specifically calls for different armament than the template's stock loadout, otherwise omit/empty"],"statOverride":{"sdp":null,"sp":null,"speed":null},"tactics":"string","gmNote":null}`;
+{"name":"string (flavor name/callsign, can differ from the template name)","vehicleTemplate":"string, EXACT name from VEHICLE CATALOG above","flavor":"2-3 sentences noir","imagePrompt":"string, see IMAGE PROMPT rule above but for a vehicle, not a person","weaponOverride":["string, 0+ names from VEHICLE WEAPON CATALOG — ONLY if the request specifically calls for different armament than the template's stock loadout, otherwise omit/empty"],"statOverride":{"sdp":null,"sp":null,"speed":null},"tactics":"string","gmNote":null}
+
+DRONE GENERATION: Used when the user asks for a drone instead of an NPC or vehicle. Like vehicles, every drone is a NAMED stat block from the rulebook — DO NOT INVENT STATS. Pick the ONE named drone from the DRONE CATALOG below that best matches the request; the numbers come from that exact template, not from you.
+
+DRONE CATALOG (exact names — "droneTemplate" must match one of these exactly):
+Standard/controlled (act on their operator's turn, no initiative of their own): Mikro-Aufklärungsdrohne (tiny silent scout, camera+audio only, no weapon), Standard-Aufklärungsdrohne (recon drone, optional light pistol, spotlight/marker laser), Kampfdrohne (Leicht) (fast agile attack drone, Heavy Pistol), Kampfdrohne (Schwer) (armored heavy combat drone, SMG + optional grenade launcher), Stealth-Aufklärungsdrohne (Tarnkappen) (cloaked recon, no weapon, can go fully invisible), EMP-Spezialist-Drohne (anti-cyberware/anti-machine EMP weapon, useless vs unaugmented targets), Mikro-Schwarm-Drohne (10-drone swarm acting as one unit, needs AoE/Autofire to fight effectively)
+FPV/controlled (also act on their operator's turn; mostly one-shot kamikaze weapons): FPV-Drohne (Basis-Kamikaze) (cheap disposable explosive drone), FPV-Drohne (Kampf-FPV) (reusable, small pistol mount), FPV-Drohne (Tandem-Ladung) (anti-vehicle shaped charge, one-shot), FPV-Drohne (Long-Range Reconnaissance) (no weapon, extreme range ISR drone), FPV-Drohnen-Schwarm (Koordinierter Angriff) (3-5 coordinated kamikaze drones)
+Autonomous (have their OWN initiative, no operator needed): Autonome Begleiter-Drohne (Leicht) (light autonomous guard/patrol drone, Heavy Pistol), Autonome Kampf-Begleitdrohne (Schwer) (heavy autonomous combat platform, SMG + grenade launcher)
+Note: the GREMLIN Support Drone is NOT in this catalog — it's a talent-bound Companion, generate it as an ally NPC concept instead if asked for GREMLIN specifically.
+
+DRONE JSON (respond ONLY with this when asked for a drone, no backticks):
+{"name":"string (flavor name/callsign, can differ from the template name)","droneTemplate":"string, EXACT name from DRONE CATALOG above","flavor":"2-3 sentences noir","imagePrompt":"string, see IMAGE PROMPT rule above but for a drone, not a person","tactics":"string","gmNote":null}`;
 
 // ═══════════════════════════════════════════════════════════════
 // DETERMINISTIC NPC STAT ENGINE
@@ -4735,9 +4792,15 @@ function computeLiveWeaponStats(c, w) {
   let bonus = w.bonus || 0;
   let pw = null, pwLabel = w.pw || '';
   let magMax = catalogMatch?.mag ?? null; // null = no magazine (melee, or unrecognized name)
-  if (catalogMatch && c.stats) {
-    pw = c.stats[catalogMatch.pw[0]] + c.stats[catalogMatch.pw[1]];
-    pwLabel = catalogMatch.label;
+  // Drones override which two stats the PW comes from — §7b.2: "PW =
+  // Int+Focus des Operators" (standard) or Focus+Senses (FPV), regardless
+  // of what stat pair the mounted weapon's own catalog entry normally
+  // uses. Everything else (bonus, mag, tags) still comes from the catalog.
+  const pwPair = w.pwOverride || catalogMatch?.pw;
+  const pwPairLabel = w.pwOverride ? (w.pwOverrideLabel || pwLabel) : catalogMatch?.label;
+  if (pwPair && c.stats) {
+    pw = c.stats[pwPair[0]] + c.stats[pwPair[1]];
+    pwLabel = pwPairLabel;
   }
   const situational = [];
   (w.attachments || []).forEach(a => {
@@ -4761,12 +4824,12 @@ function computeLiveWeaponStats(c, w) {
   return { bonus, pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, situational, magMax };
 }
 
-// A controlled companion drone's attack roll uses its OPERATOR's stats
-// (rulebook §7b.2: "PW = Int+Focus des Operators"), not its own — resolve
-// which character's `.stats` a weapon-PW calculation should actually read
-// from, defaulting to the owner unless the GM opted out per-companion.
+// A controlled drone's (or companion's) attack roll uses its OPERATOR's
+// stats, not its own — resolve which character's `.stats` a weapon-PW
+// calculation should actually read from, defaulting to the owner unless
+// the GM opted out per-character.
 function getStatsSourceChar(c) {
-  if (c.isCompanion && c.useOwnerStatsForPW !== false && c.owner_char_id) {
+  if ((c.isCompanion || c.isDrone) && c.useOwnerStatsForPW !== false && c.owner_char_id) {
     const owner = state.characters[c.owner_char_id];
     if (owner) return owner;
   }
@@ -4774,17 +4837,17 @@ function getStatsSourceChar(c) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// COMPANIONS — quick-fill templates for the rulebook's named drone stat
-// blocks (§7b.5). Speed isn't tracked as a character stat anywhere in this
-// app, so it's dropped into Notes as reference text rather than inventing
-// a field for a single use case.
+// COMPANIONS — quick-fill template for the ONE drone the rulebook treats
+// as a true Companion. §7b's own text draws the line explicitly: "Eine
+// GREMLIN-Drohne ist persoenlich. Eine Kampfdrohne ist Ausruestung." —
+// the Kampfdrohnen and Autonome Begleiter-Drohnen that used to live here
+// moved to DRONE_TEMPLATES once that distinction existed to model against.
+// Speed isn't tracked as a character stat anywhere in this app, so it's
+// dropped into Notes as reference text rather than inventing a field for
+// a single use case.
 // ═══════════════════════════════════════════════════════════════
 const COMPANION_TEMPLATES = {
-  'GREMLIN Support Drone':                { hp:15, sp:4,  speed:16, weapon:{name:'EMP Discharge', bonus:7,  pw:'', tags:'Ignores SP'} },
-  'Kampfdrohne (Leicht)':                 { hp:20, sp:5,  speed:12, weapon:{name:'Heavy Pistol',   bonus:11, pw:'Ref+Cool', tags:''} },
-  'Kampfdrohne (Schwer)':                 { hp:40, sp:11, speed:8,  weapon:{name:'SMG',            bonus:14, pw:'Dex+Ref',  tags:'Autofire'} },
-  'Autonome Begleiter-Drohne (Leicht)':   { hp:25, sp:7,  speed:12, weapon:{name:'Heavy Pistol',   bonus:11, pw:'Ref+Cool', tags:''} },
-  'Autonome Kampf-Begleitdrohne (Schwer)': { hp:50, sp:14, speed:10, weapon:{name:'SMG',            bonus:18, pw:'Dex+Ref',  tags:'Autofire'} },
+  'GREMLIN Support Drone': { hp:15, sp:4, speed:16, weapon:{name:'EMP Discharge', bonus:7, pw:'', tags:'Ignores SP'} },
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -4914,6 +4977,179 @@ const VEHICLE_TEMPLATES = {
       'Raketen-Salve: 1x/combat: all 6 missiles — AoE 8m, +30 WB, target RW DV 18 or direct hit. Zone wipe.',
       'Überhitzung: After 3 rounds of heavy dual-system fire: 1 round cooldown, -4 PW. A window for the counterattack.',
       'Strukturschwachpunkte: Knees / cooling / sensor cluster (Aimed Shot -6 PW or a hack). A hit disables 1 system or immobilizes it. You beat a Grad through system attrition, not raw SDP.',
+    ],
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════
+// DRONES (§7b) — unlike vehicles, drones use "HP" (not SDP) so they reuse
+// hp_current/hp_max with no relabeling needed. Two modes:
+//   'controlled' — no initiative of its own (§7b.1: "Sie hat keine eigene
+//     Initiative — sie handelt wenn der Operator ihr eine Aktion gibt").
+//     Slotted into combat right after its linked operator, same as a
+//     Companion. Its weapon PW is the OPERATOR's own stats (Int+Focus for
+//     standard drones, Focus+Senses for FPV drones) per pwStats below —
+//     the rulebook also adds a flat "camera quality" bonus on top, but
+//     gives no per-drone numbers for it anywhere, so that stays a GM
+//     reference note rather than an invented number.
+//   'autonomous' — has its OWN initiative (Speed+Xd6, shown as reference
+//     text and entered manually, same treatment as vehicle initiative)
+//     and acts independently without needing an operator's action economy.
+// GREMLIN Support Drone stays out of this catalog entirely — per §7b's
+// own text it's the one drone that's a talent-bound Companion, not
+// equipment (see COMPANION_TEMPLATES).
+// ═══════════════════════════════════════════════════════════════
+const DRONE_TEMPLATES = {
+  'Mikro-Aufklärungsdrohne': {
+    mode:'controlled', pwStats:['intelligence','focus'], pwLabel:'Int+Foc (Operator)',
+    hp:5, sp:0, speed:10, weapons:[],
+    loudness:'Silent', range:'100m', chargeTime:'2h', price:'100 eb (Premium)',
+    abilities:[
+      'Kompaktkamera: Live HD feed. Operator sees everything the drone sees (incl. IR night mode).',
+      'Versteck-Scan: Secondary action, scans a 10m radius for hidden/disguised people. Drone Senses 12.',
+      'Mikro-Abhörer: Can record and transmit conversations within a 5m radius.',
+    ],
+  },
+  'Standard-Aufklärungsdrohne': {
+    mode:'controlled', pwStats:['intelligence','focus'], pwLabel:'Int+Foc (Operator)',
+    hp:12, sp:2, speed:14, weapons:[{name:'Light Pistol (optional)', bonus:7, tags:['Optional loadout']}],
+    loudness:'Leise', range:'300m', chargeTime:'4h', price:'500 eb (Expensive)',
+    abilities:[
+      'Vollspektrum-Kamera: Thermal, IR, night vision, normal camera. Zoom detail up to 200m.',
+      'Spotlight: Blinding light — target within 20m needs Will+Grit DV 10 or -4 PW next round.',
+      'Markierungslaser: Secondary action, holo-marks a target. Allies get +2 PW against the marked target.',
+    ],
+  },
+  'Kampfdrohne (Leicht)': {
+    mode:'controlled', pwStats:['intelligence','focus'], pwLabel:'Int+Foc (Operator)',
+    hp:20, sp:5, speed:12, weapons:[{name:'Heavy Pistol', bonus:11, tags:[]}],
+    loudness:'Moderat', range:'500m', chargeTime:'3h', price:'1000 eb (V. Expensive)',
+    abilities:[
+      'Ausweichprotokoll: When hit, Operator Intelligence roll (DV 10) — success halves the damage. 1x/round.',
+      'Unterdrückungs-Feuer: Can perform Suppressive Fire (Operator main action). Target needs Will DV 10 or moves to cover.',
+      "Dive Attack: +6 WB, but the drone holds position for 1 round after (can't dodge).",
+    ],
+  },
+  'Kampfdrohne (Schwer)': {
+    mode:'controlled', pwStats:['intelligence','focus'], pwLabel:'Int+Foc (Operator)',
+    hp:40, sp:11, speed:8, weapons:[{name:'SMG', bonus:14, tags:['Autofire']}, {name:'Grenade Launcher (optional)', bonus:18, tags:['2 charges', 'Optional loadout']}],
+    loudness:'Laut', range:'1000m', chargeTime:'6h', price:'5000 eb (Luxury)',
+    abilities:[
+      'Panzer-Chassis: Explosion damage halved. Cannot be immobilized by grappling.',
+      'Killzone-Modus: Operator main action (HIGH IMPACT) — drone covers a 90° sector; any target moving through it gets an automatic reaction shot (+14 WB).',
+      'Notfall-Selbstzerstörung: Operator main action (HIGH IMPACT) — drone detonates on command (+18 WB, 5m radius). Drone destroyed.',
+    ],
+  },
+  'Stealth-Aufklärungsdrohne (Tarnkappen)': {
+    mode:'controlled', pwStats:['intelligence','focus'], pwLabel:'Int+Foc (Operator)',
+    hp:8, sp:1, speed:18, weapons:[],
+    loudness:'Silent (cloaked: inaudible)', range:'300m', chargeTime:'2h', price:'5000 eb (Luxury)',
+    abilities:[
+      'Optical Camo: Fully invisible in passive mode (no weapon, no actions besides moving). Sensory detection DV 22.',
+      'Vollspektrum-Suite: Thermal / IR / EM / sound detection / motion sensor combined. Drone Senses 18.',
+      'Daten-Exfiltration: Secondary action, hacks data from a nearby terminal (Int+Focus DV 12). No physical access needed.',
+      'Ghost-Protokoll: Can stay cloaked even while attacking, if the attacker has Stealth Lv. III or higher.',
+    ],
+  },
+  'EMP-Spezialist-Drohne': {
+    mode:'controlled', pwStats:['intelligence','focus'], pwLabel:'Int+Foc (Operator)',
+    hp:12, sp:3, speed:12, weapons:[{name:'EMP-Kanone', bonus:11, tags:['+11 vs Cyberware/Machines, 0 vs unaugmented targets']}],
+    loudness:'Moderat', range:'500m', chargeTime:'3h', price:'1000 eb (V. Expensive)',
+    abilities:[
+      'Präzisions-EMP: Secondary action, targeted EMP — choose 1 specific cyberware item: instantly disabled for 3 rounds.',
+      'Flächen-EMP: Operator main action (HIGH IMPACT) — 5m radius EMP. All cyberware in range: Int+Focus DV 14 or disabled 2 rounds. 1x/combat.',
+      'Hack-Relais: Boosts operator hacks — +4 on all hack rolls while the drone is within 10m of the target.',
+      'Blackout: Operator main action (HIGH IMPACT) — all light sources and displays in a 20m radius disabled for 2 rounds. 1x/combat.',
+    ],
+  },
+  'Mikro-Schwarm-Drohne': {
+    mode:'controlled', pwStats:['intelligence','focus'], pwLabel:'Int+Foc (Operator)',
+    hp:30, sp:0, speed:14, weapons:[{name:'Schwarm-Nadeln', bonus:7, tags:['+7 one target OR +3 all in 3m radius']}],
+    loudness:'Moderat (individually: Silent)', range:'200m', chargeTime:'4h', price:'1000 eb (V. Expensive)',
+    abilities:[
+      'Schwarm-Mechanik: 10 micro-drones, 3 HP each. Normal weapons only hit 1 micro-drone at a time — AoE or Autofire needed to fight the swarm effectively.',
+      'Einhüll-Angriff: Operator main action — swarm fully envelops a target: -4 PW on all its actions for 2 rounds. 1x/combat.',
+      'Auflösen: Swarm can dissolve into the environment, becoming invisible. Regrouping: Operator secondary action.',
+      'Spy-Web: Each micro-drone can be positioned separately — network covers up to 50m x 50m (full-area surveillance).',
+    ],
+  },
+  'FPV-Drohne (Basis-Kamikaze)': {
+    mode:'controlled', pwStats:['focus','senses'], pwLabel:'Foc+Sen (Operator)',
+    hp:3, sp:0, speed:24, weapons:[{name:'Sprengladung', bonus:18, tags:['Grenade-equivalent', '3m radius', 'One-time use']}],
+    loudness:'Moderat (rotors)', range:'2000m', chargeTime:null, price:'50 eb (Costly)',
+    abilities:[
+      'FPV-Steuerung: Requires FPV goggles (20 eb). Operator sees the live feed. -2 PW on the operator\'s own actions while piloting.',
+      'Präzisions-Einschlag: Operator secondary action — drone maneuvers onto target; next round, kamikaze impact as the operator\'s main action. PW: Focus+Senses. Hit: full grenade damage at the impact point.',
+      'Fenster-Einflug: Can fly through windows, doorways, and narrow gaps (min. 50cm wide) — an indoor precision weapon.',
+      'Abfangbar: Small target — enemies can shoot it down with Autofire or an Aimed Shot (PW -4, but only 3 HP).',
+      'Einwegwaffe: Destroyed on kamikaze impact. Bring 1-2 per fight.',
+    ],
+  },
+  'FPV-Drohne (Kampf-FPV)': {
+    mode:'controlled', pwStats:['focus','senses'], pwLabel:'Foc+Sen (Operator)',
+    hp:5, sp:0, speed:20, weapons:[{name:'Pistol-Halterung', bonus:7, tags:['1 magazine']}],
+    loudness:'Moderat', range:'2000m', chargeTime:'1h', price:'100 eb (Premium)',
+    abilities:[
+      'FPV-Steuerung: Same as the Basis-Kamikaze — requires FPV goggles, -2 PW on the operator\'s own actions.',
+      "Erster-Blick-Angriff: Can attack from unexpected angles (below, behind, through windows). No cover bonus applies when the drone flanks.",
+      'Drohnen-Reload: Operator secondary action — drone returns to the operator and reloads (1 round).',
+      'Störungsresistenz: Basic frequency-hopping — EMP rolls against this drone: DV +2.',
+    ],
+  },
+  'FPV-Drohne (Tandem-Ladung)': {
+    mode:'controlled', pwStats:['focus','senses'], pwLabel:'Foc+Sen (Operator)',
+    hp:4, sp:0, speed:20, weapons:[{name:'Tandem-Ladung', bonus:25, tags:['vs vehicles: ignores armor SP', '5m radius', 'One-time use']}],
+    loudness:'Moderat', range:'3000m', chargeTime:null, price:'200 eb (Everyday, warzone) / 500 eb (Night City)',
+    abilities:[
+      'Anti-Fahrzeug: Against vehicles/armor, damage ignores SDP protection and hits SDP directly. Impact DV: Focus+Senses, DV 15 for a moving vehicle.',
+      "Panzerbrechend: Explodes in armor gaps — target's SP is permanently -6 after impact (ricochet effect).",
+      'Einmalladung: Drone destroyed after impact. Operator needs a new drone for the next attack.',
+      'Blind-Spot-Anflug: Operators with Focus+Senses >= 14 can fly the drone through a vehicle\'s blind spot — no reaction from the vehicle.',
+    ],
+  },
+  'FPV-Drohne (Long-Range Reconnaissance)': {
+    mode:'controlled', pwStats:['focus','senses'], pwLabel:'Foc+Sen (Operator)',
+    hp:6, sp:0, speed:16, weapons:[],
+    loudness:'Leise', range:'10000m', chargeTime:'3h', price:'200 eb (Everyday)',
+    abilities:[
+      '10-km-Auge: Transmits sharp 4K video with 30x optical zoom. Can recognize faces at 500m, license plates at 200m.',
+      'Artillerie-Spotter: Operator can relay coordinates to allies — grenade/rocket attacks on the marked target get +6 PW and no scatter.',
+      'Stille Beobachtung: Can hover on station for hours without being detected (DV 20 perception check while stationary).',
+      'Elektronisches Auge: Can locate active radio signals, drone frequencies, and cyberware broadcasts within a 500m radius.',
+    ],
+  },
+  'FPV-Drohnen-Schwarm (Koordinierter Angriff)': {
+    mode:'controlled', pwStats:['focus','senses'], pwLabel:'Foc+Sen (Operator)',
+    hp:3, sp:0, speed:22, weapons:[{name:'Standard-Sprengladung', bonus:18, tags:['3m radius', 'or smoke/EMP payload', 'per drone (3-5 in the swarm)']}],
+    loudness:'Laut (swarm)', range:null, chargeTime:null, price:'150 eb (Costly, 3-pack)',
+    abilities:[
+      'Schwarm-Koordination: All 3-5 drones attack the same target in the same round. One roll applies to all; each drone that hits deals its own damage.',
+      "Sättigung: Against vehicles, the swarm attack can't be fully intercepted — even with return fire, at least 1 drone automatically reaches the target if 3+ are in the swarm.",
+      'Aufteilen: Operator secondary action — splits the swarm across 2 different targets.',
+      'Stör-Anfälligkeit: The swarm coordinates by radio — EMP or a jamming system hits all drones simultaneously. A single area EMP can disable the entire swarm.',
+    ],
+  },
+  'Autonome Begleiter-Drohne (Leicht)': {
+    mode:'autonomous', initiative:'Speed + 1d6',
+    hp:25, sp:7, speed:12, weapons:[{name:'Heavy Pistol', bonus:11, tags:[]}],
+    loudness:'Moderat', range:null, chargeTime:null, price:'5000 eb (Luxury)',
+    abilities:[
+      'Autonome KI: Has its own initiative. Acts independently on its current standing order. Operator can spend a secondary action to issue a new order.',
+      'Schutzmodus: Order "Protect [character]" — drone positions itself optimally and engages anyone who threateningly approaches the target (under 5m).',
+      'Patrouillen-Modus: Order "Patrol [route/zone]" — drone runs the route and alerts the operator on contact.',
+      'Selbst-Erhalt: Below 30% HP, the drone automatically seeks cover until a new order is given.',
+    ],
+  },
+  'Autonome Kampf-Begleitdrohne (Schwer)': {
+    mode:'autonomous', initiative:'Speed + 1d6 + 2',
+    hp:50, sp:14, speed:10, weapons:[{name:'SMG', bonus:18, tags:['Autofire']}, {name:'Grenade Launcher', bonus:18, tags:['3 charges']}],
+    loudness:'Laut', range:null, chargeTime:null, price:'10000 eb (Super Luxury)',
+    abilities:[
+      'Taktik-KI: Independently picks the best attack pattern. Uses cover correctly. Coordinates with the operator and other drones.',
+      'Prioritäts-Targeting: Automatically identifies and prioritizes the most dangerous targets (highest weapon, lowest armor).',
+      'Verbundkampf: If the operator and the drone attack the same target, both get +3 PW (coordinated attack).',
+      'Notfall-Umschwingen: If an ally falls to Mortally Wounded, the drone automatically switches to guard mode for that character.',
+      'Feind-Identifikation: Passively scans enemies and reports to the operator: weapon type, visible cyberware, HP estimate. Drone Senses 20.',
     ],
   },
 };
@@ -5493,6 +5729,49 @@ function processGeneratedVehicle(v) {
   return v;
 }
 
+// Drones (§7b) are also fixed named blocks, not computed spreads — but
+// unlike vehicles, HOW their weapon PW resolves depends on mode:
+//   'controlled' drones have no stats of their own; their PW pair
+//     (Int+Focus or Focus+Senses per DRONE_TEMPLATES) overrides whatever
+//     the mounted weapon's own catalog entry would normally use, and gets
+//     resolved against the linked OPERATOR's stats at render time
+//     (see getStatsSourceChar / computeLiveWeaponStats's pwOverride).
+//   'autonomous' drones act independently, so they get their own
+//     synthetic stat block (same pattern as vehicle "crew" stats) and
+//     their named weapons (Heavy Pistol, SMG, Grenade Launcher — all
+//     real personal-catalog weapons) resolve PW normally, no override.
+function processGeneratedDrone(v) {
+  try {
+    const tpl = DRONE_TEMPLATES[v.droneTemplate] || DRONE_TEMPLATES['Standard-Aufklärungsdrohne'];
+    v.droneTemplate = DRONE_TEMPLATES[v.droneTemplate] ? v.droneTemplate : 'Standard-Aufklärungsdrohne';
+    v.mode = tpl.mode;
+    v.hp = tpl.hp;
+    v.sp = tpl.sp;
+    v.speed = tpl.speed;
+    v.loudness = tpl.loudness;
+    v.range = tpl.range;
+    v.chargeTime = tpl.chargeTime;
+    v.price = tpl.price;
+    v.abilities = tpl.abilities || [];
+    v.initiative = tpl.initiative || null;
+    if (v.mode === 'controlled') {
+      v.pwStats = tpl.pwStats;
+      v.pwLabel = tpl.pwLabel;
+      v.weapons = (tpl.weapons || []).map(w => ({ name: w.name, bonus: w.bonus, pwLabel: tpl.pwLabel, tags: w.tags || [] }));
+      v.stats = null;
+    } else {
+      v.weapons = (tpl.weapons || []).map(w => {
+        const match = matchWeaponName(w.name);
+        return { name: w.name, bonus: w.bonus, pwLabel: match?.label || '', tags: w.tags || [] };
+      });
+      v.stats = computeAttributes('THREAT', 'GUNNER');
+    }
+  } catch (err) {
+    console.error('processGeneratedDrone failed, leaving raw LLM values in place:', err);
+  }
+  return v;
+}
+
 let genMode = 'single';
 let genFaction = 'enemy';
 let genTier = 'THREAT';
@@ -5520,13 +5799,17 @@ function setGenMode(mode) {
   document.getElementById('gen-mode-loot').style.color = mode === 'loot' ? 'var(--cyan)' : 'var(--text3)';
   document.getElementById('gen-mode-vehicle').style.background = mode === 'vehicle' ? 'var(--surface2)' : 'transparent';
   document.getElementById('gen-mode-vehicle').style.color = mode === 'vehicle' ? 'var(--cyan)' : 'var(--text3)';
+  document.getElementById('gen-mode-drone').style.background = mode === 'drone' ? 'var(--surface2)' : 'transparent';
+  document.getElementById('gen-mode-drone').style.color = mode === 'drone' ? 'var(--cyan)' : 'var(--text3)';
   document.getElementById('gen-single-controls').style.display = mode === 'single' ? 'block' : 'none';
   document.getElementById('gen-encounter-controls').style.display = mode === 'encounter' ? 'block' : 'none';
   document.getElementById('gen-loot-controls').style.display = mode === 'loot' ? 'block' : 'none';
   document.getElementById('gen-vehicle-controls').style.display = mode === 'vehicle' ? 'block' : 'none';
+  document.getElementById('gen-drone-controls').style.display = mode === 'drone' ? 'block' : 'none';
   document.getElementById('gen-ai-section').style.display = mode === 'loot' ? 'none' : 'block';
   document.getElementById('gen-faction-toggle').style.display = mode === 'loot' ? 'none' : 'flex';
   if (mode === 'loot') populateLootTargetDropdown();
+  if (mode === 'drone') populateDroneOperatorDropdown();
 }
 let genVehicleCategory = 'any';
 function setGenVehicleCategory(cat) {
@@ -5538,6 +5821,27 @@ function setGenVehicleCategory(cat) {
     btn.style.color = active ? 'var(--cyan)' : 'var(--text3)';
     btn.style.borderColor = active ? 'var(--cyan)' : 'var(--border2)';
   });
+}
+let genDroneCategory = 'any';
+function setGenDroneCategory(cat) {
+  genDroneCategory = cat;
+  ['any','standard','fpv','autonomous'].forEach(c => {
+    const btn = document.getElementById('gdcat-' + c);
+    const active = c === cat;
+    btn.style.background = active ? 'var(--cyan-dim)' : 'transparent';
+    btn.style.color = active ? 'var(--cyan)' : 'var(--text3)';
+    btn.style.borderColor = active ? 'var(--cyan)' : 'var(--border2)';
+  });
+}
+// Any existing character can operate a drone (a GM might want an NPC
+// security guard piloting one, not just PCs) — unlike the Companion
+// owner dropdown, this isn't restricted to PCs only.
+function populateDroneOperatorDropdown() {
+  const sel = document.getElementById('gen-drone-operator');
+  const current = sel.value;
+  const entries = Object.entries(state.characters).filter(([, c]) => !c.isVehicle && !c.isDrone);
+  sel.innerHTML = '<option value="">— none —</option>' + entries.map(([id, c]) => `<option value="${id}">${esc(c.name)}</option>`).join('');
+  if (entries.some(([id]) => id === current)) sel.value = current;
 }
 
 function setGenTier(tier) {
@@ -5575,10 +5879,13 @@ async function runGenerator() {
   btn.textContent = '...'; btn.disabled = true;
   const factionLabel = genFaction === 'ally' ? 'ally (friendly NPC fighting alongside the party)' : 'enemy';
   const vehicleCatScope = genVehicleCategory === 'any' ? '' : `\nOnly pick from ${genVehicleCategory.toUpperCase()} vehicles in the catalog.`;
+  const droneCatScope = genDroneCategory === 'any' ? '' : `\nOnly pick from ${genDroneCategory.toUpperCase()} drones in the catalog.`;
   const userMsg = genMode === 'single'
     ? `Generate a Cyberpunk Phantom ${factionLabel} stat block.\nTier: ${genTier}\nDescription: ${prompt}\nReturn only the JSON object. No preamble, no backticks.`
     : genMode === 'vehicle'
     ? `Generate a Cyberpunk Phantom vehicle (${genFaction === 'ally' ? 'belongs to the party/an ally' : 'hostile/opposing'}).\nDescription: ${prompt}${vehicleCatScope}\nUse the VEHICLE JSON format. Return only the JSON object. No preamble, no backticks.`
+    : genMode === 'drone'
+    ? `Generate a Cyberpunk Phantom drone (${genFaction === 'ally' ? 'belongs to the party/an ally' : 'hostile/opposing'}).\nDescription: ${prompt}${droneCatScope}\nUse the DRONE JSON format. Return only the JSON object. No preamble, no backticks.`
     : `Generate a Cyberpunk Phantom ${genFaction === 'ally' ? 'squad of allies' : 'encounter'} for ${genPS} PCs.\nContext: ${prompt}\nUse the ENCOUNTER JSON format. Return only the JSON object. No preamble, no backticks.`;
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -5607,6 +5914,10 @@ async function runGenerator() {
       // from an attribute spread — resolve straight from the template.
       processGeneratedVehicle(parsed);
       div.innerHTML = renderVehicleResult(parsed);
+    } else if (genMode === 'drone') {
+      parsed.operatorId = document.getElementById('gen-drone-operator').value || null;
+      processGeneratedDrone(parsed);
+      div.innerHTML = renderDroneResult(parsed);
     } else {
       // The LLM only picked tier/archetype/gear names — compute every
       // actual stat number deterministically from those choices.
@@ -5725,6 +6036,46 @@ function renderVehicleResult(v) {
   </div>`;
 }
 
+function renderDroneResult(v) {
+  const tc = 'var(--blue-bright)';
+  const isAlly = v.faction === 'ally';
+  const wpns = (v.weapons || []).map(w => `<div style="margin-bottom:6px">
+    <div style="display:flex;gap:8px;align-items:center"><span style="flex:1;font-size:11px">${esc(w.name)}</span><span style="color:${tc};font-weight:700">+${w.bonus}</span><span style="font-size:10px;color:var(--cyan)">${esc(w.pwLabel||'')}</span></div>
+    ${(w.tags||[]).map(t=>`<div style="font-size:10px;color:var(--text2);padding-left:10px;margin-top:1px">↳ ${esc(t)}</div>`).join('')}
+  </div>`).join('');
+  const abilities = (v.abilities||[]).map(a=>`<div style="color:var(--text2);font-size:11px;margin-bottom:4px;line-height:1.5">▸ ${esc(a)}</div>`).join('');
+  const modeLabel = v.mode === 'autonomous' ? 'AUTONOMOUS' : 'CONTROLLED';
+  return `<div style="background:var(--surface);border:1px solid ${tc};${isAlly ? 'border-left:3px solid var(--green-bright);' : ''}overflow:hidden">
+    <div style="background:${tc}22;border-bottom:1px solid ${tc};padding:12px 14px;display:flex;justify-content:space-between;align-items:flex-start">
+      <div><div style="font-size:10px;letter-spacing:0.25em;color:${tc};margin-bottom:3px">${modeLabel}${isAlly ? ' · ALLY' : ''} · ${esc(v.droneTemplate||'')}</div><div style="font-size:17px;font-weight:700">${esc(v.name)}</div></div>
+      <div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap">
+        ${isAlly ? '<span style="background:var(--green-bright);color:#000;font-size:10px;padding:2px 7px;letter-spacing:0.1em;font-weight:700">🤝 ALLY</span>' : ''}
+        <button onclick="addDroneToCharacters(${JSON.stringify(v).replace(/"/g,'&quot;')})" style="background:var(--cyan-dim);border:1px solid var(--cyan);color:var(--cyan);font-size:10px;padding:4px 10px;cursor:pointer;font-family:var(--font);letter-spacing:0.1em">+ ADD TO CHARACTERS</button>
+      </div>
+    </div>
+    <div style="padding:14px">
+      <p style="color:#666;font-size:11px;line-height:1.65;margin-bottom:12px;border-left:2px solid ${tc};padding-left:10px;font-style:italic">${esc(v.flavor||'')}</p>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px">
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);padding:8px 12px;text-align:center;min-width:60px"><div style="font-size:10px;color:#484848;letter-spacing:0.12em;margin-bottom:2px">HP</div><div style="font-size:18px;font-weight:700">${v.hp??'—'}</div></div>
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);padding:8px 12px;text-align:center;min-width:60px"><div style="font-size:10px;color:#484848;letter-spacing:0.12em;margin-bottom:2px">SP</div><div style="font-size:18px;font-weight:700">${v.sp??'—'}</div></div>
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);padding:8px 12px;text-align:center;min-width:60px"><div style="font-size:10px;color:#484848;letter-spacing:0.12em;margin-bottom:2px">SPEED</div><div style="font-size:18px;font-weight:700">${v.speed??'—'}</div></div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:10px">${v.mode === 'autonomous' ? `Initiative: ${esc(v.initiative||'—')}` : `PW: ${esc(v.pwLabel||'')} (needs an Operator)`} · Loudness: ${esc(v.loudness||'—')}${v.range?' · Range: '+esc(v.range):''}${v.chargeTime?' · Charge: '+esc(v.chargeTime):''} · Price: ${esc(String(v.price||'—'))}</div>
+      ${wpns ? `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">WEAPONS / PAYLOAD</div>${wpns}</div>` : ''}
+      ${abilities ? `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">ABILITIES</div>${abilities}</div>` : ''}
+      <div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">TACTICS</div><p style="font-size:11px;color:#777;line-height:1.65">${esc(v.tactics||'')}</p></div>
+      ${v.imagePrompt ? `<div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+          <div style="font-size:10px;color:var(--text3);letter-spacing:0.18em">IMAGE PROMPT</div>
+          <button onclick="copyImagePrompt(${JSON.stringify(v).replace(/"/g,'&quot;')})" style="background:transparent;border:1px solid var(--border2);color:var(--text2);font-size:10px;padding:2px 8px;cursor:pointer;font-family:var(--font);letter-spacing:0.1em">⎘ COPY</button>
+        </div>
+        <p style="font-size:10px;color:var(--text2);line-height:1.6;background:rgba(255,255,255,0.03);border:1px solid var(--border2);padding:8px 10px">${esc(v.imagePrompt)}</p>
+      </div>` : ''}
+      ${v.gmNote ? `<div style="background:rgba(255,140,0,0.05);border:1px solid rgba(255,140,0,0.18);padding:7px 11px"><span style="color:#dd8800;font-size:10px">GM // </span><span style="color:#aa7700;font-size:11px">${esc(v.gmNote)}</span></div>` : ''}
+    </div>
+  </div>`;
+}
+
 function renderEncounterResult(enc) {
   const dc = { EASY: '#4a8a4a', BALANCED: '#c8a200', BRUTAL: '#c82020' }[enc.difficulty] || '#888';
   const enemyCards = (enc.enemies || []).map(e => renderEnemyResult(e)).join('');
@@ -5817,6 +6168,52 @@ function genVehicleResultToCharacter(v) {
 async function addVehicleToCharacters(v) {
   const id = 'char_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
   const char = genVehicleResultToCharacter(v);
+  state.characters[id] = char;
+  await dbWrite('characters/' + id, char);
+  renderCharList();
+  showToast(v.name + ' added to Characters!');
+}
+
+function genDroneResultToCharacter(v) {
+  const isControlled = v.mode === 'controlled';
+  return {
+    name: v.name, isNPC: true, isAlly: v.faction === 'ally', isDrone: true,
+    stats: v.stats || null,
+    hp_override: true,
+    hp_max: v.hp || 1, hp_current: v.hp || 1,
+    // Controlled: no turn slot of its own (rides the operator's — see
+    // slotsNextToOwner). Autonomous: has one, but per the vehicle
+    // precedent it's reference text (drone_initiative_note) for the GM
+    // to enter manually rather than auto-rolled through the PW/crit engine.
+    initiative: null,
+    drone_template: v.droneTemplate || '',
+    drone_mode: v.mode || 'controlled',
+    drone_initiative_note: v.initiative || null,
+    drone_loudness: v.loudness || '',
+    drone_range: v.range || '',
+    drone_chargeTime: v.chargeTime || '',
+    drone_price: v.price || '',
+    drone_abilities: v.abilities || [],
+    owner_char_id: isControlled ? (v.operatorId || null) : null,
+    useOwnerStatsForPW: true,
+    armor_body: v.sp ? { name: 'Drone Chassis', sp_base: v.sp, sp_temp: v.sp } : null,
+    armor_head: null,
+    weapons: (v.weapons || []).map(w => ({
+      name: w.name, bonus: w.bonus, pw: w.pwLabel,
+      pwOverride: isControlled ? v.pwStats : undefined,
+      pwOverrideLabel: isControlled ? v.pwLabel : undefined,
+      tags: (w.tags||[]).join(', '),
+      attachments: [], tech: 'base', techLevel: null,
+    })),
+    loot: [], cyberware: [], cyberdeck: null, firewall: null, hacks: [],
+    image_prompt: v.imagePrompt || '',
+    status_effects: [], talents: [], inventory: [], eurodollar: 0
+  };
+}
+
+async function addDroneToCharacters(v) {
+  const id = 'char_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  const char = genDroneResultToCharacter(v);
   state.characters[id] = char;
   await dbWrite('characters/' + id, char);
   renderCharList();
