@@ -1877,7 +1877,14 @@ function buildMapTokensHtml(interactive) {
     // below works identically for the circle, the square path, and the
     // triangle without hand-computing each shape's real perimeter.
     const dashLen = pct * 100, gapLen = 100 - dashLen;
-    const ringAttrs = `pathLength="100" fill="none" stroke-width="3" style="stroke:${color}" stroke-dasharray="0 ${gapLen} ${dashLen}" transform="rotate(-90 20 20)"`;
+    const ringAttrs = `pathLength="100" fill="none" stroke-width="3" style="stroke:${color}" stroke-dasharray="0 ${gapLen} ${dashLen}"`;
+    // The -90° rotation is ONLY there to move a circle's dash-start from
+    // its default 3-o'clock position to 12 o'clock — a circle looks
+    // identical either way except for where the pattern starts. Applying
+    // that same rotation to the square/triangle would actually spin their
+    // (asymmetric!) outline out of alignment with the unrotated clip-path
+    // on the div, which is the bug from the last screenshot. Their point
+    // order already starts at the top on its own, so they need no rotation.
     const ringShape = shape === 'square'
       // Explicit path (not <rect>) so it starts at top-center like the
       // circle/triangle do, instead of a rect's default top-left start.
@@ -1887,7 +1894,7 @@ function buildMapTokensHtml(interactive) {
       // 5% 95% of a 40x40 box == these px) so the ring hugs the actual
       // visible (image-clipped) edge instead of floating inside it.
       ? `<polygon points="20,2 38,38 2,38" ${ringAttrs}/>`
-      : `<circle cx="20" cy="20" r="18.5" ${ringAttrs}/>`;
+      : `<circle cx="20" cy="20" r="18.5" ${ringAttrs} transform="rotate(-90 20 20)"/>`;
     const ring = `<svg width="40" height="40" viewBox="0 0 40 40" style="position:absolute;inset:0;pointer-events:none">${ringShape}</svg>`;
     // box-shadow doesn't respect clip-path (needed for the triangle), so
     // the drop shadow is a filter here and applied to every shape alike.
