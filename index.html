@@ -1822,12 +1822,21 @@ function ensurePortraitListener(id) {
   portraitListeners.add(id);
   db.ref('portraits/' + id).on('value', snap => {
     const val = snap.exists() ? snap.val() : null;
-    // New format is { crop, full }; a plain string is a legacy portrait
-    // saved before the full-image feature existed — it only ever had the
-    // cropped square, so there's no full image to fall back to for it.
-    if (val && typeof val === 'object') {
-      portraits[id] = val.crop ?? null;
-      portraitsFull[id] = val.full ?? null;
+    // The stored value is always a plain string (a JSON-encoded {crop,full}
+    // for the new format, or a raw base64 dataURL for a legacy/crop-only
+    // portrait) — never a raw object, see the comment in confirmPortraitCrop
+    // for why. A dataURL always starts with "data:", never "{", so that's
+    // enough to tell the two apart without risking a JSON.parse on a huge
+    // base64 string for the (far more common) plain-dataURL case.
+    if (typeof val === 'string' && val.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(val);
+        portraits[id] = parsed.crop ?? null;
+        portraitsFull[id] = parsed.full ?? null;
+      } catch (e) {
+        portraits[id] = val;
+        portraitsFull[id] = null;
+      }
     } else {
       portraits[id] = val;
       portraitsFull[id] = null;
@@ -2752,29 +2761,44 @@ async function confirmPortraitCrop() {
   const fullDataUrl = fullCanvas.toDataURL('image/jpeg', 0.72);
   showToast('Uploading portrait...');
   const id = editingCharId;
-  // Two SEPARATE writes (to 'portraits/{id}/crop' and '.../full'), not one
-  // combined .set() on the whole node — a single large write either fully
-  // succeeds or fully fails, which previously meant a full-image write big
-  // enough to fail took the already-working crop upload down with it. This
-  // way the crop (small, reliable) always lands even if the bigger full
-  // image can't, instead of an all-or-nothing failure.
+  // 'portraits/{id}' has ALWAYS been a plain string (the raw base64 dataURL)
+  // in every campaign that existed before this feature. Two earlier attempts
+  // — a { crop, full } object written directly, and writing to separate
+  // 'portraits/{id}/crop' + '.../full' child paths — both changed that
+  // node's actual data TYPE from a string to an object, and both still
+  // failed to upload anything at all. That strongly points to a Firebase
+  // security-rule type check (something like ".validate": "newData.isString()")
+  // on this exact path, not a size/permission issue — so instead of
+  // restructuring the node, both images are packed into ONE JSON string
+  // (still a plain string as far as Firebase/any such rule is concerned).
+  // ensurePortraitListener below tells this apart from a legacy plain
+  // dataURL by trying to JSON.parse it.
   try {
-    await db.ref('portraits/' + id + '/crop').set(dataUrl);
+    await db.ref('portraits/' + id).set(JSON.stringify({ crop: dataUrl, full: fullDataUrl }));
     portraits[id] = dataUrl;
-  } catch (e) {
-    showToast('Could not upload portrait.');
-    return;
-  }
-  updatePortraitPreview(id);
-  renderCharList();
-  try {
-    await db.ref('portraits/' + id + '/full').set(fullDataUrl);
     portraitsFull[id] = fullDataUrl;
+    updatePortraitPreview(id);
+    renderCharList();
     closeModal('portrait-crop-modal');
     showToast('Portrait updated!');
+    return;
   } catch (e) {
+    console.error('Portrait upload (crop+full) failed, falling back to crop-only:', e);
+  }
+  // Fall back to exactly the plain-string write this app has always done,
+  // so the crop at least saves even if packing the full image in somehow
+  // still doesn't fly on this campaign's Firebase rules.
+  try {
+    await db.ref('portraits/' + id).set(dataUrl);
+    portraits[id] = dataUrl;
+    portraitsFull[id] = null;
+    updatePortraitPreview(id);
+    renderCharList();
     closeModal('portrait-crop-modal');
-    showToast('Portrait saved, but the full-size image was too large to upload — dossier will show the cropped version.');
+    showToast('Portrait saved (cropped only — the full-size focus image could not be uploaded).');
+  } catch (e2) {
+    console.error('Portrait upload (crop-only fallback) also failed:', e2);
+    showToast('Could not upload portrait.');
   }
 }
 
