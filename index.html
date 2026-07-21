@@ -3730,9 +3730,22 @@ function calcDerived(s, hpBonus=0, staBonus=0, ipBonus=0, humanityBonus=0, cyber
 
 // ═══════════════════════════════════════════════════════════════
 // PROGRESSION — Tree XP, level-ups, banked stat points, talent points
-// (rulebook §5.3-5.5: 500 XP per tree level-up, 2 free stat points per
-// level-up, talent points from a separate never-resets global XP pool)
+// (rulebook §5.3-5.5: leveling up tree L→L+1 costs (L+1)*100 XP, 2 free
+// stat points per level-up, talent points from a separate never-resets
+// global XP pool). The displayed tree "level" comes from actually-spent
+// stat points, not from a level-up counter — leveling up only banks 2
+// points, it doesn't raise the level until they're spent — so the cost
+// formula uses an "effective level" (current level + unspent banked
+// points/2) rather than the raw displayed level, so a big XP award that
+// crosses several levels at once (or a GM undo that crosses one back
+// down) steps the cost correctly at each level in between.
 // ═══════════════════════════════════════════════════════════════
+function treeEffectiveLevel(c, tree, banked) {
+  return getTreeLevel(c, tree) + Math.floor((banked?.[tree] || 0) / 2);
+}
+function treeLevelUpCost(effectiveLevel) {
+  return (effectiveLevel + 1) * 100;
+}
 const TALENT_XP_DELTAS = [1000, 1200, 1500, 1800, 2300, 2700, 3500];
 function talentXpProgress(globalXp) {
   globalXp = globalXp || 0;
@@ -3762,6 +3775,7 @@ function renderProgressionSection(id) {
     const level = getTreeLevel(c, tree);
     const xp = treeXP[tree] || 0;
     const pts = banked[tree] || 0;
+    const nextCost = treeLevelUpCost(treeEffectiveLevel(c, tree, banked));
     const allocRow = pts > 0 ? `
       <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">
         <span style="font-size:10px;color:var(--gold-bright);align-self:center">${pts} pt${pts>1?'s':''} to allocate:</span>
@@ -3771,7 +3785,7 @@ function renderProgressionSection(id) {
       <div style="background:var(--surface2);border:1px solid var(--border);padding:7px 9px;margin-bottom:5px">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:10px;color:var(--text2);letter-spacing:0.08em">${label} — Lv ${level}</span>
-          <span style="font-size:10px;color:var(--cyan)">${xp}/500 XP</span>
+          <span style="font-size:10px;color:var(--cyan)">${xp}/${nextCost} XP</span>
         </div>
         ${allocRow}
       </div>`;
@@ -3822,14 +3836,26 @@ async function submitAwardXp() {
   for (const tree of ['power', 'mobility', 'mind']) {
     if (!amounts[tree]) continue;
     treeXP[tree] = (treeXP[tree] || 0) + amounts[tree];
-    while (treeXP[tree] >= 500) { treeXP[tree] -= 500; banked[tree] = (banked[tree] || 0) + 2; levelUps++; }
+    // Cost scales with effective level, so each successive level-up in the
+    // same award (a big lump of XP can cross several at once) has to be
+    // recomputed rather than reusing one flat number.
+    while (treeXP[tree] >= treeLevelUpCost(treeEffectiveLevel(c, tree, banked))) {
+      treeXP[tree] -= treeLevelUpCost(treeEffectiveLevel(c, tree, banked));
+      banked[tree] = (banked[tree] || 0) + 2;
+      levelUps++;
+    }
     // Removing XP symmetrically un-levels the tree, but only as long as the
     // points from that level-up are still sitting unspent in the bank — if
     // they were already allocated into a stat, we can't safely claw a
     // specific stat point back out, so floor at 0 and flag it for the GM.
+    // Un-leveling first, THEN refunding: the cost of the level being undone
+    // is the one for the level BELOW where we currently sit.
     while (treeXP[tree] < 0) {
-      if ((banked[tree] || 0) >= 2) { banked[tree] -= 2; treeXP[tree] += 500; levelDowns++; }
-      else { treeXP[tree] = 0; blockedDowns++; break; }
+      if ((banked[tree] || 0) >= 2) {
+        banked[tree] -= 2;
+        treeXP[tree] += treeLevelUpCost(treeEffectiveLevel(c, tree, banked));
+        levelDowns++;
+      } else { treeXP[tree] = 0; blockedDowns++; break; }
     }
   }
   const oldGlobal = c.globalXP || 0;
