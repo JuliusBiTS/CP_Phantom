@@ -1544,15 +1544,22 @@ let session = { role: null, charId: null, gmPin: null };
 let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} }, securityObjects: {}, alarmLevel: 0, portraitReveal: null };
 let combatViewMode = 'list';
 let mapImage = null;       // fetched from a Firebase path OUTSIDE 'campaign' — kept separate from `state`
-let portraits = {};        // { charId: dataUrl }, each fetched from its own sibling path, outside 'campaign' — the CROPPED square used for tokens/thumbnails everywhere
+// { charId: dataUrl } — the CROPPED square used for tokens/thumbnails everywhere.
+// Both this and portraitsFull are populated from the SAME 'portraits/{id}'
+// Firebase node (see ensurePortraitListener) rather than two sibling paths —
+// a separate 'portraitsFull/{id}' path was tried first, but most existing
+// campaigns have Firebase security rules that explicitly allowlist
+// 'portraits' and don't know about a brand-new top-level key, so that
+// second path silently got permission-denied while the first kept working.
+// Nesting both images under the one path that's already allowed sidesteps
+// needing the GM to edit their Firebase rules at all.
+let portraits = {};
 let portraitsFull = {};    // { charId: dataUrl }, the uncropped original — used only by the dossier/reveal "focus" view
 const portraitListeners = new Set();
-const portraitFullListeners = new Set();
 // Tracks whichever character's dossier/reveal is currently on-screen, so a
-// full-portrait listener that resolves AFTER the modal already opened (real
-// Firebase fires async, unlike the cropped-square one which is usually
-// already cached) can refresh the view in place instead of leaving it stuck
-// on the fallback image.
+// portrait listener that resolves AFTER the modal already opened (real
+// Firebase fires async, unlike a value that's usually already cached) can
+// refresh the view in place instead of leaving it stuck on stale data.
 let portraitViewerCharId = null;
 let portraitRevealCharId = null;
 let editingCharId = null;
@@ -1814,7 +1821,17 @@ function ensurePortraitListener(id) {
   if (!db || portraitListeners.has(id)) return;
   portraitListeners.add(id);
   db.ref('portraits/' + id).on('value', snap => {
-    portraits[id] = snap.exists() ? snap.val() : null;
+    const val = snap.exists() ? snap.val() : null;
+    // New format is { crop, full }; a plain string is a legacy portrait
+    // saved before the full-image feature existed — it only ever had the
+    // cropped square, so there's no full image to fall back to for it.
+    if (val && typeof val === 'object') {
+      portraits[id] = val.crop ?? null;
+      portraitsFull[id] = val.full ?? null;
+    } else {
+      portraits[id] = val;
+      portraitsFull[id] = null;
+    }
     renderCharList();
     if (combatViewMode === 'map') renderMapView();
     if (editingCharId === id) updatePortraitPreview(id);
@@ -1822,17 +1839,6 @@ function ensurePortraitListener(id) {
       renderPlayerMapView();
       if (session.charId === id) updatePlayerAvatar();
     }
-  });
-}
-
-// Lazy-loaded separately from the cropped square above — only fetched once
-// something actually needs the full image (the dossier/reveal view), so
-// browsing the map/char list never pulls the bigger payload for nothing.
-function ensurePortraitFullListener(id) {
-  if (!db || portraitFullListeners.has(id)) return;
-  portraitFullListeners.add(id);
-  db.ref('portraitsFull/' + id).on('value', snap => {
-    portraitsFull[id] = snap.exists() ? snap.val() : null;
     if (portraitViewerCharId === id) openPortraitViewer(id);
     if (portraitRevealCharId === id) showPortraitRevealOverlay(id);
   });
@@ -2270,7 +2276,6 @@ function openPortraitViewer(id) {
   const c = state.characters[id];
   if (!c) return;
   ensurePortraitListener(id);
-  ensurePortraitFullListener(id);
   portraitViewerCharId = id;
   const meta = charTypeMeta(c);
   // Prefer the uncropped original (what this whole fix is for) — fall back
@@ -2321,7 +2326,7 @@ function showPortraitRevealOverlay(id) {
   const c = state.characters[id];
   const el = document.getElementById('portrait-reveal-overlay');
   if (!c || !el) return;
-  ensurePortraitFullListener(id);
+  ensurePortraitListener(id);
   portraitRevealCharId = id;
   const meta = charTypeMeta(c);
   const portrait = portraitsFull[id] || portraits[id];
@@ -2743,8 +2748,11 @@ async function confirmPortraitCrop() {
   const fullDataUrl = fullCanvas.toDataURL('image/jpeg', 0.82);
   showToast('Uploading portrait...');
   try {
-    await db.ref('portraits/' + editingCharId).set(dataUrl);
-    await db.ref('portraitsFull/' + editingCharId).set(fullDataUrl);
+    // Both images live under the ONE 'portraits/{id}' node (not a second
+    // sibling path) — see the comment on `let portraits` for why: a
+    // separate 'portraitsFull' path got silently permission-denied by
+    // existing campaigns' Firebase rules while this one kept working.
+    await db.ref('portraits/' + editingCharId).set({ crop: dataUrl, full: fullDataUrl });
     portraits[editingCharId] = dataUrl;
     portraitsFull[editingCharId] = fullDataUrl;
     updatePortraitPreview(editingCharId);
@@ -2759,7 +2767,6 @@ async function confirmPortraitCrop() {
 async function removePortrait() {
   if (!editingCharId) return;
   await db.ref('portraits/' + editingCharId).set(null);
-  await db.ref('portraitsFull/' + editingCharId).set(null);
   portraits[editingCharId] = null;
   portraitsFull[editingCharId] = null;
   updatePortraitPreview(editingCharId);
@@ -4775,12 +4782,11 @@ async function duplicateCharacter(id) {
   const newId = 'char_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
   state.characters[newId] = clone;
   await dbWrite('characters/' + newId, clone);
-  if (portraits[id]) await db.ref('portraits/' + newId).set(portraits[id]);
-  // The full portrait is only ever lazy-fetched once the dossier's opened,
-  // so it may not be warm in `portraitsFull` yet at duplicate-time — read
-  // straight from the DB instead of trusting the local cache here.
-  const fullSnap = await db.ref('portraitsFull/' + id).get();
-  if (fullSnap.exists()) await db.ref('portraitsFull/' + newId).set(fullSnap.val());
+  // Copy the raw stored value as-is (crop-only string, or {crop,full}
+  // object) rather than reassembling it from the local cache — faithful
+  // either way, and doesn't care whether the full image is warm yet.
+  const portraitSnap = await db.ref('portraits/' + id).get();
+  if (portraitSnap.exists()) await db.ref('portraits/' + newId).set(portraitSnap.val());
   closeModal('char-modal');
   renderCharList();
   showToast(`Duplicated as "${clone.name}"`);
