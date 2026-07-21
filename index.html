@@ -509,6 +509,52 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .talent-toggle.available { background: var(--cyan-dim); border-color: var(--cyan); box-shadow: 0 0 6px var(--cyan-glow); }
 .inline-row { display: flex; gap: 8px; }
 .inline-row .field { flex: 1; }
+/* ── PORTRAIT DOSSIER / GALLERY / REVEAL ── */
+.dossier-portrait-wrap {
+  position: relative; width: 100%; aspect-ratio: 1/1;
+  background: var(--surface2) center/cover no-repeat;
+  display: flex; align-items: center; justify-content: center;
+}
+.dossier-initials { font-size: 48px; font-weight: 700; opacity: 0.5; letter-spacing: 0.05em; }
+.dossier-badge {
+  position: absolute; top: 10px; left: 10px;
+  font-size: 10px; letter-spacing: 0.2em; padding: 4px 10px;
+  background: rgba(3,4,10,0.75); border: 1px solid; text-transform: uppercase;
+}
+.dossier-badge-dead { left: auto; right: 10px; border-color: var(--red-bright); color: #ff6688; }
+.dossier-info { padding: 14px 16px; }
+.dossier-name { font-size: 18px; font-weight: 700; letter-spacing: 0.04em; }
+.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
+.gallery-card {
+  background: var(--surface2); border: 1px solid var(--border2);
+  cursor: pointer; text-align: center; padding-bottom: 8px; transition: all 0.15s;
+}
+.gallery-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+.gallery-thumb {
+  width: 100%; aspect-ratio: 1/1; background: var(--surface3) center/cover no-repeat;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 700; margin-bottom: 6px;
+}
+.gallery-name { font-size: 11px; font-weight: 700; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gallery-badge { font-size: 9px; letter-spacing: 0.15em; opacity: 0.8; }
+.portrait-reveal-overlay {
+  position: fixed; inset: 0; z-index: 10000; display: none;
+  flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: radial-gradient(circle at 50% 40%, #0a0e18 0%, #020308 80%);
+  cursor: pointer; padding: 24px; text-align: center;
+}
+.portrait-reveal-overlay.show { display: flex; animation: reveal-fade 0.6s ease-out; }
+@keyframes reveal-fade { from { opacity: 0; } to { opacity: 1; } }
+.reveal-portrait {
+  width: min(60vw, 320px); height: min(60vw, 320px);
+  border: 2px solid; background: var(--surface2) center/cover no-repeat;
+  display: flex; align-items: center; justify-content: center;
+  animation: reveal-portrait-in 0.7s ease-out;
+}
+@keyframes reveal-portrait-in { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+.reveal-name { font-size: 26px; font-weight: 700; letter-spacing: 0.08em; }
+.reveal-flavor { max-width: 460px; font-size: 13px; line-height: 1.7; color: var(--text2); font-style: italic; }
+.reveal-hint { font-size: 10px; letter-spacing: 0.25em; color: var(--text3); margin-top: 8px; }
 /* ── PLAYER VIEW ── */
 .player-view { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
 .player-card {
@@ -706,9 +752,12 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   <!-- CHARACTERS TAB -->
   <div id="tab-characters" class="tab-content main-scroll">
     <div style="padding:12px 16px 0">
-      <div class="field" style="margin-bottom:10px">
-        <label>Current Mission</label>
-        <input type="text" id="current-mission-input" placeholder="e.g. Mission 1: Neon Bridge" onchange="onCurrentMissionChange(this.value)">
+      <div class="inline-row" style="margin-bottom:10px;align-items:flex-end">
+        <div class="field" style="margin-bottom:0;flex:1">
+          <label>Current Mission</label>
+          <input type="text" id="current-mission-input" placeholder="e.g. Mission 1: Neon Bridge" onchange="onCurrentMissionChange(this.value)">
+        </div>
+        <button class="btn btn-ghost btn-small" style="height:36px" onclick="openPortraitGallery()">🖼 PORTRAITS</button>
       </div>
     </div>
     <div class="char-list" id="char-list"></div>
@@ -955,7 +1004,10 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         <div class="armor-display" id="player-armor"></div>
       </div>
       <div class="player-card">
-        <div class="player-card-title">Initiative Order</div>
+        <div class="player-card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span>Initiative Order</span>
+          <button class="btn btn-ghost btn-small" style="padding:5px 10px" onclick="openPortraitGallery()">🖼 CAST</button>
+        </div>
         <div class="initiative-list" id="player-initiative-list"></div>
       </div>
     </div>
@@ -1445,6 +1497,32 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   </div>
 </div>
 
+<!-- Portrait Dossier Viewer -->
+<div class="modal-overlay" id="portrait-viewer-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title" id="portrait-viewer-title">DOSSIER</span>
+      <button class="modal-close" onclick="closeModal('portrait-viewer-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="portrait-viewer-body" style="padding:0"></div>
+    <div class="modal-footer" id="portrait-viewer-footer"></div>
+  </div>
+</div>
+
+<!-- Portrait Gallery (mission cast board) -->
+<div class="modal-overlay" id="portrait-gallery-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">CAST — <span id="portrait-gallery-title"></span></span>
+      <button class="modal-close" onclick="closeModal('portrait-gallery-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="portrait-gallery-body"></div>
+  </div>
+</div>
+
+<!-- GM-triggered fullscreen portrait reveal, broadcast to every player -->
+<div id="portrait-reveal-overlay" class="portrait-reveal-overlay" onclick="dismissPortraitReveal()"></div>
+
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
@@ -1456,7 +1534,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 // ═══════════════════════════════════════════════════════════════
 let db = null;
 let session = { role: null, charId: null, gmPin: null };
-let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} }, securityObjects: {}, alarmLevel: 0 };
+let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} }, securityObjects: {}, alarmLevel: 0, portraitReveal: null };
 let combatViewMode = 'list';
 let mapImage = null;       // fetched from a Firebase path OUTSIDE 'campaign' — kept separate from `state`
 let portraits = {};        // { charId: dataUrl }, each fetched from its own sibling path, outside 'campaign'
@@ -1472,6 +1550,10 @@ let statusTargetId = null;
 let expandedCombatants = new Set();
 let pollTimer = null;
 let lastStateHash = '';
+// undefined (not null) until the first sync lands, so that initial sync is
+// never mistaken for a fresh reveal broadcast and doesn't pop the overlay
+// for players who simply just logged in.
+let lastPortraitRevealTs = undefined;
 
 // ═══════════════════════════════════════════════════════════════
 // FIREBASE / SYNC
@@ -1686,6 +1768,18 @@ function startSync() {
     state.map = data.map || { tokens: {} };
     state.securityObjects = data.securityObjects || {};
     state.alarmLevel = data.alarmLevel ?? 0;
+    state.portraitReveal = data.portraitReveal || null;
+    // Fire the fullscreen reveal only for players, and only on a genuinely
+    // NEW broadcast (ts changed since the last one we saw) — not on the
+    // very first sync after login/reload, which would otherwise replay
+    // whatever reveal happened to be sitting in the DB already.
+    if (state.portraitReveal && state.portraitReveal.ts !== lastPortraitRevealTs) {
+      const isFirstSync = lastPortraitRevealTs === undefined;
+      lastPortraitRevealTs = state.portraitReveal.ts;
+      if (!isFirstSync && session.role === 'player') showPortraitRevealOverlay(state.portraitReveal.charId);
+    } else if (lastPortraitRevealTs === undefined) {
+      lastPortraitRevealTs = null;
+    }
     renderAll();
   });
   // Map image and portraits live OUTSIDE the 'campaign' tree on purpose — see
@@ -1940,7 +2034,7 @@ function renderCombat() {
     ].filter(Boolean).join(' ');
     const rollCat = state.combat.initRolls?.[id]?.category;
     const critBadge = rollCat === 0 ? ' ★' : rollCat === 3 ? ' ☠' : '';
-    return `<div class="${cls}" onclick="scrollToCombatant('${id}')" title="${critBadge ? (rollCat===0?'Crit success — initiative':'Crit fail — initiative') : ''}">${esc(c.name)}${critBadge}<br><span style="font-size:10px;color:inherit;opacity:0.7">${c.hp_current ?? c.hp_max}hp</span></div>`;
+    return `<div class="${cls}" onclick="scrollToCombatant('${id}')" title="${critBadge ? (rollCat===0?'Crit success — initiative':'Crit fail — initiative') : ''}"><span onclick="event.stopPropagation(); openPortraitViewer('${id}')" title="View portrait">${esc(c.name)}${critBadge}</span><br><span style="font-size:10px;color:inherit;opacity:0.7">${c.hp_current ?? c.hp_max}hp</span></div>`;
   }).join('');
   // Combatant cards
   document.getElementById('combatants-list').innerHTML = order.map((id, i) => renderCombatantCard(id, i === current)).join('');
@@ -1977,8 +2071,11 @@ function buildMapTokensHtml(interactive) {
     const pos = state.map?.tokens?.[id] || { x: 50, y: 50 };
     const bg = portrait ? `background-image:url('${portrait}');` : '';
     const initials = esc(c.name.slice(0, 2).toUpperCase());
-    const dragAttr = interactive ? ` onpointerdown="startTokenDrag(event,'${id}')"` : '';
-    const cursorStyle = interactive ? '' : 'cursor:default;';
+    // GM tokens open the dossier via the click-vs-drag pointer handlers
+    // below; player tokens can't be dragged at all, so a plain onclick is
+    // unambiguous and needs no threshold logic.
+    const dragAttr = interactive ? ` onpointerdown="startTokenDrag(event,'${id}')"` : ` onclick="openPortraitViewer('${id}')"`;
+    const cursorStyle = interactive ? '' : 'cursor:pointer;';
     // Health ring: a full outline at max HP, retracting clockwise from the
     // top as HP drops. SVG dasharray always draws its FIRST value as the
     // visible segment, so a leading "0" is needed to force the pattern to
@@ -2079,12 +2176,13 @@ function startTokenDrag(e, id) {
   e.preventDefault();
   const mapEl = document.getElementById('map-container');
   if (!mapEl) return;
-  mapDragState = { id, mapEl, x: undefined, y: undefined };
+  mapDragState = { id, mapEl, x: undefined, y: undefined, moved: false, startX: e.clientX, startY: e.clientY };
   document.addEventListener('pointermove', onTokenDragMove);
   document.addEventListener('pointerup', onTokenDragEnd);
 }
 function onTokenDragMove(e) {
   if (!mapDragState) return;
+  if (Math.abs(e.clientX - mapDragState.startX) > 4 || Math.abs(e.clientY - mapDragState.startY) > 4) mapDragState.moved = true;
   const rect = mapDragState.mapEl.getBoundingClientRect();
   const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
   const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
@@ -2095,11 +2193,145 @@ function onTokenDragMove(e) {
 async function onTokenDragEnd() {
   document.removeEventListener('pointermove', onTokenDragMove);
   document.removeEventListener('pointerup', onTokenDragEnd);
-  if (mapDragState && mapDragState.x !== undefined) {
-    const { id, x, y } = mapDragState;
-    await dbWrite('map/tokens/' + id, { x, y });
-  }
+  const st = mapDragState;
   mapDragState = null;
+  if (!st) return;
+  if (st.moved && st.x !== undefined) {
+    await dbWrite('map/tokens/' + st.id, { x: st.x, y: st.y });
+  } else {
+    // A click, not a drag — open the portrait dossier instead of repositioning.
+    openPortraitViewer(st.id);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PORTRAIT DOSSIER / GALLERY / REVEAL
+// ═══════════════════════════════════════════════════════════════
+// Same color+label convention used everywhere else a character's
+// allegiance/type is shown (map token, char list, combat card) — kept as
+// one shared helper here since the dossier/gallery both need it and
+// neither existed as a callable function before this feature.
+function charTypeMeta(c) {
+  if (c.isDrone) return { color: 'var(--blue-bright)', label: 'DRONE' };
+  if (c.isVehicle) return { color: 'var(--gold-bright)', label: 'VEHICLE' };
+  if (c.isCompanion) return { color: 'var(--purple-bright)', label: 'COMPANION' };
+  if (c.isSecurityUnit) return { color: 'var(--red-bright)', label: 'SECURITY' };
+  if (c.isAlly) return { color: 'var(--green-bright)', label: 'ALLY' };
+  if (c.isNPC) return { color: 'var(--red-bright)', label: 'NPC' };
+  return { color: 'var(--cyan)', label: 'PC' };
+}
+
+// Players never get exact numbers for a hostile NPC (same rule the map
+// token's health ring already enforces) — only alive/dead. Everyone else
+// (GM, or a player looking at their own PC/an ally/companion/drone/
+// vehicle they can see the guts of) gets the real HP bar + status effects.
+function canSeeFullDossier(c, id) {
+  if (session.role === 'gm') return true;
+  if (session.charId === id) return true;
+  return !(c.isNPC && !c.isAlly);
+}
+
+function openPortraitViewer(id) {
+  const c = state.characters[id];
+  if (!c) return;
+  ensurePortraitListener(id);
+  const meta = charTypeMeta(c);
+  const portrait = portraits[id];
+  const full = canSeeFullDossier(c, id);
+  const hpMax = c.hp_max || 1;
+  const hpCur = c.hp_current ?? hpMax;
+  const isDead = hpCur <= 0;
+  const hpPct = full ? Math.max(0, Math.min(100, (hpCur / hpMax) * 100)) : (isDead ? 0 : 100);
+  const hpClass = hpPct > 60 ? 'healthy' : hpPct > 25 ? 'wounded' : 'critical';
+  const order = state.combat?.order || [];
+  const idx = order.indexOf(id);
+  const effects = full ? (c.status_effects || []) : [];
+  const statusHtml = effects.map(e => `<span class="status-chip status-${e.type}">${esc(e.name)} ${e.rounds > 0 ? e.rounds + 'r' : ''}</span>`).join('');
+  const flavorText = c.flavor || (full ? (c.notes || '') : '');
+  document.getElementById('portrait-viewer-title').textContent = meta.label + ' DOSSIER';
+  document.getElementById('portrait-viewer-body').innerHTML = `
+    <div class="dossier-portrait-wrap" style="border-bottom:2px solid ${meta.color};${portrait ? `background-image:url('${portrait}');` : ''}box-shadow:inset 0 0 40px rgba(0,0,0,0.6), 0 0 24px ${meta.color}33">
+      ${portrait ? '' : `<div class="dossier-initials" style="color:${meta.color}">${esc(c.name.slice(0, 2).toUpperCase())}</div>`}
+      <span class="dossier-badge" style="border-color:${meta.color};color:${meta.color}">${meta.label}</span>
+      ${isDead ? '<span class="dossier-badge dossier-badge-dead">DOWN</span>' : ''}
+    </div>
+    <div class="dossier-info">
+      <div class="dossier-name">${esc(c.name)}</div>
+      ${full ? `<div class="hp-display" style="margin:8px 0">
+        <div class="hp-numbers ${hpClass}">${hpCur}/${hpMax}${c.isVehicle ? ' SDP' : ''}</div>
+        <div class="hp-bar"><div class="hp-bar-fill ${hpClass}" style="width:${hpPct}%"></div></div>
+      </div>` : `<div style="margin:8px 0;font-size:10px;color:var(--text3);letter-spacing:0.15em">${isDead ? 'DOWN' : 'ACTIVE'}</div>`}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${statusHtml}</div>
+      ${idx !== -1 ? `<div style="font-size:10px;color:var(--text3);letter-spacing:0.1em;margin-bottom:8px">INITIATIVE SLOT ${idx + 1} / ${order.length}${state.combat.currentTurn === idx ? ' — CURRENT TURN' : ''}</div>` : ''}
+      ${flavorText ? `<p style="color:#888;font-size:11px;line-height:1.65;border-left:2px solid ${meta.color};padding-left:10px;font-style:italic;margin-top:6px">${esc(flavorText)}</p>` : ''}
+    </div>`;
+  document.getElementById('portrait-viewer-footer').innerHTML = session.role === 'gm'
+    ? `<button class="btn btn-ghost btn-small" onclick="triggerPortraitReveal('${id}')" title="Fullscreen-reveal this portrait on every player's screen">📢 REVEAL TO PLAYERS</button>
+       <button class="btn btn-primary btn-small" onclick="closeModal('portrait-viewer-modal')">CLOSE</button>`
+    : `<button class="btn btn-primary btn-small" onclick="closeModal('portrait-viewer-modal')">CLOSE</button>`;
+  openModal('portrait-viewer-modal');
+}
+
+async function triggerPortraitReveal(id) {
+  await dbWrite('portraitReveal', { charId: id, ts: Date.now() });
+  showToast('Revealed to players!');
+}
+
+function showPortraitRevealOverlay(id) {
+  const c = state.characters[id];
+  const el = document.getElementById('portrait-reveal-overlay');
+  if (!c || !el) return;
+  const meta = charTypeMeta(c);
+  const portrait = portraits[id];
+  el.innerHTML = `
+    <div class="reveal-portrait" style="border-color:${meta.color};${portrait ? `background-image:url('${portrait}');` : ''}box-shadow:0 0 60px ${meta.color}55">
+      ${portrait ? '' : `<div class="dossier-initials" style="color:${meta.color};font-size:64px">${esc(c.name.slice(0, 2).toUpperCase())}</div>`}
+    </div>
+    <div class="reveal-name" style="color:${meta.color};text-shadow:0 0 20px ${meta.color}88">${esc(c.name)}</div>
+    ${c.flavor ? `<p class="reveal-flavor">${esc(c.flavor)}</p>` : ''}
+    <div class="reveal-hint">TAP ANYWHERE TO DISMISS</div>`;
+  el.classList.add('show');
+}
+function dismissPortraitReveal() {
+  document.getElementById('portrait-reveal-overlay')?.classList.remove('show');
+}
+
+// Cast board for the current mission (falls back to whoever's in the
+// active combat order, then to the full roster, so the button always
+// does something useful even before the GM starts tagging missions).
+function openPortraitGallery() {
+  let ids;
+  if (state.currentMission) {
+    ids = Object.entries(state.characters).filter(([, c]) => c.mission === state.currentMission).map(([id]) => id);
+  } else if (state.combat?.order?.length) {
+    ids = state.combat.order.slice();
+  } else {
+    ids = Object.keys(state.characters);
+  }
+  if (session.role === 'player') {
+    // Never leak the full roster to players — only whoever's already on
+    // the map/in combat, same visibility boundary as the map view.
+    const visible = new Set(state.combat?.order || []);
+    ids = ids.filter(id => visible.has(id));
+  }
+  document.getElementById('portrait-gallery-title').textContent = state.currentMission || 'ACTIVE ROSTER';
+  const body = document.getElementById('portrait-gallery-body');
+  if (!ids.length) { body.innerHTML = '<div style="color:var(--text3);font-size:11px">No portraits to show yet.</div>'; openModal('portrait-gallery-modal'); return; }
+  body.innerHTML = `<div class="gallery-grid">${ids.map(id => {
+    const c = state.characters[id]; if (!c) return '';
+    ensurePortraitListener(id);
+    const meta = charTypeMeta(c);
+    const portrait = portraits[id];
+    const isDead = (c.hp_current ?? c.hp_max ?? 1) <= 0;
+    return `<div class="gallery-card" style="border-color:${meta.color}55" onclick="openPortraitViewer('${id}')">
+      <div class="gallery-thumb" style="${portrait ? `background-image:url('${portrait}');` : ''}${isDead ? 'filter:grayscale(85%) brightness(0.6);' : ''}">
+        ${portrait ? '' : `<span style="color:${meta.color}">${esc(c.name.slice(0, 2).toUpperCase())}</span>`}
+      </div>
+      <div class="gallery-name">${esc(c.name)}</div>
+      <div class="gallery-badge" style="color:${meta.color}">${meta.label}</div>
+    </div>`;
+  }).join('')}</div>`;
+  openModal('portrait-gallery-modal');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2978,7 +3210,7 @@ function renderPlayerView() {
       const ch = state.characters[cid]; if (!ch) return '';
       const isMe = cid === id;
       return `<div class="init-row ${i === current ? 'current' : ''}">
-        <div class="init-row-name" style="${isMe ? 'font-weight:700;color:var(--cyan)' : ''}">${i === current ? '▶ ' : ''}${esc(ch.name)}${isMe ? ' (you)' : ''}</div>
+        <div class="init-row-name" style="cursor:pointer;${isMe ? 'font-weight:700;color:var(--cyan)' : ''}" onclick="openPortraitViewer('${cid}')" title="View portrait">${i === current ? '▶ ' : ''}${esc(ch.name)}${isMe ? ' (you)' : ''}</div>
         ${!ch.isNPC || ch.isAlly || isMe ? `<div class="init-row-hp" style="color:${(ch.hp_current??ch.hp_max)/(ch.hp_max||1) > 0.5 ? 'var(--green-bright)' : 'var(--red-bright)'}">${ch.hp_current??ch.hp_max}hp</div>` : '<div class="init-row-hp" style="color:var(--text3)">???</div>'}
       </div>`;
     }).join('');
@@ -4451,6 +4683,8 @@ async function saveCharacter() {
       ? document.getElementById('cm-notes').value
       : (existing.notes ?? ''),
     image_prompt: document.getElementById('cm-image-prompt').value.trim(),
+    // Generator-only flavor text, no edit-modal UI — preserve as-is.
+    flavor: existing.flavor ?? '',
   };
   const id = editingCharId || ('char_' + Date.now());
   await dbWrite('characters/' + id, char);
@@ -6772,6 +7006,7 @@ function genResultToCharacter(enemy) {
     firewall: enemy.firewall || null,
     hacks: enemy.hacks || [],
     image_prompt: enemy.imagePrompt || '',
+    flavor: enemy.flavor || '',
     status_effects: [], talents: [], inventory: [], eurodollar: 0
   };
 }
@@ -6810,6 +7045,7 @@ function genVehicleResultToCharacter(v) {
     })),
     loot: [], cyberware: [], cyberdeck: null, firewall: null, hacks: [],
     image_prompt: v.imagePrompt || '',
+    flavor: v.flavor || '',
     status_effects: [], talents: [], inventory: [], eurodollar: 0
   };
 }
@@ -6856,6 +7092,7 @@ function genDroneResultToCharacter(v) {
     })),
     loot: [], cyberware: [], cyberdeck: null, firewall: null, hacks: [],
     image_prompt: v.imagePrompt || '',
+    flavor: v.flavor || '',
     status_effects: [], talents: [], inventory: [], eurodollar: 0
   };
 }
