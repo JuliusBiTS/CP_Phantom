@@ -2735,32 +2735,46 @@ async function confirmPortraitCrop() {
   canvas.width = targetSize; canvas.height = targetSize;
   canvas.getContext('2d').drawImage(img, sx, sy, sSize, sSize, 0, 0, targetSize, targetSize);
   const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
-  // The uncropped original, capped to a sane max dimension so a huge source
-  // photo doesn't bloat the DB record — this is what the dossier/reveal
-  // "focus" view shows, since showing the same tight token-crop there just
-  // looked like a bad zoomed-in screenshot instead of the full character art.
-  const maxFullDim = 1024;
+  // The uncropped original, capped to a sane max dimension/quality so a huge
+  // source photo doesn't produce a base64 string too big for a single
+  // Realtime Database write — this is what the dossier/reveal "focus" view
+  // shows, since showing the same tight token-crop there just looked like a
+  // bad zoomed-in screenshot instead of the full character art. Kept fairly
+  // small on purpose: a combined crop+full write large enough previously
+  // failed the WHOLE write outright (losing even the crop), so this errs
+  // small rather than risking that again.
+  const maxFullDim = 768;
   const fullScale = Math.min(1, maxFullDim / Math.max(img.naturalWidth, img.naturalHeight));
   const fullCanvas = document.createElement('canvas');
   fullCanvas.width = Math.round(img.naturalWidth * fullScale);
   fullCanvas.height = Math.round(img.naturalHeight * fullScale);
   fullCanvas.getContext('2d').drawImage(img, 0, 0, fullCanvas.width, fullCanvas.height);
-  const fullDataUrl = fullCanvas.toDataURL('image/jpeg', 0.82);
+  const fullDataUrl = fullCanvas.toDataURL('image/jpeg', 0.72);
   showToast('Uploading portrait...');
+  const id = editingCharId;
+  // Two SEPARATE writes (to 'portraits/{id}/crop' and '.../full'), not one
+  // combined .set() on the whole node — a single large write either fully
+  // succeeds or fully fails, which previously meant a full-image write big
+  // enough to fail took the already-working crop upload down with it. This
+  // way the crop (small, reliable) always lands even if the bigger full
+  // image can't, instead of an all-or-nothing failure.
   try {
-    // Both images live under the ONE 'portraits/{id}' node (not a second
-    // sibling path) — see the comment on `let portraits` for why: a
-    // separate 'portraitsFull' path got silently permission-denied by
-    // existing campaigns' Firebase rules while this one kept working.
-    await db.ref('portraits/' + editingCharId).set({ crop: dataUrl, full: fullDataUrl });
-    portraits[editingCharId] = dataUrl;
-    portraitsFull[editingCharId] = fullDataUrl;
-    updatePortraitPreview(editingCharId);
-    renderCharList();
+    await db.ref('portraits/' + id + '/crop').set(dataUrl);
+    portraits[id] = dataUrl;
+  } catch (e) {
+    showToast('Could not upload portrait.');
+    return;
+  }
+  updatePortraitPreview(id);
+  renderCharList();
+  try {
+    await db.ref('portraits/' + id + '/full').set(fullDataUrl);
+    portraitsFull[id] = fullDataUrl;
     closeModal('portrait-crop-modal');
     showToast('Portrait updated!');
   } catch (e) {
-    showToast('Could not upload portrait.');
+    closeModal('portrait-crop-modal');
+    showToast('Portrait saved, but the full-size image was too large to upload — dossier will show the cropped version.');
   }
 }
 
