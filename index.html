@@ -511,10 +511,15 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .inline-row .field { flex: 1; }
 /* ── PORTRAIT DOSSIER / GALLERY / REVEAL ── */
 .dossier-portrait-wrap {
-  position: relative; width: 100%; aspect-ratio: 1/1;
-  background: var(--surface2) center/cover no-repeat;
+  position: relative; width: 100%; min-height: 200px; max-height: 65vh;
+  background: var(--surface2);
   display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
 }
+/* object-fit:contain (not the cropped/cover token square) — the whole
+   point of this view is to show the full uploaded image, letterboxed
+   rather than cropped, whatever its native aspect ratio is. */
+.dossier-portrait-img { max-width: 100%; max-height: 65vh; display: block; object-fit: contain; }
 .dossier-initials { font-size: 48px; font-weight: 700; opacity: 0.5; letter-spacing: 0.05em; }
 .dossier-badge {
   position: absolute; top: 10px; left: 10px;
@@ -546,11 +551,13 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .portrait-reveal-overlay.show { display: flex; animation: reveal-fade 0.6s ease-out; }
 @keyframes reveal-fade { from { opacity: 0; } to { opacity: 1; } }
 .reveal-portrait {
-  width: min(60vw, 320px); height: min(60vw, 320px);
-  border: 2px solid; background: var(--surface2) center/cover no-repeat;
+  max-width: min(80vw, 480px); max-height: 60vh;
+  border: 2px solid; background: var(--surface2);
   display: flex; align-items: center; justify-content: center;
   animation: reveal-portrait-in 0.7s ease-out;
 }
+.reveal-portrait-img { max-width: min(80vw, 480px); max-height: 60vh; display: block; object-fit: contain; }
+.reveal-portrait-initials { width: min(60vw, 320px); height: min(60vw, 320px); display: flex; align-items: center; justify-content: center; }
 @keyframes reveal-portrait-in { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
 .reveal-name { font-size: 26px; font-weight: 700; letter-spacing: 0.08em; }
 .reveal-flavor { max-width: 460px; font-size: 13px; line-height: 1.7; color: var(--text2); font-style: italic; }
@@ -1537,8 +1544,17 @@ let session = { role: null, charId: null, gmPin: null };
 let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} }, securityObjects: {}, alarmLevel: 0, portraitReveal: null };
 let combatViewMode = 'list';
 let mapImage = null;       // fetched from a Firebase path OUTSIDE 'campaign' — kept separate from `state`
-let portraits = {};        // { charId: dataUrl }, each fetched from its own sibling path, outside 'campaign'
+let portraits = {};        // { charId: dataUrl }, each fetched from its own sibling path, outside 'campaign' — the CROPPED square used for tokens/thumbnails everywhere
+let portraitsFull = {};    // { charId: dataUrl }, the uncropped original — used only by the dossier/reveal "focus" view
 const portraitListeners = new Set();
+const portraitFullListeners = new Set();
+// Tracks whichever character's dossier/reveal is currently on-screen, so a
+// full-portrait listener that resolves AFTER the modal already opened (real
+// Firebase fires async, unlike the cropped-square one which is usually
+// already cached) can refresh the view in place instead of leaving it stuck
+// on the fallback image.
+let portraitViewerCharId = null;
+let portraitRevealCharId = null;
 let editingCharId = null;
 let loadedCharNotes = '';
 let dmgTargetId = null;
@@ -1806,6 +1822,19 @@ function ensurePortraitListener(id) {
       renderPlayerMapView();
       if (session.charId === id) updatePlayerAvatar();
     }
+  });
+}
+
+// Lazy-loaded separately from the cropped square above — only fetched once
+// something actually needs the full image (the dossier/reveal view), so
+// browsing the map/char list never pulls the bigger payload for nothing.
+function ensurePortraitFullListener(id) {
+  if (!db || portraitFullListeners.has(id)) return;
+  portraitFullListeners.add(id);
+  db.ref('portraitsFull/' + id).on('value', snap => {
+    portraitsFull[id] = snap.exists() ? snap.val() : null;
+    if (portraitViewerCharId === id) openPortraitViewer(id);
+    if (portraitRevealCharId === id) showPortraitRevealOverlay(id);
   });
 }
 
@@ -2235,8 +2264,13 @@ function openPortraitViewer(id) {
   const c = state.characters[id];
   if (!c) return;
   ensurePortraitListener(id);
+  ensurePortraitFullListener(id);
+  portraitViewerCharId = id;
   const meta = charTypeMeta(c);
-  const portrait = portraits[id];
+  // Prefer the uncropped original (what this whole fix is for) — fall back
+  // to the cropped token square for characters portraited before this
+  // feature existed, or the split second before the full image arrives.
+  const portrait = portraitsFull[id] || portraits[id];
   const full = canSeeFullDossier(c, id);
   const hpMax = c.hp_max || 1;
   const hpCur = c.hp_current ?? hpMax;
@@ -2250,8 +2284,8 @@ function openPortraitViewer(id) {
   const flavorText = c.flavor || (full ? (c.notes || '') : '');
   document.getElementById('portrait-viewer-title').textContent = meta.label + ' DOSSIER';
   document.getElementById('portrait-viewer-body').innerHTML = `
-    <div class="dossier-portrait-wrap" style="border-bottom:2px solid ${meta.color};${portrait ? `background-image:url('${portrait}');` : ''}box-shadow:inset 0 0 40px rgba(0,0,0,0.6), 0 0 24px ${meta.color}33">
-      ${portrait ? '' : `<div class="dossier-initials" style="color:${meta.color}">${esc(c.name.slice(0, 2).toUpperCase())}</div>`}
+    <div class="dossier-portrait-wrap" style="border-bottom:2px solid ${meta.color};box-shadow:inset 0 0 40px rgba(0,0,0,0.6), 0 0 24px ${meta.color}33">
+      ${portrait ? `<img class="dossier-portrait-img" src="${portrait}">` : `<div class="dossier-initials" style="color:${meta.color}">${esc(c.name.slice(0, 2).toUpperCase())}</div>`}
       <span class="dossier-badge" style="border-color:${meta.color};color:${meta.color}">${meta.label}</span>
       ${isDead ? '<span class="dossier-badge dossier-badge-dead">DOWN</span>' : ''}
     </div>
@@ -2281,11 +2315,13 @@ function showPortraitRevealOverlay(id) {
   const c = state.characters[id];
   const el = document.getElementById('portrait-reveal-overlay');
   if (!c || !el) return;
+  ensurePortraitFullListener(id);
+  portraitRevealCharId = id;
   const meta = charTypeMeta(c);
-  const portrait = portraits[id];
+  const portrait = portraitsFull[id] || portraits[id];
   el.innerHTML = `
-    <div class="reveal-portrait" style="border-color:${meta.color};${portrait ? `background-image:url('${portrait}');` : ''}box-shadow:0 0 60px ${meta.color}55">
-      ${portrait ? '' : `<div class="dossier-initials" style="color:${meta.color};font-size:64px">${esc(c.name.slice(0, 2).toUpperCase())}</div>`}
+    <div class="reveal-portrait" style="border-color:${meta.color};box-shadow:0 0 60px ${meta.color}55">
+      ${portrait ? `<img class="reveal-portrait-img" src="${portrait}">` : `<div class="reveal-portrait-initials dossier-initials" style="color:${meta.color};font-size:64px">${esc(c.name.slice(0, 2).toUpperCase())}</div>`}
     </div>
     <div class="reveal-name" style="color:${meta.color};text-shadow:0 0 20px ${meta.color}88">${esc(c.name)}</div>
     ${c.flavor ? `<p class="reveal-flavor">${esc(c.flavor)}</p>` : ''}
@@ -2294,6 +2330,7 @@ function showPortraitRevealOverlay(id) {
 }
 function dismissPortraitReveal() {
   document.getElementById('portrait-reveal-overlay')?.classList.remove('show');
+  portraitRevealCharId = null;
 }
 
 // Cast board for the current mission (falls back to whoever's in the
@@ -2687,10 +2724,23 @@ async function confirmPortraitCrop() {
   canvas.width = targetSize; canvas.height = targetSize;
   canvas.getContext('2d').drawImage(img, sx, sy, sSize, sSize, 0, 0, targetSize, targetSize);
   const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+  // The uncropped original, capped to a sane max dimension so a huge source
+  // photo doesn't bloat the DB record — this is what the dossier/reveal
+  // "focus" view shows, since showing the same tight token-crop there just
+  // looked like a bad zoomed-in screenshot instead of the full character art.
+  const maxFullDim = 1024;
+  const fullScale = Math.min(1, maxFullDim / Math.max(img.naturalWidth, img.naturalHeight));
+  const fullCanvas = document.createElement('canvas');
+  fullCanvas.width = Math.round(img.naturalWidth * fullScale);
+  fullCanvas.height = Math.round(img.naturalHeight * fullScale);
+  fullCanvas.getContext('2d').drawImage(img, 0, 0, fullCanvas.width, fullCanvas.height);
+  const fullDataUrl = fullCanvas.toDataURL('image/jpeg', 0.82);
   showToast('Uploading portrait...');
   try {
     await db.ref('portraits/' + editingCharId).set(dataUrl);
+    await db.ref('portraitsFull/' + editingCharId).set(fullDataUrl);
     portraits[editingCharId] = dataUrl;
+    portraitsFull[editingCharId] = fullDataUrl;
     updatePortraitPreview(editingCharId);
     renderCharList();
     closeModal('portrait-crop-modal');
@@ -2703,7 +2753,9 @@ async function confirmPortraitCrop() {
 async function removePortrait() {
   if (!editingCharId) return;
   await db.ref('portraits/' + editingCharId).set(null);
+  await db.ref('portraitsFull/' + editingCharId).set(null);
   portraits[editingCharId] = null;
+  portraitsFull[editingCharId] = null;
   updatePortraitPreview(editingCharId);
   renderCharList();
   showToast('Portrait removed.');
@@ -4718,6 +4770,11 @@ async function duplicateCharacter(id) {
   state.characters[newId] = clone;
   await dbWrite('characters/' + newId, clone);
   if (portraits[id]) await db.ref('portraits/' + newId).set(portraits[id]);
+  // The full portrait is only ever lazy-fetched once the dossier's opened,
+  // so it may not be warm in `portraitsFull` yet at duplicate-time — read
+  // straight from the DB instead of trusting the local cache here.
+  const fullSnap = await db.ref('portraitsFull/' + id).get();
+  if (fullSnap.exists()) await db.ref('portraitsFull/' + newId).set(fullSnap.val());
   closeModal('char-modal');
   renderCharList();
   showToast(`Duplicated as "${clone.name}"`);
@@ -4813,6 +4870,7 @@ function closeModal(id) {
   if (id === 'loot-modal') lootModalCharId = null;
   if (id === 'portrait-crop-modal') cropState = null;
   if (id === 'security-edit-modal') securityEditId = null;
+  if (id === 'portrait-viewer-modal') portraitViewerCharId = null;
 }
 function esc(str) { return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function showToast(msg, dur=2200) {
