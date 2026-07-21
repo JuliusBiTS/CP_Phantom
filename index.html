@@ -928,6 +928,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
     <button class="tab" onclick="switchPlayerTab('talents')">Talents</button>
     <button class="tab" onclick="switchPlayerTab('gear')">Gear</button>
     <button class="tab" id="player-tab-btn-netrunning" onclick="switchPlayerTab('netrunning')" style="display:none">Hacks</button>
+    <button class="tab" id="player-tab-btn-companion" onclick="switchPlayerTab('companion')" style="display:none">Companion</button>
     <button class="tab" onclick="switchPlayerTab('inventory')">Inventory</button>
     <button class="tab" onclick="switchPlayerTab('notes')">Notes</button>
     <button class="tab" onclick="switchPlayerTab('map')">Map</button>
@@ -1071,6 +1072,9 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         <div id="player-hacks-list" style="display:flex;flex-direction:column;gap:8px"></div>
       </div>
     </div>
+  </div>
+  <div id="player-tab-companion" class="tab-content main-scroll">
+    <div class="player-view" id="player-companion-list"></div>
   </div>
   <div id="player-tab-inventory" class="tab-content main-scroll">
     <div class="player-view">
@@ -1267,6 +1271,11 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <div id="cm-talents-list" style="display:flex;flex-direction:column;gap:4px"></div>
       <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addTalentRow()">+ ADD TALENT/TECHNIQUE</button>
 
+      <div class="section-heading">Abilities (vehicles, drones, companions, special NPCs)</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Uses/fight blank or 0 = unlimited (no tracker shown). Resets to full when combat starts.</div>
+      <div id="cm-abilities-list" style="display:flex;flex-direction:column;gap:4px"></div>
+      <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addAbilityRow()">+ ADD ABILITY</button>
+
       <div id="cm-progression-section" style="display:none">
         <div class="section-heading">Progression (GM only)</div>
         <div id="cm-progression-body"></div>
@@ -1306,6 +1315,22 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost btn-small" onclick="closeNetrunningModal()">← BACK TO CHARACTER</button>
+    </div>
+  </div>
+</div>
+
+<!-- Abilities Modal (view/use — editing the list itself is done from the
+     Build screen's Abilities section, same split the Netrunning modal
+     already uses for hacks: set up there, USED from here.) -->
+<div class="modal-overlay" id="abilities-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title">ABILITIES — <span id="abilities-modal-name"></span></span>
+      <button class="modal-close" onclick="closeModal('abilities-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="abilities-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary btn-small" onclick="closeModal('abilities-modal')">CLOSE</button>
     </div>
   </div>
 </div>
@@ -2000,7 +2025,7 @@ function switchTab(name) {
 }
 
 function switchPlayerTab(name) {
-  const names = ['status','stats','talents','gear','netrunning','inventory','notes','map'];
+  const names = ['status','stats','talents','gear','netrunning','companion','inventory','notes','map'];
   document.querySelectorAll('#screen-player .tab').forEach((t, i) => t.classList.toggle('active', names[i] === name));
   document.querySelectorAll('#screen-player .tab-content').forEach(c => c.classList.toggle('active', c.id === 'player-tab-' + name));
 }
@@ -2958,6 +2983,59 @@ function renderHacksSection(c, id) {
   </div>`;
 }
 
+// Generalized abilities (vehicles/drones/security units from the
+// generator, plus hand-authored ones on companions/special NPCs) — kept
+// out of the combat card entirely (unlike weapons/hacks) since this is
+// meant to be reachable with one click from the char list too, not just
+// mid-combat, so it lives in its own modal instead of another detail-row.
+function hasAnyAbilities(c) {
+  return !!((c.abilities?.length) || (c.vehicle_abilities?.length) || (c.drone_abilities?.length) || (c.security_abilities?.length));
+}
+
+function openAbilitiesModal(id) {
+  const c = state.characters[id]; if (!c) return;
+  document.getElementById('abilities-modal-name').textContent = c.name;
+  const structured = (c.abilities || []).map((a, ai) => {
+    const usesMax = a.usesMax || 0;
+    const usesCurrent = Math.min(a.usesCurrent ?? usesMax, usesMax);
+    // Same click semantics as the stamina dots: any filled dot just means
+    // "use one" (-1), any empty dot means "restore one" (+1) — which
+    // specific dot gets clicked doesn't matter, they're interchangeable.
+    const dots = usesMax > 0 ? `<div class="stamina-dots" style="margin-top:5px">${Array.from({length: usesMax}, (_, j) =>
+      `<div class="dot ${j < usesCurrent ? 'filled' : 'empty'}" onclick="useAbilityCell('${id}',${ai},${j < usesCurrent})"></div>`).join('')}</div>` : '';
+    return `<div style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border);margin-bottom:6px">
+      <div style="font-size:12px;font-weight:700">${esc(a.name)}</div>
+      ${a.desc ? `<div style="font-size:10px;color:var(--text2);margin-top:2px">${esc(a.desc)}</div>` : ''}
+      ${dots}
+    </div>`;
+  }).join('');
+  // Legacy generator-populated traits — plain flavor bullets, no usage
+  // tracking (the rulebook never gave these a per-fight limit), shown
+  // read-only underneath whatever structured abilities exist above.
+  const legacyKey = c.isVehicle ? 'vehicle_abilities' : (c.isDrone ? 'drone_abilities' : (c.isSecurityUnit ? 'security_abilities' : null));
+  const legacyList = legacyKey ? (c[legacyKey] || []) : [];
+  const legacyHtml = legacyList.length
+    ? `<div style="margin-top:4px">${legacyList.map(a => `<div style="font-size:10px;color:var(--text2);margin-bottom:4px;line-height:1.5">▸ ${esc(a)}</div>`).join('')}</div>`
+    : '';
+  document.getElementById('abilities-modal-body').innerHTML =
+    (structured || legacyHtml ? structured : '<div style="color:var(--text3);font-size:11px">No abilities set.</div>') + legacyHtml;
+  openModal('abilities-modal');
+}
+
+async function useAbilityCell(id, ai, wasFilled) {
+  const c = state.characters[id]; if (!c?.abilities?.[ai]) return;
+  const abilities = c.abilities.map((a, i) => i === ai ? { ...a } : a);
+  const a = abilities[ai];
+  const delta = wasFilled ? -1 : 1;
+  a.usesCurrent = Math.max(0, Math.min(a.usesMax || 0, (a.usesCurrent ?? a.usesMax ?? 0) + delta));
+  // Update the local copy immediately rather than waiting on the Firebase
+  // echo, so re-opening the modal right away reflects the click without
+  // depending on sync round-trip timing.
+  state.characters[id].abilities = abilities;
+  await dbWrite('characters/' + id + '/abilities', abilities);
+  openAbilitiesModal(id);
+}
+
 // §6.6a-c consumables — a quick roll-and-apply picker rather than a
 // per-character list, since (unlike weapons/hacks) any character could
 // plausibly use any stim and tracking a separate owned-items list would
@@ -3047,7 +3125,7 @@ function renderCombatantCard(id, isActive) {
   return `<div class="combatant-card ${c.isDrone ? 'is-drone' : (c.isVehicle ? 'is-vehicle' : (c.isCompanion ? 'is-companion' : (c.isAlly ? 'is-ally' : (c.isNPC ? 'is-npc' : 'is-pc'))))} ${isActive ? 'active-turn' : ''} ${hpCur <= 0 ? 'is-dead' : ''}" id="cc-${id}">
     <div class="combatant-top" onclick="toggleDetail('${id}')">
       <div>
-        <div class="combatant-name">${esc(c.name)}${c.isVehicle ? ' 🚗' : ''}</div>
+        <div class="combatant-name">${esc(c.name)}${c.isVehicle ? ' 🚗' : ''}${hasAnyAbilities(c) ? ` <span title="View/use abilities" style="color:var(--purple-bright);cursor:pointer" onclick="event.stopPropagation(); openAbilitiesModal('${id}')">✦</span>` : ''}</div>
         <div style="display:flex;gap:6px;align-items:center;margin-top:3px">
           ${statusHtml || '<span style="font-size:10px;color:var(--text3)">No effects</span>'}
         </div>
@@ -3188,6 +3266,7 @@ function charItemRow(id, c) {
     </div>
     <div class="char-item-hp">${c.hp_current ?? c.hp_max}/${c.hp_max}</div>
     ${combatToggleButtonHtml(id)}
+    ${hasAnyAbilities(c) ? `<button class="btn btn-purple btn-small" style="white-space:nowrap" onclick="event.stopPropagation(); openAbilitiesModal('${id}')" title="View/use abilities">✦ ABILITIES</button>` : ''}
     <button class="btn btn-gold btn-small" style="white-space:nowrap" onclick="event.stopPropagation(); openLootModal('${id}')" title="Give away inventory or loot">🎒 ITEMS</button>
     <div style="font-size:16px;color:var(--text3)">›</div>
   </div>`;
@@ -3401,6 +3480,7 @@ function renderPlayerView() {
       </div>`;
     }).join('') : '<div style="color:var(--text3);font-size:11px">No hacks known yet.</div>';
   }
+  renderPlayerCompanionTab(id);
   // EB
   document.getElementById('player-eb').textContent = (c.eurodollar || 0).toLocaleString();
   // Inventory
@@ -3444,6 +3524,77 @@ function renderPlayerView() {
   if (notesEl && document.activeElement !== notesEl) notesEl.value = c.notes || '';
   // Map (view-only)
   renderPlayerMapView();
+}
+
+// Companion tab — hidden entirely unless this PC actually owns a
+// companion (isCompanion + owner_char_id === them). Normally at most one
+// (GREMLIN Support Drone is the only true Companion per the rulebook),
+// but rendered as a list so it doesn't break if that ever changes.
+function renderPlayerCompanionTab(myId) {
+  const companions = Object.entries(state.characters).filter(([, ch]) => ch.isCompanion && ch.owner_char_id === myId);
+  document.getElementById('player-tab-btn-companion').style.display = companions.length ? '' : 'none';
+  if (!companions.length) return;
+  document.getElementById('player-companion-list').innerHTML = companions.map(([cid, ch]) => {
+    ensurePortraitListener(cid);
+    const portrait = portraits[cid];
+    const hpMax = ch.hp_max || 1;
+    const hpCur = ch.hp_current ?? hpMax;
+    const pct = Math.max(0, Math.min(100, hpCur / hpMax * 100));
+    const cls = pct > 60 ? 'healthy' : pct > 25 ? 'wounded' : 'critical';
+    const effects = ch.status_effects || [];
+    const statusHtml = effects.length
+      ? effects.map(e => `<span class="status-chip status-${e.type}">${esc(e.name)} ${e.rounds > 0 ? e.rounds + 'r' : ''}</span>`).join('')
+      : '<span style="font-size:10px;color:var(--text3)">No active effects</span>';
+    const statsSource = getStatsSourceChar(ch);
+    const weapons = ch.weapons || [];
+    const weaponsHtml = weapons.length ? weapons.map(w => {
+      const live = computeLiveWeaponStats(statsSource, w);
+      return `<div style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border)">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div style="flex:1;font-size:12px">${esc(w.name)}</div>
+          <div style="font-size:11px;color:var(--gold-bright)">${live.bonus ? '+' + live.bonus : ''}</div>
+          <div style="font-size:10px;color:var(--cyan)">${esc(live.pwLabel || '')}${live.pw != null ? ' · ' + live.pw : ''}</div>
+          ${w.tags ? `<div style="font-size:10px;color:var(--text3)">${esc(w.tags)}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('') : '<div style="color:var(--text3);font-size:11px">No weapons.</div>';
+    const abilities = ch.abilities || [];
+    const abilitiesHtml = abilities.map((a, ai) => {
+      const usesMax = a.usesMax || 0;
+      const usesCurrent = Math.min(a.usesCurrent ?? usesMax, usesMax);
+      const dots = usesMax > 0 ? `<div class="stamina-dots" style="margin-top:4px">${Array.from({length: usesMax}, (_, j) =>
+        `<div class="dot ${j < usesCurrent ? 'filled' : 'empty'}" onclick="useAbilityCell('${cid}',${ai},${j < usesCurrent})"></div>`).join('')}</div>` : '';
+      return `<div style="padding:6px 8px;background:var(--surface2);border:1px solid var(--border);margin-bottom:4px">
+        <div style="font-size:11px;font-weight:700">${esc(a.name)}</div>
+        ${a.desc ? `<div style="font-size:10px;color:var(--text2)">${esc(a.desc)}</div>` : ''}
+        ${dots}
+      </div>`;
+    }).join('');
+    return `<div class="player-card">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+        <div style="width:48px;height:48px;border-radius:50%;flex-shrink:0;background-color:var(--surface2);background-size:cover;background-position:center;border:2px solid var(--purple-bright);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--purple-bright);${portrait ? `background-image:url('${portrait}');` : ''}">${portrait ? '' : esc(ch.name.slice(0, 2).toUpperCase())}</div>
+        <div style="flex:1">
+          <div class="player-card-title" style="margin:0">${esc(ch.name)}</div>
+          <div style="font-size:10px;color:var(--text3);letter-spacing:0.1em">COMPANION</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div class="big-stat">
+          <div class="big-stat-val ${cls}">${hpCur}</div>
+          <div class="big-stat-max">/ ${hpMax}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="adj-btn red" onclick="quickAdj('${cid}','hp',-1)">−</button>
+          <button class="adj-btn green" onclick="quickAdj('${cid}','hp',1)">+</button>
+        </div>
+        <div class="hp-bar" style="flex:1"><div class="hp-bar-fill ${cls}" style="width:${pct}%"></div></div>
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px">${statusHtml}</div>
+      ${abilitiesHtml ? `<div class="player-card-title" style="font-size:10px;margin-bottom:4px">Abilities</div>${abilitiesHtml}` : ''}
+      <div class="player-card-title" style="font-size:10px;margin-bottom:4px">Weapons</div>
+      ${weaponsHtml}
+    </div>`;
+  }).join('');
 }
 
 let notesSaveTimer = null;
@@ -3575,7 +3726,20 @@ async function startCombat() {
   });
   const order = sortCombatOrder(validIds, initRolls);
   const combat = { active: true, round: 1, currentTurn: 0, order, initRolls };
-  await dbUpdate({ 'combat': combat, 'encounterQueue': [] });
+  const updates = { 'combat': combat, 'encounterQueue': [] };
+  // Limited-use abilities are "per fight" — every character actually
+  // entering this fight gets its abilities refilled, not just the
+  // friendly side (unlike Flink/status effects, which only reset for
+  // PCs/allies/companions in endCombat — an ability's use count needs to
+  // be fresh for enemies/drones/vehicles too every time a new fight starts).
+  validIds.forEach(id => {
+    const c = state.characters[id];
+    const abilities = c.abilities || [];
+    if (abilities.some(a => a.usesMax > 0 && a.usesCurrent !== a.usesMax)) {
+      updates['characters/' + id + '/abilities'] = abilities.map(a => a.usesMax > 0 ? { ...a, usesCurrent: a.usesMax } : a);
+    }
+  });
+  await dbUpdate(updates);
   showToast('Combat started! Initiative rolled.');
 }
 
@@ -4409,6 +4573,8 @@ function openCharModal(id) {
   renderHackRows(c.hacks || []);
   // Talents
   renderTalentRows(c.talents || []);
+  // Abilities
+  renderAbilityRows(c.abilities || []);
   openModal('char-modal');
 }
 
@@ -4685,6 +4851,42 @@ function updateTalentField(i, f, v) {
 }
 function removeTalentRow(i) { talentData.splice(i,1); renderTalentRows(talentData); }
 
+// Abilities — same row-editing shape as talents (name/desc + a numeric
+// field), but the third field is a per-fight use count instead of slots,
+// and each row also carries a usesCurrent that this form never shows or
+// touches directly (only the Abilities modal's clickable cells and the
+// per-combat reset change it) — abilityData is seeded straight from the
+// existing objects, so usesCurrent just rides along untouched on save
+// unless useAbilityCell/startCombat's reset already had to adjust it.
+let abilityData = [];
+function renderAbilityRows(abilities) {
+  abilityData = [...abilities];
+  const el = document.getElementById('cm-abilities-list');
+  el.innerHTML = abilities.map((a, i) => `<div class="inline-row" style="gap:4px;margin-bottom:2px">
+    <input type="text" placeholder="Ability name" value="${esc(a.name||'')}" style="flex:2" onchange="updateAbilityField(${i},'name',this.value)">
+    <input type="text" placeholder="Description" value="${esc(a.desc||'')}" style="flex:3" onchange="updateAbilityField(${i},'desc',this.value)">
+    <input type="number" placeholder="Uses/fight" value="${a.usesMax||''}" style="width:80px" min="0" onchange="updateAbilityField(${i},'usesMax',this.value)">
+    <button class="btn btn-danger btn-icon" onclick="removeAbilityRow(${i})">✕</button>
+  </div>`).join('');
+}
+// usesCurrent starts at null (not 0) so the first time a Uses/fight value
+// is actually typed in, the "?? usesMax" fallback below correctly treats
+// a brand-new ability as starting fresh/full rather than pre-exhausted.
+function addAbilityRow() { abilityData.push({name:'',desc:'',usesMax:0,usesCurrent:null}); renderAbilityRows(abilityData); }
+function updateAbilityField(i, f, v) {
+  if (!abilityData[i]) abilityData[i] = {};
+  if (f === 'usesMax') {
+    const usesMax = parseInt(v) || 0;
+    abilityData[i].usesMax = usesMax;
+    // Raising/lowering the max keeps the current count sane without
+    // silently topping it back up (that's what the per-combat reset is for).
+    abilityData[i].usesCurrent = Math.min(abilityData[i].usesCurrent ?? usesMax, usesMax);
+  } else {
+    abilityData[i][f] = v;
+  }
+}
+function removeAbilityRow(i) { abilityData.splice(i,1); renderAbilityRows(abilityData); }
+
 // Inventory now lives entirely in the Items & Loot modal (openLootModal),
 // alongside the loot/transfer flow it shares — each edit writes straight to
 // Firebase (same instant-save pattern as Give/Transfer already use here)
@@ -4811,6 +5013,10 @@ async function saveCharacter() {
     cyberware: cyberwareList,
     weapons: weaponData.filter(w => w.name),
     talents: talentData.filter(t => t.name),
+    abilities: abilityData.filter(a => a.name).map(a => {
+      const usesMax = parseInt(a.usesMax) || 0;
+      return { name: a.name, desc: a.desc || '', usesMax, usesCurrent: usesMax > 0 ? Math.min(a.usesCurrent ?? usesMax, usesMax) : 0 };
+    }),
     // Edited instantly from the Items & Loot modal now, not this form —
     // preserve whatever's already there instead of silently dropping it.
     inventory: existing.inventory ?? [],
