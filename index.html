@@ -2133,7 +2133,13 @@ function buildMapTokensHtml(interactive) {
     const ringShape = shape === 'square'
       // Explicit path (not <rect>) so it starts at top-center like the
       // circle/triangle do, instead of a rect's default top-left start.
-      ? `<path d="M20,3 L37,3 L37,37 L3,37 L3,3 Z" ${ringAttrs}/>`
+      // Unlike triangle/hexagon, .shape-square has NO clip-path — the
+      // image fills the entire 40x40 box (only its corners are rounded via
+      // border-radius), so the ring must hug the actual box edge (inset by
+      // just half the 3px stroke-width, exactly like the circle's r=18.5)
+      // instead of sitting a few px inside it, which left a visible gap
+      // between the vehicle art and its "border" in the last screenshot.
+      ? `<path d="M20,1.5 L38.5,1.5 L38.5,38.5 L1.5,38.5 L1.5,1.5 Z" ${ringAttrs}/>`
       : shape === 'triangle'
       // Matches .shape-triangle's clip-path exactly (50% 5%, 95% 95%,
       // 5% 95% of a 40x40 box == these px) so the ring hugs the actual
