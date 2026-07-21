@@ -927,6 +927,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
     <button class="tab" onclick="switchPlayerTab('stats')">Stats</button>
     <button class="tab" onclick="switchPlayerTab('talents')">Talents</button>
     <button class="tab" onclick="switchPlayerTab('gear')">Gear</button>
+    <button class="tab" id="player-tab-btn-netrunning" onclick="switchPlayerTab('netrunning')" style="display:none">Hacks</button>
     <button class="tab" onclick="switchPlayerTab('inventory')">Inventory</button>
     <button class="tab" onclick="switchPlayerTab('notes')">Notes</button>
     <button class="tab" onclick="switchPlayerTab('map')">Map</button>
@@ -1060,6 +1061,14 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <div class="player-card">
         <div class="player-card-title">Cyberware</div>
         <div id="player-cyberware-list" style="display:flex;flex-direction:column;gap:4px"></div>
+      </div>
+    </div>
+  </div>
+  <div id="player-tab-netrunning" class="tab-content main-scroll">
+    <div class="player-view">
+      <div class="player-card">
+        <div class="player-card-title" id="player-netrunning-header">Netrunning</div>
+        <div id="player-hacks-list" style="display:flex;flex-direction:column;gap:8px"></div>
       </div>
     </div>
   </div>
@@ -1991,7 +2000,7 @@ function switchTab(name) {
 }
 
 function switchPlayerTab(name) {
-  const names = ['status','stats','talents','gear','inventory','notes','map'];
+  const names = ['status','stats','talents','gear','netrunning','inventory','notes','map'];
   document.querySelectorAll('#screen-player .tab').forEach((t, i) => t.classList.toggle('active', names[i] === name));
   document.querySelectorAll('#screen-player .tab-content').forEach(c => c.classList.toggle('active', c.id === 'player-tab-' + name));
 }
@@ -3359,6 +3368,39 @@ function renderPlayerView() {
   // Cyberware
   const cyberware = c.cyberware || [];
   document.getElementById('player-cyberware-list').innerHTML = cyberware.length ? cyberware.map(cw => `<div style="font-size:11px;color:#7aafc8;padding:4px 0">⬡ ${esc(cw)}</div>`).join('') : '<div style="color:var(--text3);font-size:11px">No cyberware.</div>';
+  // Netrunning — the tab itself is hidden entirely for characters with
+  // nothing set up here (no cyberdeck/firewall/hacks), same "hide if
+  // there's nothing to show" rule the GM's own hacks card already uses.
+  const hacks = c.hacks || [];
+  const isNetrunner = !!(c.cyberdeck || c.firewall || hacks.length);
+  document.getElementById('player-tab-btn-netrunning').style.display = isNetrunner ? '' : 'none';
+  if (isNetrunner) {
+    const liveFw = computeLiveFirewall(c);
+    document.getElementById('player-netrunning-header').textContent =
+      `${c.cyberdeck ? c.cyberdeck + ' Deck' : 'Netrunning'}${liveFw ? ' · Firewall ' + liveFw : ''} · ${ipCur}/${ipMax} IP`;
+    const targetOptions = order.filter(tid => tid !== id).map(tid => ({ tid, tc: state.characters[tid] })).filter(o => o.tc);
+    document.getElementById('player-hacks-list').innerHTML = hacks.length ? hacks.map((h, hi) => {
+      const live = computeLiveHackStats(c, h);
+      const canAfford = ipCur >= live.ip;
+      return `<div style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border)">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span style="flex:1;font-size:12px">${esc(h.name)}</span>
+          <span style="font-size:11px;color:var(--gold-bright);font-weight:700">${live.ip} IP</span>
+          <button class="btn ${canAfford ? 'btn-primary' : 'btn-ghost'} btn-small" style="padding:2px 10px;font-size:10px" onclick="usePlayerHack(${hi})" ${canAfford ? '' : 'disabled'}>USE</button>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
+          <span style="font-size:10px;color:var(--cyan)">${esc(live.pwLabel)}${live.pw!=null?' · '+live.pw:''}</span>
+          ${live.dice ? `<span style="font-size:10px;color:var(--cyan)">→ ${live.dice}×d20</span>` : ''}
+          ${targetOptions.length ? `<select style="font-size:10px;width:auto" onchange="onPlayerHackTargetChange(${hi},this.value)">
+            <option value="">vs target...</option>
+            ${targetOptions.map(o => `<option value="${o.tid}">${esc(o.tc.name)}</option>`).join('')}
+          </select>
+          <span id="player-hack-vs-${hi}" style="font-size:10px;color:var(--text2)"></span>` : ''}
+        </div>
+        ${live.effect ? `<div style="font-size:10px;color:var(--text2);margin-top:4px">${esc(live.effect)}</div>` : ''}
+      </div>`;
+    }).join('') : '<div style="color:var(--text3);font-size:11px">No hacks known yet.</div>';
+  }
   // EB
   document.getElementById('player-eb').textContent = (c.eurodollar || 0).toLocaleString();
   // Inventory
@@ -4856,6 +4898,26 @@ async function clearEncounter() {
 // ═══════════════════════════════════════════════════════════════
 // PLAYER ACTIONS
 // ═══════════════════════════════════════════════════════════════
+// Player-facing counterpart to the GM's useHack() — same IP deduction,
+// just always scoped to the player's own character (session.charId)
+// and going through adjustPlayerStat's clamp instead of the GM's quickAdj.
+async function usePlayerHack(hi) {
+  const id = session.charId;
+  const c = state.characters[id]; if (!c?.hacks?.[hi]) return;
+  const live = computeLiveHackStats(c, c.hacks[hi]);
+  await adjustPlayerStat('ip', -live.ip);
+  showToast(`${c.hacks[hi].name}: -${live.ip} IP`);
+}
+
+// Pure client-side preview, mirrors the GM's onHackTargetChange.
+function onPlayerHackTargetChange(hi, targetId) {
+  const el = document.getElementById(`player-hack-vs-${hi}`);
+  if (!el) return;
+  const target = state.characters[targetId];
+  if (!target) { el.textContent = ''; return; }
+  el.textContent = `vs ${target.name}: Firewall ${computeLiveFirewall(target)}`;
+}
+
 async function adjustPlayerStat(stat, delta) {
   const id = session.charId;
   const c = state.characters[id]; if (!c) return;
