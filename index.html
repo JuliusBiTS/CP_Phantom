@@ -259,7 +259,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 }
 .init-chip.npc { border-color: var(--red-bright); color: #ff6688; }
 .init-chip.ally { border-color: var(--green-bright); color: var(--green-bright); }
-.init-chip.companion { border-color: var(--purple-bright); color: var(--purple-bright); }
+.init-chip.companion { border-color: var(--blue); color: var(--blue); }
 .init-chip.dead { opacity: 0.25; text-decoration: line-through; }
 .combatants { padding: 8px 12px; display: flex; flex-direction: column; gap: 5px; }
 /* ── COMBAT MAP ── */
@@ -326,7 +326,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .combatant-card.is-npc { border-left: 3px solid var(--red-bright); }
 .combatant-card.is-ally { border-left: 3px solid var(--green-bright); }
 .combatant-card.is-pc { border-left: 3px solid var(--cyan); }
-.combatant-card.is-companion { border-left: 3px solid var(--purple-bright); }
+.combatant-card.is-companion { border-left: 3px solid var(--blue); }
 .combatant-card.is-dead { opacity: 0.3; filter: grayscale(0.5); }
 .combatant-top { padding: 10px 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .combatant-name { font-size: 13px; font-weight: 700; flex: 1; letter-spacing: 0.04em; }
@@ -1081,7 +1081,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <div class="player-card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <div class="player-card-title" style="margin:0">Inventory</div>
-          <div style="font-size:11px;color:var(--gold-bright)">₡ <span id="player-eb">0</span> eb</div>
+          <div style="font-size:11px;color:var(--gold-bright)">₡ <span id="player-eb">0</span> ed</div>
         </div>
         <div id="player-inventory-list" style="display:flex;flex-direction:column;gap:4px"></div>
       </div>
@@ -1158,7 +1158,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         </div>
       </div>
       <div class="inline-row">
-        <div class="field"><label>Eurodollar (eb)</label><input type="number" id="cm-eb" placeholder="700" min="0"></div>
+        <div class="field"><label>Eurodollars (ed)</label><input type="number" id="cm-eb" placeholder="700" min="0"></div>
       </div>
       <div class="inline-row">
         <div class="field">
@@ -2085,7 +2085,7 @@ function renderPreCombat() {
     return;
   }
   el.innerHTML = entries.map(([id, c]) => `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid ${c.isVehicle ? 'var(--gold-bright)' : (c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red)' : 'var(--cyan)')))}">
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid ${c.isVehicle ? 'var(--gold-bright)' : (c.isCompanion ? 'var(--blue)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red)' : 'var(--cyan)')))}">
       <div style="flex:1;font-size:13px;font-weight:700">${esc(c.name)}</div>
       <div style="font-size:10px;color:var(--text2)">${c.isDrone ? 'DRN' : (c.isVehicle ? 'VEH' : (c.isCompanion ? 'COM' : (c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC'))))}</div>
       <div style="font-size:11px;color:var(--green-bright)">${c.hp_current ?? c.hp_max}/${c.hp_max} HP</div>
@@ -2140,7 +2140,7 @@ function buildMapTokensHtml(interactive) {
     const portrait = portraits[id];
     // Drones take the same ally/enemy color as any other NPC (no fixed
     // color of their own) — the hexagon shape is what marks it as a drone.
-    const color = c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)'));
+    const color = c.isCompanion ? 'var(--blue)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)'));
     // Shape is a second, color-independent channel: octagon=companion,
     // square=vehicle, hexagon=drone, circle=everyone else (PC/NPC/Ally
     // stay color-only).
@@ -2303,7 +2303,7 @@ function charTypeMeta(c) {
   // at a glance — the hexagon shape already marks it as a drone.
   if (c.isDrone) return { color: c.isAlly ? 'var(--green-bright)' : 'var(--red-bright)', label: 'DRONE' };
   if (c.isVehicle) return { color: 'var(--gold-bright)', label: 'VEHICLE' };
-  if (c.isCompanion) return { color: 'var(--purple-bright)', label: 'COMPANION' };
+  if (c.isCompanion) return { color: 'var(--blue)', label: 'COMPANION' };
   if (c.isSecurityUnit) return { color: 'var(--red-bright)', label: 'SECURITY' };
   if (c.isAlly) return { color: 'var(--green-bright)', label: 'ALLY' };
   if (c.isNPC) return { color: 'var(--red-bright)', label: 'NPC' };
@@ -3075,8 +3075,9 @@ function renderInitRow(id) {
   const idx = order.indexOf(id);
   if (idx === -1) return '';
   const r = state.combat.initRolls?.[id];
+  const maxInit = state.characters[id]?.initiative;
   const rollText = r
-    ? `🎲 [${(r.rolls || []).join(', ')}] → ${initRollLabel(r.category, r.value)}`
+    ? `🎲 [${(r.rolls || []).join(', ')}] → ${initRollLabel(r.category, r.value)}${maxInit != null ? ` (Initiative ${maxInit})` : ''}`
     : 'No roll — companion, follows owner';
   return `<div class="detail-row">
     <span class="detail-label">INITIATIVE</span>
@@ -3252,7 +3253,7 @@ function combatToggleButtonHtml(id) {
 let expandedMissionGroups = new Set();
 
 function charItemRow(id, c) {
-  const color = c.isVehicle ? 'var(--gold-bright)' : (c.isCompanion ? 'var(--purple-bright)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)')));
+  const color = c.isVehicle ? 'var(--gold-bright)' : (c.isCompanion ? 'var(--blue)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)')));
   const portrait = portraits[id];
   const avatar = portrait
     ? `<div style="width:32px;height:32px;border-radius:50%;background-image:url('${portrait}');background-size:cover;background-position:center;border:2px solid ${color};flex-shrink:0"></div>`
@@ -3455,8 +3456,10 @@ function renderPlayerView() {
   document.getElementById('player-tab-btn-netrunning').style.display = isNetrunner ? '' : 'none';
   if (isNetrunner) {
     const liveFw = computeLiveFirewall(c);
+    const deckInfo = CYBERDECK_INFO[c.cyberdeck];
+    const deckLabel = c.cyberdeck ? `${c.cyberdeck} Deck${deckInfo ? ` (${deckInfo.slots} slots, +${deckInfo.ipRegen} IP/rd)` : ''}` : 'Netrunning';
     document.getElementById('player-netrunning-header').textContent =
-      `${c.cyberdeck ? c.cyberdeck + ' Deck' : 'Netrunning'}${liveFw ? ' · Firewall ' + liveFw : ''} · ${ipCur}/${ipMax} IP`;
+      `${deckLabel}${liveFw ? ' · Firewall ' + liveFw : ''} · ${ipCur}/${ipMax} IP`;
     const targetOptions = order.filter(tid => tid !== id).map(tid => ({ tid, tc: state.characters[tid] })).filter(o => o.tc);
     document.getElementById('player-hacks-list').innerHTML = hacks.length ? hacks.map((h, hi) => {
       const live = computeLiveHackStats(c, h);
@@ -3572,7 +3575,7 @@ function renderPlayerCompanionTab(myId) {
     }).join('');
     return `<div class="player-card">
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
-        <div style="width:48px;height:48px;border-radius:50%;flex-shrink:0;background-color:var(--surface2);background-size:cover;background-position:center;border:2px solid var(--purple-bright);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--purple-bright);${portrait ? `background-image:url('${portrait}');` : ''}">${portrait ? '' : esc(ch.name.slice(0, 2).toUpperCase())}</div>
+        <div style="width:48px;height:48px;border-radius:50%;flex-shrink:0;background-color:var(--surface2);background-size:cover;background-position:center;border:2px solid var(--blue);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--blue);${portrait ? `background-image:url('${portrait}');` : ''}">${portrait ? '' : esc(ch.name.slice(0, 2).toUpperCase())}</div>
         <div style="flex:1">
           <div class="player-card-title" style="margin:0">${esc(ch.name)}</div>
           <div style="font-size:10px;color:var(--text3);letter-spacing:0.1em">COMPANION</div>
@@ -3707,6 +3710,38 @@ function sortCombatOrder(ids, initRolls) {
     while (insertAt < result.length && slotsNextToOwner(state.characters[result[insertAt]]) && state.characters[result[insertAt]]?.owner_char_id === ownerId) insertAt++;
     result.splice(insertAt, 0, riderId);
   }
+  return result;
+}
+
+// Inserts ONE new (or rejoining) character into an ALREADY-ESTABLISHED
+// order at its correctly-rolled position, without touching anyone else's
+// position — unlike sortCombatOrder (which rebuilds the whole order from
+// scratch and is only meant for a fresh startCombat()), this preserves
+// any manual moveInOrder() adjustments the GM already made mid-fight.
+// Used by toggleCombatQueue when someone joins a combat that's already running.
+function insertIntoCombatOrder(order, newId, initRolls) {
+  const result = [...order];
+  const c = state.characters[newId];
+  if (slotsNextToOwner(c)) {
+    const ownerId = c?.owner_char_id;
+    const ownerIdx = result.indexOf(ownerId);
+    if (ownerIdx === -1) { result.push(newId); return result; }
+    let insertAt = ownerIdx + 1;
+    while (insertAt < result.length && slotsNextToOwner(state.characters[result[insertAt]]) && state.characters[result[insertAt]]?.owner_char_id === ownerId) insertAt++;
+    result.splice(insertAt, 0, newId);
+    return result;
+  }
+  const [newCat, newVal] = initCompareKey(newId, initRolls);
+  // Find the first existing NON-rider entry that sorts after the new one
+  // (riders are skipped — they're glued to their owner's spot, not an
+  // independent init position to compare against) and insert right before it.
+  let insertAt = result.length;
+  for (let i = 0; i < result.length; i++) {
+    if (slotsNextToOwner(state.characters[result[i]])) continue;
+    const [cat, val] = initCompareKey(result[i], initRolls);
+    if (cat > newCat || (cat === newCat && val > newVal)) { insertAt = i; break; }
+  }
+  result.splice(insertAt, 0, newId);
   return result;
 }
 
@@ -3905,14 +3940,16 @@ async function toggleCombatQueue(id) {
       order.splice(idx, 1);
       delete initRolls[id];
     } else {
-      order.push(id);
       const c = state.characters[id];
       if (c && !slotsNextToOwner(c)) {
         const rolled = rollInitiativeFor(c);
         initRolls[id] = { category: rolled.category, value: rolled.value, rolls: rolled.rolls };
         showToast(`${c.name} rolled initiative: ${rolled.rolls.join('+')} → ${initRollLabel(rolled.category, rolled.value)}`);
       }
-      order = sortCombatOrder(order, initRolls);
+      // insertIntoCombatOrder (not sortCombatOrder) — only places the new
+      // arrival at its own correct spot, leaving any manual reordering the
+      // GM already did to the rest of the order untouched.
+      order = insertIntoCombatOrder(order, id, initRolls);
     }
     // Keep "whose turn it is" stable even though the array just shifted
     const newTurn = order.length ? Math.max(0, order.indexOf(currentId)) : 0;
@@ -4003,9 +4040,9 @@ function openGiveAllLootModal(charId) {
   transferSource = { charId, kind: 'loot-all' };
   populateTransferTargets(charId);
   const lootCount = (c.loot || []).length;
-  const eb = c.eurodollar || 0;
+  const ed = c.eurodollar || 0;
   document.getElementById('transfer-item-label').textContent =
-    `All loot (${lootCount} item${lootCount !== 1 ? 's' : ''}${eb ? ' + ' + eb + ' eb' : ''})`;
+    `All loot (${lootCount} item${lootCount !== 1 ? 's' : ''}${ed ? ' + ' + ed + ' ed' : ''})`;
   document.getElementById('transfer-qty-field').style.display = 'none';
   document.getElementById('transfer-weapon-field').style.display = 'none';
   openModal('transfer-modal');
@@ -5432,7 +5469,7 @@ const ARMOR_CATALOG = {
 // LOOT TABLES — rulebook §24, all four tiers transcribed verbatim.
 // Each row is tagged with a `type` so the Loot Roller knows how (and
 // whether) to expand/apply it:
-//   cash       — eb range (or flat amount), optionally with an extra
+//   cash       — ed range (or flat amount), optionally with an extra
 //                narrative item tacked on (extraItem)
 //   weapon     — a generic weapon category + quality per the book; the
 //                specific flavor name is rolled (or taken from the book's
@@ -5451,22 +5488,22 @@ const ARMOR_CATALOG = {
 // ═══════════════════════════════════════════════════════════════
 const LOOT_TABLES = {
   1: { label: 'Tier 1 — Straße', context: 'Gangster, Strassenkriminelle, tote Stadtstreicher.', rows: [
-    { text: '3 eb und eine Büroklammer', type: 'cash', cashMin: 3, cashMax: 3, extraItem: 'Büroklammer' },
+    { text: '3 ed und eine Büroklammer', type: 'cash', cashMin: 3, cashMax: 3, extraItem: 'Büroklammer' },
     { text: 'Halbgegessene Synth-Mahlzeit und eine kaputte Sonnenbrille', type: 'text' },
     { text: 'Gefälschter Credchip (leer) und eine einzelne Socke', type: 'text' },
     { text: "Billiges Handy mit 47 ungelesenen Nachrichten von 'Mama'", type: 'text' },
-    { text: '20-50 eb Bargeld', type: 'cash', cashMin: 20, cashMax: 50 },
+    { text: '20-50 ed Bargeld', type: 'cash', cashMin: 20, cashMax: 50 },
     { text: 'Billige Drogen oder Synthetik-Alkohol', type: 'text' },
     { text: 'Messer (Poor Quality)', type: 'weapon', weapon: 'Knife', quality: 'Poor', attachments: 0 },
-    { text: '50-100 eb Bargeld', type: 'cash', cashMin: 50, cashMax: 100 },
+    { text: '50-100 ed Bargeld', type: 'cash', cashMin: 50, cashMax: 100 },
     { text: 'Hollow Point Munition (6 Schuss)', type: 'text' },
     { text: 'Big Knucks (Average)', type: 'weapon', weapon: 'Big Knucks', quality: 'Average', attachments: 0 },
     { text: 'Medium Pistol (Poor)', type: 'weapon', weapon: 'Medium Pistol', quality: 'Poor', attachments: 0 },
-    { text: '100-150 eb Bargeld', type: 'cash', cashMin: 100, cashMax: 150 },
+    { text: '100-150 ed Bargeld', type: 'cash', cashMin: 100, cashMax: 150 },
     { text: 'Armor-Piercing Munition (6 Schuss)', type: 'text' },
     { text: 'Leathers Rüstung Body (Average)', type: 'armor', armorName: 'Leathers', quality: 'Average', slot: 'body' },
     { text: 'SMG (Poor)', type: 'weapon', weapon: 'SMG', quality: 'Poor', attachments: 0 },
-    { text: '150-250 eb Bargeld + Schmuck (50 eb Schrottpreis)', type: 'cash', cashMin: 150, cashMax: 250, extraItem: 'Schmuck (50 eb Schrottpreis)' },
+    { text: '150-250 ed Bargeld + Schmuck (50 ed Schrottpreis)', type: 'cash', cashMin: 150, cashMax: 250, extraItem: 'Schmuck (50 ed Schrottpreis)' },
     { text: 'Heavy Pistol (Poor) + 1 Magazin', type: 'weapon', weapon: 'Heavy Pistol', quality: 'Poor', attachments: 0, extraItem: '+1 Magazin' },
     { text: 'Kevlar Vest (Poor)', type: 'armor', armorName: 'Kevlar Vest', quality: 'Poor', slot: 'body' },
     { text: 'Heavy Pistol (Average)', type: 'weapon', weapon: 'Heavy Pistol', quality: 'Average', attachments: 0 },
@@ -5474,66 +5511,66 @@ const LOOT_TABLES = {
   ]},
   2: { label: 'Tier 2 — Söldner', context: 'Erfahrene Söldner, private Security, organisiertes Verbrechen.', rows: [
     { text: 'Kaputtes Datapad mit teilverschlüsselten Infos - vielleicht was wert, vielleicht nicht', type: 'text' },
-    { text: 'Credchip mit 200 eb - jemandem anderem gehörend (Konsequenzen möglich)', type: 'cash', cashMin: 200, cashMax: 200, extraItem: 'gehört jemand anderem — Konsequenzen möglich' },
+    { text: 'Credchip mit 200 ed - jemandem anderem gehörend (Konsequenzen möglich)', type: 'cash', cashMin: 200, cashMax: 200, extraItem: 'gehört jemand anderem — Konsequenzen möglich' },
     { text: 'Kevlar Vest (Average)', type: 'armor', armorName: 'Kevlar Vest', quality: 'Average', slot: 'body' },
     { text: 'Medium Pistol (Excellent) - Lizzie-Style, neonbeleuchtet', type: 'weapon', weapon: 'Medium Pistol', quality: 'Excellent', attachments: 0, flavorName: 'Lizzie-Style' },
     { text: 'Attachment: Laser Sight oder Foregrip', type: 'text' },
     { text: 'Heavy Pistol (Average)', type: 'weapon', weapon: 'Heavy Pistol', quality: 'Average', attachments: 0 },
-    { text: '400-700 eb Bargeld', type: 'cash', cashMin: 400, cashMax: 700 },
+    { text: '400-700 ed Bargeld', type: 'cash', cashMin: 400, cashMax: 700 },
     { text: 'SMG (Average) - Fenrir-Style', type: 'weapon', weapon: 'SMG', quality: 'Average', attachments: 0, flavorName: 'Fenrir-Style' },
     { text: 'Attachment: Suppressor oder Muzzle Brake', type: 'text' },
     { text: 'Cyberware: Basic ICE', type: 'cyberware', cyberwareOptions: ['Basic ICE'] },
     { text: 'Light Armorjack Body (Average)', type: 'armor', armorName: 'Light Armorjack', quality: 'Average', slot: 'body' },
-    { text: '700-1000 eb Bargeld', type: 'cash', cashMin: 700, cashMax: 1000 },
+    { text: '700-1000 ed Bargeld', type: 'cash', cashMin: 700, cashMax: 1000 },
     { text: 'Heavy Pistol (Excellent)', type: 'weapon', weapon: 'Heavy Pistol', quality: 'Excellent', attachments: 0 },
     { text: 'Light Armorjack Body + Head (Average)', type: 'armor', armorName: 'Light Armorjack', quality: 'Average', slot: 'both' },
     { text: 'SMG (Excellent) + 1 Attachment', type: 'weapon', weapon: 'SMG', quality: 'Excellent', attachments: 1 },
     { text: 'Heavy SMG (Average)', type: 'weapon', weapon: 'Heavy SMG', quality: 'Average', attachments: 0 },
-    { text: '1000-1500 eb Bargeld + kleiner Diamant (300 eb Schrottpreis)', type: 'cash', cashMin: 1000, cashMax: 1500, extraItem: 'kleiner Diamant (300 eb Schrottpreis)' },
+    { text: '1000-1500 ed Bargeld + kleiner Diamant (300 ed Schrottpreis)', type: 'cash', cashMin: 1000, cashMax: 1500, extraItem: 'kleiner Diamant (300 ed Schrottpreis)' },
     { text: 'Light Armorjack Komplett-Set (Average) + Attachment', type: 'armor', armorName: 'Light Armorjack', quality: 'Average', slot: 'both', extraItem: '+ 1 Attachment (GM\'s choice, attach via the weapon editor)' },
     { text: 'Heavy SMG (Excellent)', type: 'weapon', weapon: 'Heavy SMG', quality: 'Excellent', attachments: 0 },
     { text: 'TIER 3 hinaufsteigen und neu würfeln', type: 'bump' },
   ]},
   3: { label: 'Tier 3 — Corpo-Security', context: 'Corpo-Sicherheitskräfte, professionelle Söldner, mittlere Offiziere.', rows: [
-    { text: '1500-2500 eb Bargeld', type: 'cash', cashMin: 1500, cashMax: 2500 },
+    { text: '1500-2500 ed Bargeld', type: 'cash', cashMin: 1500, cashMax: 2500 },
     { text: 'Medium Armorjack Body + Head (Average)', type: 'armor', armorName: 'Medium Armorjack', quality: 'Average', slot: 'both' },
     { text: 'Assault Rifle (Average) - Tactician-Style', type: 'weapon', weapon: 'Assault Rifle', quality: 'Average', attachments: 0, flavorName: 'Tactician-Style' },
     { text: 'Heavy SMG (Excellent) + 2 Attachments', type: 'weapon', weapon: 'Heavy SMG', quality: 'Excellent', attachments: 2 },
-    { text: '2500-4000 eb Bargeld', type: 'cash', cashMin: 2500, cashMax: 4000 },
+    { text: '2500-4000 ed Bargeld', type: 'cash', cashMin: 2500, cashMax: 4000 },
     { text: 'Cyberware: Reflex Booster oder Cyberaudio Suite', type: 'cyberware', cyberwareOptions: ['Reflex Booster', 'Cyberaudio Suite'], choice: true },
     { text: 'Assault Rifle (Excellent) - Ajax-Style', type: 'weapon', weapon: 'Assault Rifle', quality: 'Excellent', attachments: 0, flavorName: 'Ajax-Style' },
     { text: 'Netrunner Helm + Basic Deck', type: 'cyberware', cyberwareOptions: ['Netrunner Helm'], cyberdeck: 'Basic' },
-    { text: '4000-6000 eb Bargeld', type: 'cash', cashMin: 4000, cashMax: 6000 },
+    { text: '4000-6000 ed Bargeld', type: 'cash', cashMin: 4000, cashMax: 6000 },
     { text: 'Sniper Rifle (Average) - Widowmaker-Style', type: 'weapon', weapon: 'Sniper Rifle', quality: 'Average', attachments: 0, flavorName: 'Widowmaker-Style' },
     { text: 'Heavy Armorjack Body + Head (Average)', type: 'armor', armorName: 'Heavy Armorjack', quality: 'Average', slot: 'both' },
     { text: 'Cyberware: Cybereye (Basis) + 1 Option', type: 'cyberware', cyberwareOptions: ['Cybereye (Basis)'], extraItem: '+ 1 Option (GM picks: Thermovision / Targeting System / Zoom Optics)' },
-    { text: '6000-9000 eb Bargeld + Diamanten (500 eb Wert)', type: 'cash', cashMin: 6000, cashMax: 9000, extraItem: 'Diamanten (500 eb Wert)' },
+    { text: '6000-9000 ed Bargeld + Diamanten (500 ed Wert)', type: 'cash', cashMin: 6000, cashMax: 9000, extraItem: 'Diamanten (500 ed Wert)' },
     { text: "Sniper Rifle (Excellent) - O'Five-Style", type: 'weapon', weapon: 'Sniper Rifle', quality: 'Excellent', attachments: 0, flavorName: "O'Five-Style" },
     { text: 'Assault Rifle (Excellent) + 3 Attachments', type: 'weapon', weapon: 'Assault Rifle', quality: 'Excellent', attachments: 3 },
     { text: 'Heavy Armorjack Komplett-Set (Excellent)', type: 'armor', armorName: 'Heavy Armorjack', quality: 'Excellent', slot: 'both' },
-    { text: '9000-12000 eb Bargeld', type: 'cash', cashMin: 9000, cashMax: 12000 },
+    { text: '9000-12000 ed Bargeld', type: 'cash', cashMin: 9000, cashMax: 12000 },
     { text: 'Cyberware: Mantis Blades oder Kiroshi Owl', type: 'cyberware', cyberwareOptions: ['Mantis Blades', 'Kiroshi Owl'], choice: true },
     { text: 'Military Deck + 3 Hacks', type: 'cyberware', cyberwareOptions: [], cyberdeck: 'Military', extraItem: '+ 3 Hacks (GM\'s choice, add via the Netrunning screen)' },
     { text: 'TIER 4 hinaufsteigen und neu würfeln', type: 'bump' },
   ]},
   4: { label: 'Tier 4 — Elite / Legendär', context: 'Spezialeinheiten, Corpo-Direktoren, Top-Netrunner, militärische Eliten.', rows: [
-    { text: '12000-20000 eb Bargeld', type: 'cash', cashMin: 12000, cashMax: 20000 },
+    { text: '12000-20000 ed Bargeld', type: 'cash', cashMin: 12000, cashMax: 20000 },
     { text: 'Cyberware: Sandevistan + Neural Link', type: 'cyberware', cyberwareOptions: ['Sandevistan', 'Neural Link'] },
     { text: 'Malorian Arms 3516 (Excellent, ikonisch)', type: 'text' },
     { text: 'MetalGear Komplett-Set (Excellent)', type: 'armor', armorName: 'MetalGear', quality: 'Excellent', slot: 'both' },
-    { text: '20000-30000 eb Bargeld', type: 'cash', cashMin: 20000, cashMax: 30000 },
+    { text: '20000-30000 ed Bargeld', type: 'cash', cashMin: 20000, cashMax: 30000 },
     { text: 'Cyberware: Optical Camo + Kiroshi Owl', type: 'cyberware', cyberwareOptions: ['Optical Camo', 'Kiroshi Owl'] },
     { text: 'Faraday Helm + Heavy Armorjack Set (Excellent)', type: 'armor', armorName: 'Heavy Armorjack', quality: 'Excellent', slot: 'both', extraCyberware: ['Faraday Helm'] },
     { text: "Comrade's Hammer (Very Heavy Pistol, Excellent - ein Schuss, massiver Schaden)", type: 'text' },
-    { text: '30000-40000 eb Bargeld + Diamanten (3000 eb Wert)', type: 'cash', cashMin: 30000, cashMax: 40000, extraItem: 'Diamanten (3000 eb Wert)' },
+    { text: '30000-40000 ed Bargeld + Diamanten (3000 ed Wert)', type: 'cash', cashMin: 30000, cashMax: 40000, extraItem: 'Diamanten (3000 ed Wert)' },
     { text: 'Cyberware: Blackwall Fragment', type: 'cyberware', cyberwareOptions: ['Blackwall Fragment'] },
     { text: 'Blackmarket Deck + 6 Hacks komplett', type: 'cyberware', cyberwareOptions: [], cyberdeck: 'Blackmarket', extraItem: '+ 6 Hacks (GM\'s choice, add via the Netrunning screen)' },
     { text: 'Prototype Weapon (Excellent, alle Slots belegt, DM wählt Typ)', type: 'text' },
-    { text: '40000-55000 eb Bargeld', type: 'cash', cashMin: 40000, cashMax: 55000 },
+    { text: '40000-55000 ed Bargeld', type: 'cash', cashMin: 40000, cashMax: 55000 },
     { text: 'Cyberware: Full Cyberarm (beidseitig) + Mantis Blades', type: 'cyberware', cyberwareOptions: ['Full Cyberarm (beidseitig)', 'Mantis Blades'] },
-    { text: 'Militärische Geheiminfos (Plotmaterial + 10000 eb Verkaufswert)', type: 'cash', cashMin: 10000, cashMax: 10000, extraItem: 'Militärische Geheiminfos (Plot-Material)' },
+    { text: 'Militärische Geheiminfos (Plotmaterial + 10000 ed Verkaufswert)', type: 'cash', cashMin: 10000, cashMax: 10000, extraItem: 'Militärische Geheiminfos (Plot-Material)' },
     { text: 'Cyberware: Titanium Bones + Muscle & Bone Lace + Subdermal Armor', type: 'cyberware', cyberwareOptions: ['Titanium Bones', 'Muscle & Bone Lace', 'Subdermal Armor'] },
-    { text: '55000-70000 eb oder Corporate Kontozugang', type: 'cash', cashMin: 55000, cashMax: 70000, extraItem: 'Alternative: Corporate Kontozugang statt Bargeld' },
+    { text: '55000-70000 ed oder Corporate Kontozugang', type: 'cash', cashMin: 55000, cashMax: 70000, extraItem: 'Alternative: Corporate Kontozugang statt Bargeld' },
     { text: 'Elite-Komplettausrüstung: Excellent Waffe + Rüstung + 3 Cyberware', type: 'text' },
     { text: 'Corporate Access Codes + Militärisches Geheimarchiv (Plot-Material)', type: 'text' },
     { text: 'JACKPOT - DM wählt etwas völlig Einzigartiges', type: 'jackpot' },
@@ -5663,7 +5700,7 @@ function renderLootResult(result) {
     <button class="btn btn-primary btn-small" ${disabled} onclick="applyLootWeapon()">+ ADD TO ${targetName}</button>
     ${extraItemHtml}${pickTargetNote}`;
   } else if (row.type === 'cash') {
-    bodyHtml += `<div style="font-size:16px;font-weight:700;color:var(--gold-bright);margin-bottom:8px">${result.rolledCash.toLocaleString()} eb</div>
+    bodyHtml += `<div style="font-size:16px;font-weight:700;color:var(--gold-bright);margin-bottom:8px">${result.rolledCash.toLocaleString()} ed</div>
     <button class="btn btn-primary btn-small" ${disabled} onclick="applyLootCash()">+ ADD TO ${targetName}</button>
     ${extraItemHtml}${pickTargetNote}`;
   } else if (row.type === 'armor') {
@@ -5702,7 +5739,7 @@ async function applyLootCash() {
   const c = requireLootTarget(); if (!c || !lootLastResult) return;
   const amount = lootLastResult.rolledCash || 0;
   await dbWrite('characters/' + lootTargetId + '/eurodollar', (c.eurodollar || 0) + amount);
-  showToast(`+${amount} eb → ${c.name}`);
+  showToast(`+${amount} ed → ${c.name}`);
 }
 
 async function applyLootWeapon() {
@@ -5915,18 +5952,18 @@ const VEHICLE_WEAPON_TABLE = {
 // SP is the vehicle's own stated Karosserie-SP. Condor is a drone swarm
 // treated as one unit — sdp is per-drone, noted in its abilities.
 const VEHICLE_TEMPLATES = {
-  'Roadbike':        { category:'civilian', sdp:35, sp:9,  speed:20, seats:2, price:'20000 eb', weapons:[], abilities:[] },
-  'Superbike':       { category:'civilian', sdp:35, sp:9,  speed:60, seats:2, price:'100000 eb', weapons:[], abilities:[] },
-  'Kompaktwagen':    { category:'civilian', sdp:50, sp:13, speed:20, seats:4, price:'30000 eb', weapons:[], abilities:[] },
-  'Sportwagen':      { category:'civilian', sdp:50, sp:13, speed:40, seats:4, price:'50000 eb', weapons:[], abilities:[] },
-  'Super-Wagen':     { category:'civilian', sdp:50, sp:13, speed:60, seats:2, price:'100000 eb', weapons:[], abilities:[] },
-  'Aerozep':         { category:'civilian', sdp:100, sp:13, speed:8,  seats:'4-8', price:'1000000 eb', weapons:[], abilities:[] },
-  'AV-4':            { category:'civilian', sdp:50, sp:13, speed:20, seats:4, price:'250000 eb', weapons:[], abilities:[] },
+  'Roadbike':        { category:'civilian', sdp:35, sp:9,  speed:20, seats:2, price:'20000 ed', weapons:[], abilities:[] },
+  'Superbike':       { category:'civilian', sdp:35, sp:9,  speed:60, seats:2, price:'100000 ed', weapons:[], abilities:[] },
+  'Kompaktwagen':    { category:'civilian', sdp:50, sp:13, speed:20, seats:4, price:'30000 ed', weapons:[], abilities:[] },
+  'Sportwagen':      { category:'civilian', sdp:50, sp:13, speed:40, seats:4, price:'50000 ed', weapons:[], abilities:[] },
+  'Super-Wagen':     { category:'civilian', sdp:50, sp:13, speed:60, seats:2, price:'100000 ed', weapons:[], abilities:[] },
+  'Aerozep':         { category:'civilian', sdp:100, sp:13, speed:8,  seats:'4-8', price:'1000000 ed', weapons:[], abilities:[] },
+  'AV-4':            { category:'civilian', sdp:50, sp:13, speed:20, seats:4, price:'250000 ed', weapons:[], abilities:[] },
   'Militär-AV':      { category:'civilian', sdp:100, sp:25, speed:30, seats:6, price:'Military only', weapons:[], abilities:[] },
-  'Jetski':          { category:'civilian', sdp:35, sp:9,  speed:20, seats:2, price:'20000 eb', weapons:[], abilities:[] },
-  'Schnellboot':     { category:'civilian', sdp:50, sp:13, speed:20, seats:4, price:'30000 eb', weapons:[], abilities:[] },
-  'Cabin Cruiser':   { category:'civilian', sdp:60, sp:13, speed:10, seats:'2/cabin', price:'30000 eb/cabin', weapons:[], abilities:[] },
-  'Yacht':           { category:'civilian', sdp:100, sp:13, speed:10, seats:'4/cabin', price:'50000 eb/cabin', weapons:[], abilities:[] },
+  'Jetski':          { category:'civilian', sdp:35, sp:9,  speed:20, seats:2, price:'20000 ed', weapons:[], abilities:[] },
+  'Schnellboot':     { category:'civilian', sdp:50, sp:13, speed:20, seats:4, price:'30000 ed', weapons:[], abilities:[] },
+  'Cabin Cruiser':   { category:'civilian', sdp:60, sp:13, speed:10, seats:'2/cabin', price:'30000 ed/cabin', weapons:[], abilities:[] },
+  'Yacht':           { category:'civilian', sdp:100, sp:13, speed:10, seats:'4/cabin', price:'50000 ed/cabin', weapons:[], abilities:[] },
   'Militech "Behemoth" APC': {
     category:'military', sdp:180, sp:25, speed:15, seats:8, price:'Military only',
     weapons:['30mm Autocannon', 'Heavy MG (12.7mm)'],
@@ -6040,7 +6077,7 @@ const DRONE_TEMPLATES = {
   'Mikro-Aufklärungsdrohne': {
     mode:'controlled', pwStats:['intelligence','focus'], pwLabel:'Int+Foc (Operator)',
     hp:5, sp:0, speed:10, weapons:[],
-    loudness:'Silent', range:'100m', chargeTime:'2h', price:'100 eb (Premium)',
+    loudness:'Silent', range:'100m', chargeTime:'2h', price:'100 ed (Premium)',
     abilities:[
       'Kompaktkamera: Live HD feed. Operator sees everything the drone sees (incl. IR night mode).',
       'Versteck-Scan: Secondary action, scans a 10m radius for hidden/disguised people. Drone Senses 12.',
@@ -6050,7 +6087,7 @@ const DRONE_TEMPLATES = {
   'Standard-Aufklärungsdrohne': {
     mode:'controlled', pwStats:['intelligence','focus'], pwLabel:'Int+Foc (Operator)',
     hp:12, sp:2, speed:14, weapons:[{name:'Light Pistol (optional)', bonus:7, tags:['Optional loadout']}],
-    loudness:'Leise', range:'300m', chargeTime:'4h', price:'500 eb (Expensive)',
+    loudness:'Leise', range:'300m', chargeTime:'4h', price:'500 ed (Expensive)',
     abilities:[
       'Vollspektrum-Kamera: Thermal, IR, night vision, normal camera. Zoom detail up to 200m.',
       'Spotlight: Blinding light — target within 20m needs Will+Grit DV 10 or -4 PW next round.',
@@ -6060,7 +6097,7 @@ const DRONE_TEMPLATES = {
   'Kampfdrohne (Leicht)': {
     mode:'controlled', pwStats:['intelligence','focus'], pwLabel:'Int+Foc (Operator)',
     hp:20, sp:5, speed:12, weapons:[{name:'Heavy Pistol', bonus:11, tags:[]}],
-    loudness:'Moderat', range:'500m', chargeTime:'3h', price:'1000 eb (V. Expensive)',
+    loudness:'Moderat', range:'500m', chargeTime:'3h', price:'1000 ed (V. Expensive)',
     abilities:[
       'Ausweichprotokoll: When hit, Operator Intelligence roll (DV 10) — success halves the damage. 1x/round.',
       'Unterdrückungs-Feuer: Can perform Suppressive Fire (Operator main action). Target needs Will DV 10 or moves to cover.',
@@ -6070,7 +6107,7 @@ const DRONE_TEMPLATES = {
   'Kampfdrohne (Schwer)': {
     mode:'controlled', pwStats:['intelligence','focus'], pwLabel:'Int+Foc (Operator)',
     hp:40, sp:11, speed:8, weapons:[{name:'SMG', bonus:14, tags:['Autofire']}, {name:'Grenade Launcher (optional)', bonus:18, tags:['2 charges', 'Optional loadout']}],
-    loudness:'Laut', range:'1000m', chargeTime:'6h', price:'5000 eb (Luxury)',
+    loudness:'Laut', range:'1000m', chargeTime:'6h', price:'5000 ed (Luxury)',
     abilities:[
       'Panzer-Chassis: Explosion damage halved. Cannot be immobilized by grappling.',
       'Killzone-Modus: Operator main action (HIGH IMPACT) — drone covers a 90° sector; any target moving through it gets an automatic reaction shot (+14 WB).',
@@ -6080,7 +6117,7 @@ const DRONE_TEMPLATES = {
   'Stealth-Aufklärungsdrohne (Tarnkappen)': {
     mode:'controlled', pwStats:['intelligence','focus'], pwLabel:'Int+Foc (Operator)',
     hp:8, sp:1, speed:18, weapons:[],
-    loudness:'Silent (cloaked: inaudible)', range:'300m', chargeTime:'2h', price:'5000 eb (Luxury)',
+    loudness:'Silent (cloaked: inaudible)', range:'300m', chargeTime:'2h', price:'5000 ed (Luxury)',
     abilities:[
       'Optical Camo: Fully invisible in passive mode (no weapon, no actions besides moving). Sensory detection DV 22.',
       'Vollspektrum-Suite: Thermal / IR / EM / sound detection / motion sensor combined. Drone Senses 18.',
@@ -6091,7 +6128,7 @@ const DRONE_TEMPLATES = {
   'EMP-Spezialist-Drohne': {
     mode:'controlled', pwStats:['intelligence','focus'], pwLabel:'Int+Foc (Operator)',
     hp:12, sp:3, speed:12, weapons:[{name:'EMP-Kanone', bonus:11, tags:['+11 vs Cyberware/Machines, 0 vs unaugmented targets']}],
-    loudness:'Moderat', range:'500m', chargeTime:'3h', price:'1000 eb (V. Expensive)',
+    loudness:'Moderat', range:'500m', chargeTime:'3h', price:'1000 ed (V. Expensive)',
     abilities:[
       'Präzisions-EMP: Secondary action, targeted EMP — choose 1 specific cyberware item: instantly disabled for 3 rounds.',
       'Flächen-EMP: Operator main action (HIGH IMPACT) — 5m radius EMP. All cyberware in range: Int+Focus DV 14 or disabled 2 rounds. 1x/combat.',
@@ -6102,7 +6139,7 @@ const DRONE_TEMPLATES = {
   'Mikro-Schwarm-Drohne': {
     mode:'controlled', pwStats:['intelligence','focus'], pwLabel:'Int+Foc (Operator)',
     hp:30, sp:0, speed:14, weapons:[{name:'Schwarm-Nadeln', bonus:7, tags:['+7 one target OR +3 all in 3m radius']}],
-    loudness:'Moderat (individually: Silent)', range:'200m', chargeTime:'4h', price:'1000 eb (V. Expensive)',
+    loudness:'Moderat (individually: Silent)', range:'200m', chargeTime:'4h', price:'1000 ed (V. Expensive)',
     abilities:[
       'Schwarm-Mechanik: 10 micro-drones, 3 HP each. Normal weapons only hit 1 micro-drone at a time — AoE or Autofire needed to fight the swarm effectively.',
       'Einhüll-Angriff: Operator main action — swarm fully envelops a target: -4 PW on all its actions for 2 rounds. 1x/combat.',
@@ -6113,9 +6150,9 @@ const DRONE_TEMPLATES = {
   'FPV-Drohne (Basis-Kamikaze)': {
     mode:'controlled', pwStats:['focus','senses'], pwLabel:'Foc+Sen (Operator)',
     hp:3, sp:0, speed:24, weapons:[{name:'Sprengladung', bonus:18, tags:['Grenade-equivalent', '3m radius', 'One-time use']}],
-    loudness:'Moderat (rotors)', range:'2000m', chargeTime:null, price:'50 eb (Costly)',
+    loudness:'Moderat (rotors)', range:'2000m', chargeTime:null, price:'50 ed (Costly)',
     abilities:[
-      'FPV-Steuerung: Requires FPV goggles (20 eb). Operator sees the live feed. -2 PW on the operator\'s own actions while piloting.',
+      'FPV-Steuerung: Requires FPV goggles (20 ed). Operator sees the live feed. -2 PW on the operator\'s own actions while piloting.',
       'Präzisions-Einschlag: Operator secondary action — drone maneuvers onto target; next round, kamikaze impact as the operator\'s main action. PW: Focus+Senses. Hit: full grenade damage at the impact point.',
       'Fenster-Einflug: Can fly through windows, doorways, and narrow gaps (min. 50cm wide) — an indoor precision weapon.',
       'Abfangbar: Small target — enemies can shoot it down with Autofire or an Aimed Shot (PW -4, but only 3 HP).',
@@ -6125,7 +6162,7 @@ const DRONE_TEMPLATES = {
   'FPV-Drohne (Kampf-FPV)': {
     mode:'controlled', pwStats:['focus','senses'], pwLabel:'Foc+Sen (Operator)',
     hp:5, sp:0, speed:20, weapons:[{name:'Pistol-Halterung', bonus:7, tags:['1 magazine']}],
-    loudness:'Moderat', range:'2000m', chargeTime:'1h', price:'100 eb (Premium)',
+    loudness:'Moderat', range:'2000m', chargeTime:'1h', price:'100 ed (Premium)',
     abilities:[
       'FPV-Steuerung: Same as the Basis-Kamikaze — requires FPV goggles, -2 PW on the operator\'s own actions.',
       "Erster-Blick-Angriff: Can attack from unexpected angles (below, behind, through windows). No cover bonus applies when the drone flanks.",
@@ -6136,7 +6173,7 @@ const DRONE_TEMPLATES = {
   'FPV-Drohne (Tandem-Ladung)': {
     mode:'controlled', pwStats:['focus','senses'], pwLabel:'Foc+Sen (Operator)',
     hp:4, sp:0, speed:20, weapons:[{name:'Tandem-Ladung', bonus:25, tags:['vs vehicles: ignores armor SP', '5m radius', 'One-time use']}],
-    loudness:'Moderat', range:'3000m', chargeTime:null, price:'200 eb (Everyday, warzone) / 500 eb (Night City)',
+    loudness:'Moderat', range:'3000m', chargeTime:null, price:'200 ed (Everyday, warzone) / 500 ed (Night City)',
     abilities:[
       'Anti-Fahrzeug: Against vehicles/armor, damage ignores SDP protection and hits SDP directly. Impact DV: Focus+Senses, DV 15 for a moving vehicle.',
       "Panzerbrechend: Explodes in armor gaps — target's SP is permanently -6 after impact (ricochet effect).",
@@ -6147,7 +6184,7 @@ const DRONE_TEMPLATES = {
   'FPV-Drohne (Long-Range Reconnaissance)': {
     mode:'controlled', pwStats:['focus','senses'], pwLabel:'Foc+Sen (Operator)',
     hp:6, sp:0, speed:16, weapons:[],
-    loudness:'Leise', range:'10000m', chargeTime:'3h', price:'200 eb (Everyday)',
+    loudness:'Leise', range:'10000m', chargeTime:'3h', price:'200 ed (Everyday)',
     abilities:[
       '10-km-Auge: Transmits sharp 4K video with 30x optical zoom. Can recognize faces at 500m, license plates at 200m.',
       'Artillerie-Spotter: Operator can relay coordinates to allies — grenade/rocket attacks on the marked target get +6 PW and no scatter.',
@@ -6158,7 +6195,7 @@ const DRONE_TEMPLATES = {
   'FPV-Drohnen-Schwarm (Koordinierter Angriff)': {
     mode:'controlled', pwStats:['focus','senses'], pwLabel:'Foc+Sen (Operator)',
     hp:3, sp:0, speed:22, weapons:[{name:'Standard-Sprengladung', bonus:18, tags:['3m radius', 'or smoke/EMP payload', 'per drone (3-5 in the swarm)']}],
-    loudness:'Laut (swarm)', range:null, chargeTime:null, price:'150 eb (Costly, 3-pack)',
+    loudness:'Laut (swarm)', range:null, chargeTime:null, price:'150 ed (Costly, 3-pack)',
     abilities:[
       'Schwarm-Koordination: All 3-5 drones attack the same target in the same round. One roll applies to all; each drone that hits deals its own damage.',
       "Sättigung: Against vehicles, the swarm attack can't be fully intercepted — even with return fire, at least 1 drone automatically reaches the target if 3+ are in the swarm.",
@@ -6169,7 +6206,7 @@ const DRONE_TEMPLATES = {
   'Autonome Begleiter-Drohne (Leicht)': {
     mode:'autonomous', initiative:'Speed + 1d6',
     hp:25, sp:7, speed:12, weapons:[{name:'Heavy Pistol', bonus:11, tags:[]}],
-    loudness:'Moderat', range:null, chargeTime:null, price:'5000 eb (Luxury)',
+    loudness:'Moderat', range:null, chargeTime:null, price:'5000 ed (Luxury)',
     abilities:[
       'Autonome KI: Has its own initiative. Acts independently on its current standing order. Operator can spend a secondary action to issue a new order.',
       'Schutzmodus: Order "Protect [character]" — drone positions itself optimally and engages anyone who threateningly approaches the target (under 5m).',
@@ -6180,7 +6217,7 @@ const DRONE_TEMPLATES = {
   'Autonome Kampf-Begleitdrohne (Schwer)': {
     mode:'autonomous', initiative:'Speed + 1d6 + 2',
     hp:50, sp:14, speed:10, weapons:[{name:'SMG', bonus:18, tags:['Autofire']}, {name:'Grenade Launcher', bonus:18, tags:['3 charges']}],
-    loudness:'Laut', range:null, chargeTime:null, price:'10000 eb (Super Luxury)',
+    loudness:'Laut', range:null, chargeTime:null, price:'10000 ed (Super Luxury)',
     abilities:[
       'Taktik-KI: Independently picks the best attack pattern. Uses cover correctly. Coordinates with the operator and other drones.',
       'Prioritäts-Targeting: Automatically identifies and prioritizes the most dangerous targets (highest weapon, lowest armor).',
@@ -6320,6 +6357,16 @@ const ALARM_LEVELS = [
   { level:2, name:'Orange — Alarm', desc:'Confirmed intruders. Turrets active, doors lock, security team alerted (arrives in 1d3 rounds).' },
   { level:3, name:'Red — Lockdown', desc:'Full lockdown. All turrets fire, netrunner ICE active, reinforcements (corpo squad or AV) in 1d6 rounds. Trauma Team dispatched for corpo VIPs.' },
 ];
+
+// Same numbers as the cyberdeck <option> labels in the char modal — pulled
+// out into a lookup so the player's own Netrunning tab can show them too,
+// not just the GM's dropdown text.
+const CYBERDECK_INFO = {
+  Basic: { slots: 2, ipRegen: 1 },
+  Standard: { slots: 4, ipRegen: 2 },
+  Military: { slots: 6, ipRegen: 3 },
+  Blackmarket: { slots: 8, ipRegen: 4 },
+};
 
 // ═══════════════════════════════════════════════════════════════
 // NETRUNNING — all 32 hacks from rulebook §10.4-10.8, verbatim. Only IP
