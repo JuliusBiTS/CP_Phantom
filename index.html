@@ -312,6 +312,23 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   z-index: 2;
 }
 .security-token:active { cursor: grabbing; }
+/* GM map ping — a "look here" broadcast, not a persistent object. Two
+   staggered expanding rings that fade out; re-triggered by toggling the
+   'show' class off/on with a forced reflow in between (see
+   showMapPingPulse), which restarts the CSS animation from scratch even
+   if the previous ping is still mid-fade. */
+.map-ping-marker { position: absolute; width: 1px; height: 1px; transform: translate(-50%, -50%); pointer-events: none; z-index: 5; }
+.map-ping-marker.show::before, .map-ping-marker.show::after {
+  content: ''; position: absolute; left: 50%; top: 50%;
+  width: 16px; height: 16px; margin: -8px 0 0 -8px;
+  border: 2px solid var(--red-bright); border-radius: 50%;
+  animation: map-ping-pulse 1.3s ease-out;
+}
+.map-ping-marker.show::after { animation-delay: 0.25s; }
+@keyframes map-ping-pulse { 0% { transform: scale(0.3); opacity: 1; } 100% { transform: scale(6); opacity: 0; } }
+/* Map tool toggle buttons (Ping/Draw) get a visibly "active" state so the
+   GM can tell which click-behavior is currently armed on the map. */
+.map-tool-btn.active { background: var(--cyan-dim); border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px var(--cyan-glow); }
 /* ── COMBATANT CARD ── */
 .combatant-card {
   background: var(--surface);
@@ -1572,7 +1589,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 // ═══════════════════════════════════════════════════════════════
 let db = null;
 let session = { role: null, charId: null, gmPin: null };
-let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} }, securityObjects: {}, alarmLevel: 0, portraitReveal: null };
+let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} }, securityObjects: {}, alarmLevel: 0, portraitReveal: null, mapPing: null, mapDrawings: [] };
 let combatViewMode = 'list';
 let mapImage = null;       // fetched from a Firebase path OUTSIDE 'campaign' — kept separate from `state`
 // { charId: dataUrl } — the CROPPED square used for tokens/thumbnails everywhere.
@@ -1608,6 +1625,16 @@ let lastStateHash = '';
 // never mistaken for a fresh reveal broadcast and doesn't pop the overlay
 // for players who simply just logged in.
 let lastPortraitRevealTs = undefined;
+// Same "skip the first sync" convention as lastPortraitRevealTs, so a
+// fresh page load doesn't replay whatever ping happened to be sitting
+// in the DB already.
+let lastMapPingTs = undefined;
+// null | 'ping' | 'draw' — which map-click behavior is currently active
+// on the GM's own map view. Mutually exclusive with normal token/security
+// dragging (see the early-return guards in startTokenDrag/startSecurityDrag).
+let mapTool = null;
+let drawColor = localStorage.getItem('cp_draw_color') || '#ff2244';
+let drawStrokeState = null;
 
 // ═══════════════════════════════════════════════════════════════
 // FIREBASE / SYNC
@@ -1834,7 +1861,25 @@ function startSync() {
     } else if (lastPortraitRevealTs === undefined) {
       lastPortraitRevealTs = null;
     }
+    state.mapDrawings = data.mapDrawings || [];
+    state.mapPing = data.mapPing || null;
+    // Same skip-first-sync rule as the portrait reveal, but shown to
+    // EVERYONE (GM included) — a ping is just "look here", not a
+    // player-only surprise moment, so there's no role gate. Decide
+    // whether to pulse BEFORE renderAll() (which rebuilds the map view's
+    // innerHTML, including a fresh, class-less .map-ping-marker div), but
+    // don't actually pulse until AFTER it — pulsing first would add the
+    // 'show' class to the marker that's about to be thrown away.
+    let shouldPulse = false;
+    if (state.mapPing && state.mapPing.ts !== lastMapPingTs) {
+      const isFirstPingSync = lastMapPingTs === undefined;
+      lastMapPingTs = state.mapPing.ts;
+      shouldPulse = !isFirstPingSync;
+    } else if (lastMapPingTs === undefined) {
+      lastMapPingTs = null;
+    }
     renderAll();
+    if (shouldPulse) showMapPingPulse(state.mapPing.x, state.mapPing.y);
   });
   // Map image and portraits live OUTSIDE the 'campaign' tree on purpose — see
   // the comment above the `mapImage`/`portraits` declarations. This keeps
@@ -2215,6 +2260,109 @@ function buildMapTokensHtml(interactive) {
   }).join('');
 }
 
+// GM map annotations — a ping (ephemeral, broadcast-only, see
+// showMapPingPulse) and freehand drawings (persistent until cleared).
+// Drawings use plain 0-100 percentage coordinates stretched to fill the
+// container via preserveAspectRatio="none", same trick character tokens'
+// left/top % positioning relies on — unlike the security-object detection
+// shapes, a freehand line's thickness varying slightly by direction on a
+// non-square map is not a noticeable problem, so it doesn't need the
+// fixed-pixel-space treatment those circles/cones needed.
+function buildMapDrawingsHtml() {
+  const drawings = state.mapDrawings || [];
+  if (!drawings.length) return '<svg id="map-draw-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></svg>';
+  const strokes = drawings.map(s => `<polyline points="${(s.points||[]).map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="${esc(s.color || '#ff2244')}" stroke-width="0.6" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
+  return `<svg id="map-draw-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none">${strokes}</svg>`;
+}
+
+function toggleMapTool(tool) {
+  mapTool = mapTool === tool ? null : tool;
+  renderMapView();
+}
+function setDrawColor(val) {
+  drawColor = val;
+  localStorage.setItem('cp_draw_color', val);
+}
+
+// Single entry point for map-level clicks — only acts while a tool is
+// armed; otherwise this is a no-op and the click already did whatever a
+// token/security marker's own onpointerdown handler decided (those bail
+// out early instead if a tool IS armed, so the two never fight over the
+// same click — see the `if (mapTool) return;` guards in startTokenDrag
+// and startSecurityDrag).
+function onMapContainerPointerDown(e) {
+  const mapEl = document.getElementById('map-container');
+  if (!mapEl) return;
+  const rect = mapEl.getBoundingClientRect();
+  const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+  const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+  if (mapTool === 'ping') {
+    e.preventDefault();
+    dbWrite('mapPing', { x, y, ts: Date.now() });
+  } else if (mapTool === 'draw') {
+    e.preventDefault();
+    drawStrokeState = { points: [{ x, y }], mapEl, color: drawColor };
+    const svg = mapEl.querySelector('#map-draw-overlay');
+    const live = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    live.setAttribute('fill', 'none');
+    live.setAttribute('stroke', drawColor);
+    live.setAttribute('stroke-width', '0.6');
+    live.setAttribute('stroke-linecap', 'round');
+    live.setAttribute('stroke-linejoin', 'round');
+    live.setAttribute('points', `${x},${y}`);
+    svg.appendChild(live);
+    drawStrokeState.liveEl = live;
+    document.addEventListener('pointermove', onMapDrawMove);
+    document.addEventListener('pointerup', onMapDrawEnd);
+  }
+}
+function onMapDrawMove(e) {
+  if (!drawStrokeState) return;
+  const rect = drawStrokeState.mapEl.getBoundingClientRect();
+  const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+  const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+  const pts = drawStrokeState.points;
+  const last = pts[pts.length - 1];
+  // Skip near-duplicate points so a slow, careful stroke doesn't balloon
+  // the saved point array for no visible benefit.
+  if (Math.hypot(x - last.x, y - last.y) < 0.4) return;
+  pts.push({ x, y });
+  drawStrokeState.liveEl.setAttribute('points', pts.map(p => `${p.x},${p.y}`).join(' '));
+}
+async function onMapDrawEnd() {
+  document.removeEventListener('pointermove', onMapDrawMove);
+  document.removeEventListener('pointerup', onMapDrawEnd);
+  const st = drawStrokeState;
+  drawStrokeState = null;
+  if (!st || st.points.length < 2) { st?.liveEl?.remove(); return; }
+  const drawings = [...(state.mapDrawings || []), { points: st.points, color: st.color }];
+  state.mapDrawings = drawings;
+  await dbWrite('mapDrawings', drawings);
+  renderMapView();
+}
+async function clearMapDrawings() {
+  if (!(state.mapDrawings || []).length) return;
+  if (!confirm('Clear all map drawings? This cannot be undone.')) return;
+  state.mapDrawings = [];
+  await dbWrite('mapDrawings', []);
+  renderMapView();
+}
+
+// Broadcast-only "look here" marker — see the skip-first-sync handling in
+// startSync for how a genuinely NEW ping is told apart from replaying an
+// old one on page load. Removing then re-adding the 'show' class (with a
+// forced reflow in between) restarts the CSS animation even if a previous
+// ping's rings are still mid-fade.
+function showMapPingPulse(x, y) {
+  document.querySelectorAll('.map-ping-marker').forEach(el => {
+    el.style.left = x + '%';
+    el.style.top = y + '%';
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+  });
+}
+
 function renderMapView() {
   const el = document.getElementById('combat-map-view');
   if (!el) return;
@@ -2228,16 +2376,23 @@ function renderMapView() {
     return;
   }
   el.innerHTML = `
-    <div id="map-container" style="position:relative;width:100%;overflow:hidden;border:1px solid var(--border2);background:#000">
+    <div id="map-container" style="position:relative;width:100%;overflow:hidden;border:1px solid var(--border2);background:#000;${mapTool ? 'cursor:crosshair;' : ''}" onpointerdown="onMapContainerPointerDown(event)">
       <img src="${mapImage}" style="display:block;width:100%;height:auto;user-select:none;pointer-events:none" draggable="false">
+      ${buildMapDrawingsHtml()}
       ${buildSecurityObjectsHtml(true)}
       ${buildMapTokensHtml(true)}
+      <div class="map-ping-marker"></div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
       <input type="file" accept="image/*" id="map-upload-input" style="display:none" onchange="handleMapUpload(event)">
       <button class="btn btn-ghost btn-small" onclick="document.getElementById('map-upload-input').click()">CHANGE MAP</button>
       <button class="btn btn-danger btn-small" onclick="removeMap()">REMOVE MAP</button>
       <button class="btn btn-primary btn-small" onclick="openAddSecurityObjectModal()">+ ADD DEVICE</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-ghost btn-small map-tool-btn ${mapTool === 'ping' ? 'active' : ''}" onclick="toggleMapTool('ping')" title="Click the map to ping a spot for everyone">📍 PING</button>
+      <button class="btn btn-ghost btn-small map-tool-btn ${mapTool === 'draw' ? 'active' : ''}" onclick="toggleMapTool('draw')" title="Drag on the map to draw">✏ DRAW</button>
+      <input type="color" id="map-draw-color" value="${drawColor}" onchange="setDrawColor(this.value)" title="Drawing color" style="width:32px;height:32px;padding:2px;background:var(--surface2);border:1px solid var(--border2);cursor:pointer">
+      <button class="btn btn-ghost btn-small" onclick="clearMapDrawings()" ${(state.mapDrawings||[]).length ? '' : 'disabled'}>CLEAR DRAWINGS</button>
     </div>`;
 }
 
@@ -2251,13 +2406,16 @@ function renderPlayerMapView() {
   el.innerHTML = `
     <div style="position:relative;width:100%;overflow:hidden;border:1px solid var(--border2);background:#000">
       <img src="${mapImage}" style="display:block;width:100%;height:auto;user-select:none;pointer-events:none" draggable="false">
+      ${buildMapDrawingsHtml()}
       ${buildSecurityObjectsHtml(false)}
       ${buildMapTokensHtml(false)}
+      <div class="map-ping-marker"></div>
     </div>`;
 }
 
 let mapDragState = null;
 function startTokenDrag(e, id) {
+  if (mapTool) return; // let the click bubble to onMapContainerPointerDown instead
   e.preventDefault();
   const mapEl = document.getElementById('map-container');
   if (!mapEl) return;
@@ -2470,15 +2628,20 @@ function buildSecurityObjectsHtml(interactive) {
     const shape = o.detectionShape || 'point';
     const visualRange = o.visualRange ?? 30;
     const radiusPx = visualRange * 3;
+    // Box is 3x the old 320x320 (and the center offset 3x'd to match) —
+    // the "Visual Size" slider goes up to 100 (radiusPx up to 300), which
+    // was already clipping against the old box's 160px half-width well
+    // before the slider even maxed out.
+    const boxSize = 960, center = 480;
     let overlay = '';
     if (shape === 'cone' && radiusPx > 0) {
-      const path = buildConePath(160, 160, o.rotation || 0, o.coneAngle ?? 70, radiusPx);
-      overlay = `<svg class="security-overlay" data-id="${id}" width="320" height="320" viewBox="0 0 320 320" style="position:absolute;left:${o.pos?.x??50}%;top:${o.pos?.y??50}%;transform:translate(-50%,-50%);pointer-events:none;${dimStyle}">
+      const path = buildConePath(center, center, o.rotation || 0, o.coneAngle ?? 70, radiusPx);
+      overlay = `<svg class="security-overlay" data-id="${id}" width="${boxSize}" height="${boxSize}" viewBox="0 0 ${boxSize} ${boxSize}" style="position:absolute;left:${o.pos?.x??50}%;top:${o.pos?.y??50}%;transform:translate(-50%,-50%);pointer-events:none;${dimStyle}">
         <path d="${path}" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="1.5" stroke-opacity="0.6"/>
       </svg>`;
     } else if (shape === 'radius' && radiusPx > 0) {
-      overlay = `<svg class="security-overlay" data-id="${id}" width="320" height="320" viewBox="0 0 320 320" style="position:absolute;left:${o.pos?.x??50}%;top:${o.pos?.y??50}%;transform:translate(-50%,-50%);pointer-events:none;${dimStyle}">
-        <circle cx="160" cy="160" r="${radiusPx}" fill="${color}" fill-opacity="0.12" stroke="${color}" stroke-width="1.5" stroke-opacity="0.6"/>
+      overlay = `<svg class="security-overlay" data-id="${id}" width="${boxSize}" height="${boxSize}" viewBox="0 0 ${boxSize} ${boxSize}" style="position:absolute;left:${o.pos?.x??50}%;top:${o.pos?.y??50}%;transform:translate(-50%,-50%);pointer-events:none;${dimStyle}">
+        <circle cx="${center}" cy="${center}" r="${radiusPx}" fill="${color}" fill-opacity="0.12" stroke="${color}" stroke-width="1.5" stroke-opacity="0.6"/>
       </svg>`;
     }
     const dragAttr = interactive ? ` onpointerdown="startSecurityDrag(event,'${id}')"` : '';
@@ -2489,6 +2652,7 @@ function buildSecurityObjectsHtml(interactive) {
 }
 let securityDragState = null;
 function startSecurityDrag(e, id) {
+  if (mapTool) return; // let the click bubble to onMapContainerPointerDown instead
   e.preventDefault();
   const mapEl = document.getElementById('map-container');
   if (!mapEl) return;
