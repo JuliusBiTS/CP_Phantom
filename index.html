@@ -3115,7 +3115,7 @@ function renderWeaponsSection(c, id) {
         const live = computeLiveWeaponStats(statsSource, w);
         const techColor = TECH_BADGE_COLOR[w.tech] || '#888';
         const magCur = Math.min(w.magCurrent ?? live.magMax, live.magMax ?? Infinity);
-        const condChips = renderConditionalModChips(statsSource, 'pw', live.slotType).concat(renderConditionalModChips(statsSource, 'wb', live.slotType));
+        const condChips = renderConditionalModChips(statsSource, 'pw', live.slotType).concat(renderConditionalModChips(statsSource, 'wb', live.slotType), renderConditionalAttachmentChips(statsSource, w, 'pw'), renderConditionalAttachmentChips(statsSource, w, 'wb'));
         return `<div style="font-size:11px">
           <div style="display:flex;gap:8px;align-items:center">
             <span style="flex:1;color:var(--text)">${esc(w.name)}</span>
@@ -3128,6 +3128,7 @@ function renderWeaponsSection(c, id) {
           </div>
           ${condChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">${condChips.join('')}</div>` : ''}
           ${live.talentNames?.length ? `<div style="font-size:10px;color:var(--blue-bright);padding-left:2px;margin-top:2px">✦ ${live.talentNames.map(esc).join(', ')}</div>` : ''}
+          ${live.attachmentNames?.length ? `<div style="font-size:10px;color:var(--blue-bright);padding-left:2px;margin-top:2px">⚙ ${live.attachmentNames.map(esc).join(', ')}</div>` : ''}
           ${live.situational.length ? `<div style="font-size:10px;color:var(--text2);padding-left:2px;margin-top:2px">${live.situational.map(s=>esc(s)).join(' · ')}</div>` : ''}
           ${w.tags ? `<div style="font-size:10px;color:var(--text2);padding-left:2px;margin-top:2px">${esc(w.tags)}</div>` : ''}
           ${live.magMax != null ? `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:3px">
@@ -3686,7 +3687,8 @@ function renderPlayerView() {
     const techBadge = (w.tech && w.tech !== 'base') ? `<span style="font-size:10px;padding:1px 6px;background:${techColor}33;border:1px solid ${techColor};color:${techColor};letter-spacing:0.1em">⚙ ${w.tech.toUpperCase()}${w.tech==='smart'&&w.techLevel?' '+w.techLevel:''}</span>` : '';
     const attachList = (w.attachments||[]).map(a => `<div style="font-size:10px;color:var(--text2);padding-left:10px;margin-top:1px">↳ ${esc(a.name)}${a.effect?': '+esc(a.effect):''}</div>`).join('');
     const talentHint = live.talentNames?.length ? `<div style="font-size:10px;color:var(--blue-bright);padding-left:10px;margin-top:1px">✦ ${live.talentNames.map(esc).join(', ')}</div>` : '';
-    const condChips = renderConditionalModChips(c, 'pw', live.slotType).concat(renderConditionalModChips(c, 'wb', live.slotType));
+    const attachHint = live.attachmentNames?.length ? `<div style="font-size:10px;color:var(--blue-bright);padding-left:10px;margin-top:1px">⚙ ${live.attachmentNames.map(esc).join(', ')}</div>` : '';
+    const condChips = renderConditionalModChips(c, 'pw', live.slotType).concat(renderConditionalModChips(c, 'wb', live.slotType), renderConditionalAttachmentChips(c, w, 'pw'), renderConditionalAttachmentChips(c, w, 'wb'));
     return `<div style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border)">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <div style="flex:1;font-size:12px">${esc(w.name)}</div>
@@ -3697,6 +3699,7 @@ function renderPlayerView() {
       </div>
       ${condChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${condChips.join('')}</div>` : ''}
       ${talentHint}
+      ${attachHint}
       ${attachList}
     </div>`;
   }).join('') : '<div style="color:var(--text3);font-size:11px">No weapons.</div>';
@@ -4911,6 +4914,7 @@ function openCharModal(id) {
   document.getElementById('cm-image-prompt').value = c.image_prompt || '';
   // Weapons
   weaponFamilySelection = {};
+  attachmentCustomMode = {};
   renderWeaponRows(c.weapons || []);
   // Hacks
   hackCategorySelection = {};
@@ -5012,12 +5016,20 @@ function renderWeaponRows(weapons) {
 function weaponRow(i, w={}) {
   const tech = w.tech || 'base';
   const slotInfo = getWeaponSlotInfo(w.name);
-  const attachRows = (w.attachments || []).map((a, ai) => `<div class="inline-row" style="gap:4px;margin-top:3px">
-    <input type="text" list="mod-catalog-${i}" placeholder="Attachment name" value="${esc(a.name||'')}" style="flex:1.5;font-size:11px" onchange="updateAttachmentField(${i},${ai},'name',this.value)">
+  const attachRows = (w.attachments || []).map((a, ai) => {
+    const isCustom = attachmentCustomMode[`${i}:${ai}`] || (!!a.name && !slotInfo.catalog.some(e => e.name === a.name));
+    return `<div class="inline-row" style="gap:4px;margin-top:3px;flex-wrap:wrap">
+    <select style="flex:1.5;font-size:11px;min-width:120px" onchange="onAttachmentNameChange(${i},${ai},this.value)">
+      <option value="">— Attachment... —</option>
+      ${slotInfo.catalog.map(e => `<option value="${esc(e.name)}" ${a.name===e.name?'selected':''}>${esc(e.name)}</option>`).join('')}
+      <option value="__custom__" ${isCustom?'selected':''}>— Custom... —</option>
+    </select>
+    ${isCustom ? `<input type="text" placeholder="Custom name" value="${esc(a.name||'')}" style="flex:1.5;font-size:11px" onchange="updateAttachmentField(${i},${ai},'name',this.value)">` : ''}
     <input type="text" placeholder="Stat effect" value="${esc(a.effect||'')}" style="flex:2;font-size:11px" onchange="updateAttachmentField(${i},${ai},'effect',this.value)">
     <input type="text" placeholder="Special effect" value="${esc(a.special||'')}" style="flex:2;font-size:11px" onchange="updateAttachmentField(${i},${ai},'special',this.value)">
     <button class="btn btn-danger btn-icon" onclick="removeAttachmentRow(${i},${ai})">✕</button>
-  </div>`).join('');
+  </div>`;
+  }).join('');
   const selFamily = weaponFamilySelection[i] || '';
   const specificOptions = WEAPON_SPECIFIC_OPTIONS[selFamily] || [];
   const slotCount = (w.attachments || []).length;
@@ -5025,7 +5037,6 @@ function weaponRow(i, w={}) {
   const attachNames = (w.attachments || []).map(a => String(a.name||'').trim().toLowerCase());
   const suppressorConflict = attachNames.includes('suppressor') && attachNames.includes('extended barrel');
   return `<div style="border:1px solid var(--border);padding:4px;margin-bottom:2px">
-    <datalist id="mod-catalog-${i}">${slotInfo.catalog.map(e => `<option value="${esc(e.name)}">`).join('')}</datalist>
     <div class="inline-row" style="gap:4px;margin-bottom:4px">
       <select style="flex:1" onchange="onWeaponFamilyChange(${i},this.value)">
         <option value="">— Family... —</option>
@@ -5104,6 +5115,29 @@ function addAttachmentRow(wi) {
 }
 function updateAttachmentField(wi, ai, field, val) {
   weaponData[wi].attachments[ai][field] = val;
+}
+// Transient UI-only flag (like weaponFamilySelection) marking a row as
+// "custom name" mode — needed because picking "Custom..." clears a.name to
+// '', and an empty name alone can't distinguish "nothing picked yet" from
+// "custom picked, not typed yet" on the next render.
+let attachmentCustomMode = {};
+// Picking a catalog attachment locks the name to the exact catalog string
+// (guaranteeing computeLiveWeaponStats' exact-match lookup succeeds) and
+// auto-fills the effect text for reference; picking "Custom..." clears the
+// name so the free-text fallback input appears for homebrew items.
+function onAttachmentNameChange(wi, ai, val) {
+  const a = weaponData[wi].attachments[ai];
+  const key = `${wi}:${ai}`;
+  if (val === '__custom__') {
+    attachmentCustomMode[key] = true;
+    a.name = '';
+  } else {
+    delete attachmentCustomMode[key];
+    a.name = val;
+    const entry = matchAttachmentEntry(val);
+    if (entry) a.effect = entry.effect;
+  }
+  renderWeaponRows(weaponData);
 }
 function removeAttachmentRow(wi, ai) {
   weaponData[wi].attachments.splice(ai, 1);
@@ -6227,19 +6261,19 @@ async function applyLootGenericItem() {
 // tier so stronger enemies are more likely to be better equipped.
 // ═══════════════════════════════════════════════════════════════
 const ATTACHMENT_CATALOG = [
-  {name:'Iron Sights Upgrade', effect:'+2 weapon bonus at medium range (13-50m)', costTier:'guenstig'},
-  {name:'2.5x Scope', effect:'+4 weapon bonus medium range, -2 PW on Autofire', costTier:'normal'},
-  {name:'Sniper Scope', effect:'+6 weapon bonus long range (50m+), no Autofire', costTier:'teuer'},
-  {name:'Thermal Scope', effect:'Sees through smoke/darkness, +2 weapon bonus at night', costTier:'teuer'},
+  {name:'Iron Sights Upgrade', effect:'+2 weapon bonus at medium range (13-50m)', costTier:'guenstig', mods:[{appliesTo:'wb', amount:2, conditional:true, label:'Medium range (13-50m)'}]},
+  {name:'2.5x Scope', effect:'+4 weapon bonus medium range, -2 PW on Autofire', costTier:'normal', mods:[{appliesTo:'wb', amount:4, conditional:true, label:'Medium range (13-50m)'}, {appliesTo:'pw', amount:-2, conditional:true, label:'Autofire'}]},
+  {name:'Sniper Scope', effect:'+6 weapon bonus long range (50m+), no Autofire', costTier:'teuer', mods:[{appliesTo:'wb', amount:6, conditional:true, label:'Long range (50m+)'}]},
+  {name:'Thermal Scope', effect:'Sees through smoke/darkness, +2 weapon bonus at night', costTier:'teuer', mods:[{appliesTo:'wb', amount:2, conditional:true, label:'Night/darkness'}]},
   {name:'Smart Scope', effect:'Requires Neural Link. +1 weapon bonus always.', costTier:'sehr teuer', alwaysOn:{bonus:1}},
   {name:'Suppressor', effect:'Shot inaudible beyond 15m, -1 weapon bonus', costTier:'normal', alwaysOn:{bonus:-1}},
-  {name:'Muzzle Brake', effect:'-2 Autofire PW penalty', costTier:'normal'},
-  {name:'Extended Barrel', effect:'+2 weapon bonus long range, no longer concealable', costTier:'normal'},
+  {name:'Muzzle Brake', effect:'-2 Autofire PW penalty', costTier:'normal', mods:[{appliesTo:'pw', amount:-2, conditional:true, label:'Autofire'}]},
+  {name:'Extended Barrel', effect:'+2 weapon bonus long range, no longer concealable', costTier:'normal', mods:[{appliesTo:'wb', amount:2, conditional:true, label:'Long range (50m+)'}]},
   {name:'Compensator', effect:'Blindfire: 1/4 PW → 1/2 PW', costTier:'teuer'},
-  {name:'Laser Sight', effect:'Darkness PW penalty reduced by 4', costTier:'normal'},
-  {name:'UV Laser Sight', effect:'Like Laser Sight, only visible with Cyberoptics', costTier:'teuer'},
-  {name:'Foregrip', effect:'+1 weapon bonus while standing', costTier:'guenstig'},
-  {name:'Bipod', effect:'+4 PW while prone/braced, no movement', costTier:'normal'},
+  {name:'Laser Sight', effect:'Darkness PW penalty reduced by 4', costTier:'normal', mods:[{appliesTo:'pw', amount:4, conditional:true, label:'Darkness (offsets penalty)'}]},
+  {name:'UV Laser Sight', effect:'Like Laser Sight, only visible with Cyberoptics', costTier:'teuer', mods:[{appliesTo:'pw', amount:4, conditional:true, label:'Darkness, Cyberoptics only'}]},
+  {name:'Foregrip', effect:'+1 weapon bonus while standing', costTier:'guenstig', mods:[{appliesTo:'wb', amount:1, conditional:true, label:'Standing'}]},
+  {name:'Bipod', effect:'+4 PW while prone/braced, no movement', costTier:'normal', mods:[{appliesTo:'pw', amount:4, conditional:true, label:'Prone/braced'}]},
   {name:'Grenade Launcher', effect:'1x/combat: Focus+Strength, +14 in 3m radius', costTier:'sehr teuer'},
   {name:'Flashlight', effect:'Eliminates darkness penalty, but reveals position', costTier:'guenstig'},
   {name:'Extended Magazine', effect:'+2 magazine ticks', costTier:'normal', magEffect:{add:2}},
@@ -6373,6 +6407,57 @@ function onCondModChipClick(el) {
   renderAll();
 }
 
+// ATTACHMENT CONDITIONAL MODIFIERS (§8) — same conditional-toggle shape as
+// talent mods above, but scoped to one attachment on one weapon instance
+// rather than character-wide, since these (range band, stance, lighting)
+// depend on the specific shot being taken, not something always active.
+// Keyed by character name + weapon name + attachment/mod index for the
+// same reason talent mods are keyed by name, not id (see talentModKey).
+let activeAttachmentMods = new Set();
+function attachmentModKey(c, w, ai, mi) { return `${c?.name || ''}:${w?.name || ''}:${ai}:${mi}`; }
+function toggleAttachmentModByKey(key) {
+  if (activeAttachmentMods.has(key)) activeAttachmentMods.delete(key); else activeAttachmentMods.add(key);
+}
+function matchAttachmentEntry(name) {
+  return ATTACHMENT_CATALOG.find(e => e.name === name) || MELEE_MOD_CATALOG.find(e => e.name === name);
+}
+function getActiveAttachmentMods(c, w, appliesTo) {
+  let total = 0;
+  const names = [];
+  (w?.attachments || []).forEach((a, ai) => {
+    const entry = matchAttachmentEntry(a.name);
+    (entry?.mods || []).forEach((m, mi) => {
+      if (m.appliesTo !== appliesTo) return;
+      const isOn = !m.conditional || activeAttachmentMods.has(attachmentModKey(c, w, ai, mi));
+      if (isOn) { total += m.amount; names.push(m.label ? `${entry.name} (${m.label})` : entry.name); }
+    });
+  });
+  return { total, names };
+}
+function getConditionalAttachmentMods(c, w, appliesTo) {
+  const out = [];
+  (w?.attachments || []).forEach((a, ai) => {
+    const entry = matchAttachmentEntry(a.name);
+    (entry?.mods || []).forEach((m, mi) => {
+      if (m.appliesTo !== appliesTo || !m.conditional) return;
+      out.push({ ai, mi, name: entry.name, amount: m.amount, label: m.label, key: attachmentModKey(c, w, ai, mi) });
+    });
+  });
+  return out;
+}
+function renderConditionalAttachmentChips(c, w, appliesTo) {
+  return getConditionalAttachmentMods(c, w, appliesTo).map(m => {
+    const isOn = activeAttachmentMods.has(m.key);
+    const unit = appliesTo === 'wb' ? 'WB' : 'PW';
+    const title = m.label ? `${m.name} — ${m.label}` : m.name;
+    return `<span class="cond-mod-chip ${isOn ? 'on' : ''}" data-mod-key="${esc(m.key)}" onclick="event.stopPropagation(); onAttachCondChipClick(this)" title="${esc(title)}">${isOn ? '✓ ' : ''}${esc(m.label || m.name)} ${m.amount >= 0 ? '+' : ''}${m.amount} ${unit}</span>`;
+  });
+}
+function onAttachCondChipClick(el) {
+  toggleAttachmentModByKey(el.dataset.modKey);
+  renderAll();
+}
+
 // Live weapon math for the combat UI — computes a weapon's real PW/bonus
 // for ANY character (PC or NPC) from their actual attributes, folding in
 // unconditional (always-on) attachment/Smart-tech bonuses AND any active
@@ -6428,7 +6513,14 @@ function computeLiveWeaponStats(c, w) {
   if (pw !== null && pwMods.total) pw += pwMods.total;
   if (wbMods.total) bonus += wbMods.total;
   const talentNames = [...new Set([...pwMods.names, ...wbMods.names])];
-  return { bonus, pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, situational, magMax, talentNames, slotType };
+  // Attachment conditional modifiers (§8) — same toggle-chip mechanism as
+  // talents, but scoped to the attachments actually on this weapon.
+  const attachPwMods = getActiveAttachmentMods(c, w, 'pw');
+  const attachWbMods = getActiveAttachmentMods(c, w, 'wb');
+  if (pw !== null && attachPwMods.total) pw += attachPwMods.total;
+  if (attachWbMods.total) bonus += attachWbMods.total;
+  const attachmentNames = [...new Set([...attachPwMods.names, ...attachWbMods.names])];
+  return { bonus, pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, situational, magMax, talentNames, attachmentNames, slotType };
 }
 
 // A controlled drone's (or companion's) attack roll uses its OPERATOR's
