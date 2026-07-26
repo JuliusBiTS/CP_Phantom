@@ -192,9 +192,17 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 }
 .tabs::-webkit-scrollbar { height: 0; }
 .tab {
-  flex: 1;
-  min-width: 60px;
-  padding: 10px 6px;
+  /* Natural width + horizontal scroll (via .tabs' overflow-x:auto) instead
+     of squeezing to fit — flex:1 with a min-width floor let long labels
+     (COMPANION, INVENTORY) render wider than their squeezed-down box on
+     narrow phones, and with no overflow:hidden the text bled into the
+     neighboring tab instead of clipping or scrolling. flex-shrink:0 keeps
+     every tab at its own natural size regardless of how many exist, so a
+     long tab strip just becomes swipeable instead of ever overlapping. */
+  flex: 0 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 10px 12px;
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
