@@ -4525,9 +4525,27 @@ async function applyDmg(sign) {
   const c = state.characters[id]; if (!c) return;
   const delta = sign > 0 ? val : -val;
   const newHp = Math.min(c.hp_max, Math.max(-(c.stats?.grit || 0), (c.hp_current ?? c.hp_max) + delta));
-  await dbWrite('characters/' + id + '/hp_current', newHp);
+  const updates = { ['characters/' + id + '/hp_current']: newHp };
+  // Armor ablates 1 Temporary SP per hit taken, same as the GM was doing
+  // by hand with the -1/+1 armor buttons — bumped up if whoever's dealing
+  // this damage (the damage calculator's attacker, if one's selected) has
+  // an armor-ablation talent (Armor Breaker, Ruestungsbrecher). Only on
+  // actual damage (the − DAMAGE button passes sign=-1), never on healing.
+  let ablationMsg = '';
+  if (sign < 0 && c.armor_body?.sp_temp > 0) {
+    const attackerId = document.getElementById('dmg-calc-attacker')?.value;
+    const attacker = attackerId ? state.characters[attackerId] : null;
+    const weaponIdx = document.getElementById('dmg-calc-weapon')?.value;
+    const weapon = attacker?.weapons?.[weaponIdx];
+    const slotType = weapon ? matchWeaponName(weapon.name)?.slotType : undefined;
+    const ablation = 1 + (attacker ? getActiveTalentMods(attacker, 'armorAblation', slotType).total : 0);
+    const newSpTemp = Math.max(0, c.armor_body.sp_temp - ablation);
+    updates['characters/' + id + '/armor_body/sp_temp'] = newSpTemp;
+    ablationMsg = ` · Armor SP -${ablation} → ${newSpTemp}`;
+  }
+  await dbUpdate(updates);
   closeModal('dmg-modal');
-  showToast(`${c.name}: ${delta > 0 ? '+' : ''}${delta} HP → ${newHp}`);
+  showToast(`${c.name}: ${delta > 0 ? '+' : ''}${delta} HP → ${newHp}${ablationMsg}`);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -6303,17 +6321,20 @@ function talentScopeMatches(modScope, weaponSlotType) {
   if (modScope === 'ranged') return weaponSlotType === 'firearm' || weaponSlotType === 'exotic';
   return modScope === weaponSlotType;
 }
+// appliesTo values whose mods carry a weapon-category scope (melee/
+// ranged/hacks/all) that needs matching against the weapon in hand;
+// targetFirewall/initiative have no weapon to match against, so they're
+// summed regardless of what (if anything) is passed as weaponSlotType.
+const SCOPE_GATED_MODS = new Set(['pw', 'wb', 'armorAblation']);
 // Sums every matching mod on c.talents — non-conditional ones always
-// count, conditional ones only while their toggle is on. weaponSlotType
-// is only checked for pw/wb (scope-gated); other appliesTo values
-// (targetFirewall, initiative) have no weapon scope to match.
+// count, conditional ones only while their toggle is on.
 function getActiveTalentMods(c, appliesTo, weaponSlotType) {
   let total = 0;
   const names = [];
   (c?.talents || []).forEach((t, ti) => {
     (t.mods || []).forEach((m, mi) => {
       if (m.appliesTo !== appliesTo) return;
-      if ((appliesTo === 'pw' || appliesTo === 'wb') && !talentScopeMatches(m.scope, weaponSlotType)) return;
+      if (SCOPE_GATED_MODS.has(appliesTo) && !talentScopeMatches(m.scope, weaponSlotType)) return;
       const isOn = !m.conditional || activeTalentMods.has(talentModKey(c, ti, mi));
       if (isOn) { total += m.amount; names.push(t.name); }
     });
@@ -6328,7 +6349,7 @@ function getConditionalTalentMods(c, appliesTo, weaponSlotType) {
   (c?.talents || []).forEach((t, ti) => {
     (t.mods || []).forEach((m, mi) => {
       if (m.appliesTo !== appliesTo || !m.conditional) return;
-      if ((appliesTo === 'pw' || appliesTo === 'wb') && !talentScopeMatches(m.scope, weaponSlotType)) return;
+      if (SCOPE_GATED_MODS.has(appliesTo) && !talentScopeMatches(m.scope, weaponSlotType)) return;
       out.push({ ti, mi, name: t.name, amount: m.amount, key: talentModKey(c, ti, mi) });
     });
   });
@@ -6983,9 +7004,9 @@ const TALENT_CATALOG = {
       { lvl:'IV', req:'Power 22', effect:'+6 WB. Crit Success: Weapon Bonus doubled on that hit.', mods:[{appliesTo:'wb',scope:'melee',amount:6,conditional:false}] },
     ]},
     { name: 'Ruestungsbrecher', levels: [
-      { lvl:'I', req:'Power 10', effect:'Melee hits reduce target SP by 1 per hit', mods:[] },
-      { lvl:'II', req:'Power 14', effect:'SP reduction: 2 per hit', mods:[] },
-      { lvl:'III', req:'Power 18', effect:'SP reduction: 3. Crit Success: 6.', mods:[] },
+      { lvl:'I', req:'Power 10', effect:'Melee hits reduce target SP by 1 per hit', mods:[{appliesTo:'armorAblation',scope:'melee',amount:0,conditional:false}] },
+      { lvl:'II', req:'Power 14', effect:'SP reduction: 2 per hit', mods:[{appliesTo:'armorAblation',scope:'melee',amount:1,conditional:false}] },
+      { lvl:'III', req:'Power 18', effect:'SP reduction: 3. Crit Success: 6 (not automated — apply the extra manually on a crit).', mods:[{appliesTo:'armorAblation',scope:'melee',amount:2,conditional:false}] },
     ]},
     { name: 'Kampfrausch', levels: [
       { lvl:'I', req:'Power 10', effect:'After a melee kill: +2 PW on the next attack this round', mods:[{appliesTo:'pw',scope:'melee',amount:2,conditional:true}] },
@@ -7212,9 +7233,9 @@ const TALENT_CATALOG = {
   ],
   General: [
     { name: 'Armor Breaker', levels: [
-      { lvl:'I', req:'Power 10', effect:'-2 Temporary SP per hit (instead of -1). Applies to melee, ranged, and Combat Hacks.', mods:[] },
-      { lvl:'II', req:'Power 14', effect:'-3 Temporary SP per hit', mods:[] },
-      { lvl:'III', req:'Power 20', effect:'-4 Temporary SP per hit. Crit Success ablates Base SP directly (permanent).', mods:[] },
+      { lvl:'I', req:'Power 10', effect:'-2 Temporary SP per hit (instead of -1). Applies to melee, ranged, and Combat Hacks.', mods:[{appliesTo:'armorAblation',scope:'all',amount:1,conditional:false}] },
+      { lvl:'II', req:'Power 14', effect:'-3 Temporary SP per hit', mods:[{appliesTo:'armorAblation',scope:'all',amount:2,conditional:false}] },
+      { lvl:'III', req:'Power 20', effect:'-4 Temporary SP per hit. Crit Success ablates Base SP directly (not automated — permanent-SP crit clause needs a manual base-SP edit).', mods:[{appliesTo:'armorAblation',scope:'all',amount:3,conditional:false}] },
     ]},
     { name: 'Kampferfahrung', levels: [
       { lvl:'I', req:'Power 8', effect:'+1 on all attack rolls', mods:[{appliesTo:'pw',scope:'all',amount:1,conditional:false}] },
@@ -7364,7 +7385,7 @@ const TALENT_CATALOG = {
       { lvl:'I', req:'Gauntlet I', effect:'Flamethrower can now damage machines/robots. Every hit also reduces target SP by 2.', mods:[] },
     ]},
     { name: 'Ruestungsbrecher (Heavy)', levels: [
-      { lvl:'I', req:'Power 10', effect:'Primary-weapon hit: target SP -1 permanently (max -3/fight)', mods:[] },
+      { lvl:'I', req:'Power 10', effect:'Primary-weapon hit: target SP -1 permanently (max -3/fight) — not automated, this reduces BASE SP with a per-fight cap, unlike the auto-ablation on Temporary SP', mods:[] },
       { lvl:'II', req:'Power 15', effect:'SP -2 per hit (max -6/fight). Applies to explosions too.', mods:[] },
       { lvl:'III', req:'Power 20', effect:'SP -3 per hit, no max. Target at 0 SP: all attacks vs it count as unarmored.', mods:[] },
     ]},
