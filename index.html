@@ -255,7 +255,8 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   white-space: nowrap;
   cursor: pointer;
   transition: all 0.12s;
-  min-width: 64px;
+  flex-shrink: 0;
+  width: 76px;
   text-align: center;
   letter-spacing: 0.06em;
 }
@@ -2180,7 +2181,7 @@ function renderCombat() {
     ].filter(Boolean).join(' ');
     const rollCat = state.combat.initRolls?.[id]?.category;
     const critBadge = rollCat === 0 ? ' ★' : rollCat === 3 ? ' ☠' : '';
-    return `<div class="${cls}" onclick="scrollToCombatant('${id}')" title="${critBadge ? (rollCat===0?'Crit success — initiative':'Crit fail — initiative') : ''}"><span onclick="event.stopPropagation(); openPortraitViewer('${id}')" title="View portrait">${esc(c.name)}${critBadge}</span><br><span style="font-size:10px;color:inherit;opacity:0.7">${c.hp_current ?? c.hp_max}hp</span></div>`;
+    return `<div class="${cls}" onclick="scrollToCombatant('${id}')" title="${critBadge ? (rollCat===0?'Crit success — initiative':'Crit fail — initiative') : ''}"><span onclick="event.stopPropagation(); openPortraitViewer('${id}')" title="${esc(c.name)} — View portrait" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}${critBadge}</span><br><span style="font-size:10px;color:inherit;opacity:0.7">${c.hp_current ?? c.hp_max}hp</span></div>`;
   }).join('');
   // Combatant cards
   document.getElementById('combatants-list').innerHTML = order.map((id, i) => renderCombatantCard(id, i === current)).join('');
