@@ -4187,7 +4187,7 @@ async function reloadWeapon(id, wi) {
   if (live.magMax == null) return;
   weapons[wi].magCurrent = live.magMax;
   await dbWrite('characters/' + id + '/weapons', weapons);
-  showToast('Reloaded — costs a Nebenaktion.');
+  showToast('Reloaded — costs a Hauptaktion.');
 }
 
 async function useHack(id, hi) {
@@ -4530,26 +4530,45 @@ async function applyDmg(sign) {
   const delta = sign > 0 ? val : -val;
   const newHp = Math.min(c.hp_max, Math.max(-(c.stats?.grit || 0), (c.hp_current ?? c.hp_max) + delta));
   const updates = { ['characters/' + id + '/hp_current']: newHp };
+  // Both the armor ablation and the magazine spend below key off whoever's
+  // dealing this damage (the damage calculator's attacker/weapon, if
+  // selected) — resolved once up front since both need it.
+  const attackerId = document.getElementById('dmg-calc-attacker')?.value;
+  const attacker = attackerId ? state.characters[attackerId] : null;
+  const weaponIdx = document.getElementById('dmg-calc-weapon')?.value;
+  const weapon = attacker?.weapons?.[weaponIdx];
   // Armor ablates 1 Temporary SP per hit taken, same as the GM was doing
-  // by hand with the -1/+1 armor buttons — bumped up if whoever's dealing
-  // this damage (the damage calculator's attacker, if one's selected) has
+  // by hand with the -1/+1 armor buttons — bumped up if the attacker has
   // an armor-ablation talent (Armor Breaker, Ruestungsbrecher). Only on
   // actual damage (the − DAMAGE button passes sign=-1), never on healing.
   let ablationMsg = '';
   if (sign < 0 && c.armor_body?.sp_temp > 0) {
-    const attackerId = document.getElementById('dmg-calc-attacker')?.value;
-    const attacker = attackerId ? state.characters[attackerId] : null;
-    const weaponIdx = document.getElementById('dmg-calc-weapon')?.value;
-    const weapon = attacker?.weapons?.[weaponIdx];
     const slotType = weapon ? matchWeaponName(weapon.name)?.slotType : undefined;
     const ablation = 1 + (attacker ? getActiveTalentMods(attacker, 'armorAblation', slotType).total : 0);
     const newSpTemp = Math.max(0, c.armor_body.sp_temp - ablation);
     updates['characters/' + id + '/armor_body/sp_temp'] = newSpTemp;
     ablationMsg = ` · Armor SP -${ablation} → ${newSpTemp}`;
   }
+  // Spends 1 magazine tick off the ATTACKER's weapon (never the target's) —
+  // the GM was doing this by hand every hit too. Only for actual damage,
+  // and only if the weapon has a magazine at all (melee/shields don't, per
+  // computeLiveWeaponStats' magMax). A normal shot is always 1 tick here;
+  // Autofire/Suppressive Fire's 2-tick cost stays a manual -2 click on the
+  // weapon row, same as today, since the calculator has no autofire signal.
+  let magMsg = '';
+  if (sign < 0 && attacker && weapon) {
+    const live = computeLiveWeaponStats(getStatsSourceChar(attacker), weapon);
+    if (live.magMax != null) {
+      const curMag = weapon.magCurrent ?? live.magMax;
+      const newMag = Math.max(0, curMag - 1);
+      const attackerWeapons = attacker.weapons.map((w, wi) => wi === Number(weaponIdx) ? { ...w, magCurrent: newMag } : w);
+      updates['characters/' + attackerId + '/weapons'] = attackerWeapons;
+      magMsg = ` · ${attacker.name}'s ${weapon.name} mag -1 → ${newMag}/${live.magMax}`;
+    }
+  }
   await dbUpdate(updates);
   closeModal('dmg-modal');
-  showToast(`${c.name}: ${delta > 0 ? '+' : ''}${delta} HP → ${newHp}${ablationMsg}`);
+  showToast(`${c.name}: ${delta > 0 ? '+' : ''}${delta} HP → ${newHp}${ablationMsg}${magMsg}`);
 }
 
 // ═══════════════════════════════════════════════════════════════
