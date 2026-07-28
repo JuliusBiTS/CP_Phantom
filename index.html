@@ -270,6 +270,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .init-chip.ally { border-color: var(--green-bright); color: var(--green-bright); }
 .init-chip.companion { border-color: var(--blue); color: var(--blue); }
 .init-chip.dead { opacity: 0.25; text-decoration: line-through; }
+.init-chip.dying { border-color: var(--red-bright); color: var(--red-bright); animation: dying-pulse 1.4s ease-in-out infinite; }
 .combatants { padding: 8px 12px; display: flex; flex-direction: column; gap: 5px; }
 /* ── COMBAT MAP ── */
 .map-token {
@@ -364,6 +365,12 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .combatant-card.is-pc { border-left: 3px solid var(--cyan); }
 .combatant-card.is-companion { border-left: 3px solid var(--blue); }
 .combatant-card.is-dead { opacity: 0.3; filter: grayscale(0.5); }
+/* PCs get a Death Save before they're actually dead — pulse them instead
+   of fading them out like a confirmed kill (.is-dead above). */
+.combatant-card.is-dying { border-color: var(--red-bright); box-shadow: 0 0 14px var(--red-glow); animation: dying-pulse 1.4s ease-in-out infinite; }
+@keyframes dying-pulse { 0%,100% { box-shadow: 0 0 8px var(--red-glow); } 50% { box-shadow: 0 0 20px var(--red-glow); } }
+.dying-badge { font-size: 10px; padding: 2px 7px; letter-spacing: 0.1em; background: var(--red-glow); color: var(--red-bright); border: 1px solid var(--red-bright); animation: dying-pulse 1.4s ease-in-out infinite; }
+.dead-badge { font-size: 10px; padding: 2px 7px; letter-spacing: 0.1em; background: rgba(120,120,120,0.15); color: var(--text3); border: 1px solid var(--border2); }
 .combatant-top { padding: 10px 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .combatant-name { font-size: 13px; font-weight: 700; flex: 1; letter-spacing: 0.04em; }
 .hp-display { display: flex; flex-direction: column; align-items: flex-end; }
@@ -386,6 +393,8 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .status-burn { background: rgba(255,100,0,0.1); color: #ffaa66; border-color: #ff6600; }
 .status-malfunction { background: rgba(136,0,204,0.15); color: var(--purple-bright); border-color: var(--purple); }
 .status-stagger { background: rgba(0,150,200,0.1); color: #66ccff; border-color: #0099cc; }
+.status-poison { background: rgba(140,200,0,0.1); color: #aadd44; border-color: #88bb00; }
+.status-blind { background: rgba(200,200,200,0.1); color: #cccccc; border-color: var(--border2); }
 .status-custom { background: rgba(100,100,150,0.1); color: var(--text2); border-color: var(--border2); }
 .combatant-detail { display: none; border-top: 1px solid var(--border2); padding: 12px; background: var(--surface2); }
 .combatant-detail.open { display: block; }
@@ -1441,6 +1450,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         <select id="status-type">
           <option value="bleed">Bleed (2 dmg/round)</option>
           <option value="burn">Burn (2 or 4 dmg/round)</option>
+          <option value="poison">Poison (3 dmg/round)</option>
           <option value="malfunction">Cyberware Malfunction</option>
           <option value="stagger">Stagger (lose Nebenaktion)</option>
           <option value="blind">Blind</option>
@@ -2173,11 +2183,12 @@ function renderCombat() {
   // Initiative strip
   document.getElementById('initiative-strip').innerHTML = order.map((id, i) => {
     const c = state.characters[id]; if (!c) return '';
+    const isDown = (c.hp_current ?? c.hp_max) <= 0;
     const cls = [
       'init-chip',
       c.isCompanion ? 'companion' : (c.isAlly ? 'ally' : (c.isNPC ? 'npc' : '')),
       i === current ? 'active-turn' : '',
-      (c.hp_current ?? c.hp_max) <= 0 ? 'dead' : ''
+      isDown ? (isPlayerCharacter(c) ? 'dying' : 'dead') : ''
     ].filter(Boolean).join(' ');
     const rollCat = state.combat.initRolls?.[id]?.category;
     const critBadge = rollCat === 0 ? ' ★' : rollCat === 3 ? ' ☠' : '';
@@ -2494,6 +2505,13 @@ function charTypeMeta(c) {
   if (c.isNPC) return { color: 'var(--red-bright)', label: 'NPC' };
   return { color: 'var(--cyan)', label: 'PC' };
 }
+
+// True player characters get a Death Save on top of the grit floor before
+// they're actually dead — every other entity type (NPC, Ally, Companion,
+// Drone, Vehicle, Security Unit) just dies outright once HP hits 0, no
+// save. Reuses charTypeMeta's own PC fallthrough so this can never drift
+// from the classification already used everywhere else in the app.
+function isPlayerCharacter(c) { return charTypeMeta(c).label === 'PC'; }
 
 // Players never get exact numbers for a hostile NPC (same rule the map
 // token's health ring already enforces) — only alive/dead. Everyone else
@@ -3217,7 +3235,7 @@ function renderHacksSection(c, id) {
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:2px">
             <span style="font-size:10px;color:var(--cyan)">${esc(live.pwLabel)}${live.pw!=null?' · '+live.pw:''}</span>
             ${live.dice ? `<span style="font-size:10px;color:var(--cyan)">→ ${live.dice}×d20</span>` : ''}
-            ${targetOptions.length ? `<select style="font-size:10px" onchange="onHackTargetChange('${id}',${hi},this.value)">
+            ${targetOptions.length ? `<select id="hack-target-${id}-${hi}" style="font-size:10px" onchange="onHackTargetChange('${id}',${hi},this.value)">
               <option value="">vs target...</option>
               ${targetOptions.map(o => `<option value="${o.tid}">${esc(o.tc.name)}</option>`).join('')}
             </select>
@@ -3372,7 +3390,14 @@ function renderCombatantCard(id, isActive) {
   const ipMax = c.ip_max ?? 0;
   const humanityCur = c.humanity_current ?? c.humanity_max ?? 0;
   const humanityMax = c.humanity_max ?? 0;
-  return `<div class="combatant-card ${c.isDrone ? 'is-drone' : (c.isVehicle ? 'is-vehicle' : (c.isCompanion ? 'is-companion' : (c.isAlly ? 'is-ally' : (c.isNPC ? 'is-npc' : 'is-pc'))))} ${isActive ? 'active-turn' : ''} ${hpCur <= 0 ? 'is-dead' : ''}" id="cc-${id}">
+  // Down-state: true PCs get a Death Save before they're confirmed dead
+  // (isPlayerCharacter, see its own comment) — everyone else just dies
+  // outright once HP hits 0, no save.
+  const isDown = hpCur <= 0;
+  const isDying = isDown && isPlayerCharacter(c);
+  const downClass = isDown ? (isDying ? 'is-dying' : 'is-dead') : '';
+  const downBadge = isDying ? '<span class="dying-badge">☠ DEATH SAVE</span>' : (isDown ? '<span class="dead-badge">☠ DEAD</span>' : '');
+  return `<div class="combatant-card ${c.isDrone ? 'is-drone' : (c.isVehicle ? 'is-vehicle' : (c.isCompanion ? 'is-companion' : (c.isAlly ? 'is-ally' : (c.isNPC ? 'is-npc' : 'is-pc'))))} ${isActive ? 'active-turn' : ''} ${downClass}" id="cc-${id}">
     <div class="combatant-top" onclick="toggleDetail('${id}')">
       <div>
         <div class="combatant-name">${esc(c.name)}${c.isVehicle ? ' 🚗' : ''}${hasAnyAbilities(c) ? ` <span title="View/use abilities" style="color:var(--purple-bright);cursor:pointer" onclick="event.stopPropagation(); openAbilitiesModal('${id}')">✦</span>` : ''}</div>
@@ -3385,6 +3410,7 @@ function renderCombatantCard(id, isActive) {
           <div class="hp-numbers ${hpClass}">${hpCur}/${hpMax}${c.isVehicle ? ' SDP' : ''}</div>
           <div class="hp-bar"><div class="hp-bar-fill ${hpClass}" style="width:${hpPct}%"></div></div>
         </div>
+        ${downBadge}
         ${flinkHas ? `<span class="flink-badge ${flinkUsed ? 'flink-used' : 'flink-available'}">${flinkUsed ? 'FLINK ✓' : 'FLINK'}</span>` : ''}
       </div>
     </div>
@@ -3607,8 +3633,11 @@ function renderPlayerView() {
   document.getElementById('player-hp-bar').style.width = pct + '%';
   document.getElementById('player-hp-bar').className = 'hp-bar-fill ' + cls;
   const wound = hpPct => hpPct > 60 ? '● HEALTHY' : hpPct > 25 ? '⚠ SERIOUSLY WOUNDED (−2 all)' : '☠ MORTALLY WOUNDED';
-  document.getElementById('player-wound-state').textContent = wound(pct);
-  document.getElementById('player-wound-state').style.color = pct > 60 ? 'var(--green-bright)' : pct > 25 ? 'var(--gold-bright)' : 'var(--red-bright)';
+  // At 0 HP a PC isn't just "mortally wounded" — they need a Death Save
+  // (rolled by the player themselves, same as every other roll in this
+  // app) before the grit floor below actually kills them.
+  document.getElementById('player-wound-state').textContent = hpCur <= 0 ? '☠ DYING — ROLL A DEATH SAVE' : wound(pct);
+  document.getElementById('player-wound-state').style.color = hpCur <= 0 ? 'var(--red-bright)' : (pct > 60 ? 'var(--green-bright)' : pct > 25 ? 'var(--gold-bright)' : 'var(--red-bright)');
   const staCur = c.stamina_current ?? c.stamina_max ?? 0;
   const staMax = c.stamina_max ?? 0;
   document.getElementById('player-sta-val').textContent = staCur;
@@ -3760,7 +3789,7 @@ function renderPlayerView() {
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
           <span style="font-size:10px;color:var(--cyan)">${esc(live.pwLabel)}${live.pw!=null?' · '+live.pw:''}</span>
           ${live.dice ? `<span style="font-size:10px;color:var(--cyan)">→ ${live.dice}×d20</span>` : ''}
-          ${targetOptions.length ? `<select style="font-size:10px;width:auto" onchange="onPlayerHackTargetChange(${hi},this.value)">
+          ${targetOptions.length ? `<select id="player-hack-target-${hi}" style="font-size:10px;width:auto" onchange="onPlayerHackTargetChange(${hi},this.value)">
             <option value="">vs target...</option>
             ${targetOptions.map(o => `<option value="${o.tid}">${esc(o.tc.name)}</option>`).join('')}
           </select>
@@ -4112,6 +4141,7 @@ async function nextRound() {
       if (e.rounds > 0 || e.rounds === -1) {
         if (e.type === 'bleed') dmg += 2;
         if (e.type === 'burn') dmg += (e.stacks >= 2 ? 4 : 2);
+        if (e.type === 'poison') dmg += 3;
       }
     }
     // Sum regen from talents (e.g. Jack In IP-Regen) — ticks once per round
@@ -4192,9 +4222,24 @@ async function reloadWeapon(id, wi) {
 
 async function useHack(id, hi) {
   const c = state.characters[id]; if (!c?.hacks?.[hi]) return;
-  const live = computeLiveHackStats(c, c.hacks[hi]);
-  await quickAdj(id, 'ip', -live.ip);
-  showToast(`${c.hacks[hi].name}: -${live.ip} IP`);
+  const hack = c.hacks[hi];
+  const live = computeLiveHackStats(c, hack);
+  const newIp = Math.min(c.ip_max || 0, Math.max(0, (c.ip_current ?? c.ip_max ?? 0) - live.ip));
+  const updates = { ['characters/' + id + '/ip_current']: newIp };
+  // Combat/Control hacks with a matched autoStatus (Overheat, Contagion,
+  // Cyberware Malfunction, etc.) push their effect straight onto the
+  // selected target's status_effects — the same array the round-tick
+  // already ticks — so a GM no longer has to remember to hand-add it.
+  let statusMsg = '';
+  const autoStatus = matchHackName(hack.name)?.autoStatus;
+  const targetId = document.getElementById(`hack-target-${id}-${hi}`)?.value;
+  const target = targetId ? state.characters[targetId] : null;
+  if (autoStatus && target) {
+    updates['characters/' + targetId + '/status_effects'] = applyAutoStatusEffect(target, autoStatus);
+    statusMsg = ` · ${target.name}: ${autoStatus.name}`;
+  }
+  await dbUpdate(updates);
+  showToast(`${hack.name}: -${live.ip} IP${statusMsg}`);
 }
 
 // Pure client-side preview (no Firebase write, doesn't need to survive a
@@ -4590,7 +4635,7 @@ async function addStatusEffect() {
   const type = document.getElementById('status-type').value;
   const rounds = parseInt(document.getElementById('status-rounds').value) || 3;
   const stacks = parseInt(document.getElementById('status-stacks').value) || 1;
-  const names = { bleed: 'Bleed', burn: 'Burn', malfunction: 'CW Malfunction', stagger: 'Stagger', blind: 'Blind' };
+  const names = { bleed: 'Bleed', burn: 'Burn', poison: 'Poison', malfunction: 'CW Malfunction', stagger: 'Stagger', blind: 'Blind' };
   const name = type === 'custom' ? (document.getElementById('status-custom-name').value || 'Effect') : names[type];
   const c = state.characters[statusTargetId]; if (!c) return;
   const effects = [...(c.status_effects || []), { type, name, rounds, stacks }];
@@ -5613,15 +5658,26 @@ async function clearEncounter() {
 // ═══════════════════════════════════════════════════════════════
 // PLAYER ACTIONS
 // ═══════════════════════════════════════════════════════════════
-// Player-facing counterpart to the GM's useHack() — same IP deduction,
-// just always scoped to the player's own character (session.charId)
-// and going through adjustPlayerStat's clamp instead of the GM's quickAdj.
+// Player-facing counterpart to the GM's useHack() — same IP deduction and
+// autoStatus application, just always scoped to the player's own character
+// (session.charId).
 async function usePlayerHack(hi) {
   const id = session.charId;
   const c = state.characters[id]; if (!c?.hacks?.[hi]) return;
-  const live = computeLiveHackStats(c, c.hacks[hi]);
-  await adjustPlayerStat('ip', -live.ip);
-  showToast(`${c.hacks[hi].name}: -${live.ip} IP`);
+  const hack = c.hacks[hi];
+  const live = computeLiveHackStats(c, hack);
+  const newIp = Math.min(c.ip_max || 0, Math.max(0, (c.ip_current ?? c.ip_max ?? 0) - live.ip));
+  const updates = { ['characters/' + id + '/ip_current']: newIp };
+  let statusMsg = '';
+  const autoStatus = matchHackName(hack.name)?.autoStatus;
+  const targetId = document.getElementById(`player-hack-target-${hi}`)?.value;
+  const target = targetId ? state.characters[targetId] : null;
+  if (autoStatus && target) {
+    updates['characters/' + targetId + '/status_effects'] = applyAutoStatusEffect(target, autoStatus);
+    statusMsg = ` · ${target.name}: ${autoStatus.name}`;
+  }
+  await dbUpdate(updates);
+  showToast(`${hack.name}: -${live.ip} IP${statusMsg}`);
 }
 
 // Techniques cost Stamina, not IP, but otherwise mirror usePlayerHack.
@@ -7831,18 +7887,18 @@ function computeLiveTechniqueStats(c, weapon, t) {
 const HACK_CATALOG = {
   Combat: [
     {name:'Short Circuit', ip:5, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Electrical direct damage: roll result − half target Firewall. Armor ignored. Combo: doubled damage if target has Cyberware Malfunction active.'},
-    {name:'Overheat', ip:5, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Burn: 4 dmg/round for 3 rounds, armor ignored. Combo: ignites Contagion on an infected target for an explosion.'},
-    {name:'Contagion', ip:8, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Poison virus: 3 dmg/round for 4 rounds, spreads to up to 2 targets within 5m. Combo with Overheat/Burn → explosion (3m area).'},
+    {name:'Overheat', ip:5, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Burn: 4 dmg/round for 3 rounds, armor ignored. Combo: ignites Contagion on an infected target for an explosion.', autoStatus:{type:'burn', name:'Burn (Overheat)', rounds:3, stacks:2}},
+    {name:'Contagion', ip:8, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Poison virus: 3 dmg/round for 4 rounds, spreads to up to 2 targets within 5m. Combo with Overheat/Burn → explosion (3m area).', autoStatus:{type:'poison', name:'Poison (Contagion)', rounds:4}},
     {name:'Synapse Burnout', ip:11, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Massive direct brain damage: 2× roll result − Firewall. No armor deduction. Crit Success: target instantly taken out.'},
     {name:'Cyberware Overload', ip:9, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Overloads target's implants: damage = roll result + 3 per cyberware item (GM estimate: lightly cybered 0-2, heavily cybered 4-6). Armor ignored. Only vs. cybered targets."},
   ],
   Control: [
-    {name:'Cyberware Malfunction', ip:4, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Target −3 on cyberware actions. Stacks up to 3×. At 3 stacks: cyberware disabled for 2 rounds.'},
-    {name:'Reboot Optics', ip:7, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Target blind for 1 round: no ranged attacks, −6 PW melee, no reaction roll.'},
-    {name:'Cripple Movement', ip:5, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Target loses secondary action/movement for 2 rounds.'},
-    {name:'Weapon Glitch', ip:7, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Target's next attack action automatically fails."},
-    {name:'Sonic Shock', ip:4, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Target can't communicate for 1 round. Stealth rolls against target automatically succeed."},
-    {name:'Cyberpsychosis', ip:16, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Target attacks an ally for 2 rounds. Does not work on non-cybered targets.'},
+    {name:'Cyberware Malfunction', ip:4, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Target −3 on cyberware actions. Stacks up to 3×. At 3 stacks: cyberware disabled for 2 rounds.', autoStatus:{type:'malfunction', name:'CW Malfunction', rounds:3, stacks:1, maxStacks:3}},
+    {name:'Reboot Optics', ip:7, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Target blind for 1 round: no ranged attacks, −6 PW melee, no reaction roll.', autoStatus:{type:'blind', name:'Blind (Reboot Optics)', rounds:1}},
+    {name:'Cripple Movement', ip:5, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'Target loses secondary action/movement for 2 rounds.', autoStatus:{type:'stagger', name:'Stagger (Cripple Movement)', rounds:2}},
+    {name:'Weapon Glitch', ip:7, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Target's next attack action automatically fails.", autoStatus:{type:'custom', name:'Weapon Glitch — next attack fails', rounds:1}},
+    {name:'Sonic Shock', ip:4, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Target can't communicate for 1 round. Stealth rolls against target automatically succeed.", autoStatus:{type:'custom', name:"Sonic Shock — can't communicate", rounds:1}},
+    {name:'Cyberpsychosis', ip:16, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Target attacks an ally for 2 rounds. Does not work on non-cybered targets.', autoStatus:{type:'custom', name:'Cyberpsychosis — attacks an ally', rounds:2}},
     {name:'Suicide', ip:14, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:"Turns target's own weapon against them: immediate full-weapon attack against self (no reaction roll). Only vs. cybered targets. Doesn't work on bosses with a Military deck."},
     {name:'Whistle', ip:4, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Lures a single target, which moves up to its Speed toward the netrunner's ping — isolates it from the group. Ideal for stealth takedowns."},
   ],
@@ -7889,6 +7945,27 @@ function computeLiveHackStats(c, h) {
   const pwMods = getActiveTalentMods(c, 'pw', 'hacks');
   if (pw !== null && pwMods.total) pw += pwMods.total;
   return { pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, ip: h.ip ?? match?.ip ?? 0, effect: h.effect || match?.effect || '', talentNames: pwMods.names };
+}
+
+// Auto-applies a hack's status effect onto its target when USE is clicked
+// with a target selected (see HACK_CATALOG's autoStatus fields) — same
+// status_effects array the round-tick DoT/duration logic already ticks,
+// so this just closes the loop the GM was doing by hand (adding Burn after
+// Overheat, Malfunction after Cyberware Malfunction, etc.). Cyberware
+// Malfunction is the only hack whose effect text describes real stacking
+// ("Stacks up to 3x") — everything else just refreshes duration on reuse
+// rather than piling up damage/stacks a re-cast was never described as
+// adding. Returns the target's new status_effects array (caller writes it).
+function applyAutoStatusEffect(target, spec) {
+  const effects = (target.status_effects || []).map(e => ({ ...e }));
+  const idx = effects.findIndex(e => e.type === spec.type);
+  if (idx >= 0) {
+    const stacks = spec.maxStacks ? Math.min(spec.maxStacks, (effects[idx].stacks || 1) + 1) : (spec.stacks || effects[idx].stacks || 1);
+    effects[idx] = { ...effects[idx], name: spec.name, rounds: spec.rounds, stacks };
+  } else {
+    effects.push({ type: spec.type, name: spec.name, rounds: spec.rounds, stacks: spec.stacks || 1 });
+  }
+  return effects;
 }
 
 // Firewall-boosting gear (§10.2) — scans the character's existing free-text
