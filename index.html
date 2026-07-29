@@ -304,6 +304,18 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
    4,12"> in buildMapTokensHtml — same identical-shape requirement as the
    octagon above. */
 .map-token.shape-hexagon { clip-path: polygon(50% 5%, 90% 30%, 90% 70%, 50% 95%, 10% 70%, 10% 30%); }
+/* A PC/ally token currently standing inside an active camera/sensor's
+   detection cone or radius (see computeSpottedCharIds) — a bright red
+   pulsing glow, distinct from the health ring's own color, since this is
+   about exposure to the security network, not HP. box-shadow doesn't
+   respect clip-path (see the octagon/hexagon ring's own filter comment
+   above), so this uses a drop-shadow filter too, layered on top of the
+   token's existing one via animation rather than a second static filter. */
+.map-token.spotted { animation: spotted-pulse 1s ease-in-out infinite; }
+@keyframes spotted-pulse {
+  0%, 100% { filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6)) drop-shadow(0 0 6px var(--red-bright)); }
+  50% { filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6)) drop-shadow(0 0 14px var(--red-bright)); }
+}
 /* Security objects (§25) — deliberately NOT one of the character shapes
    above, so a camera/lock/trap marker never reads as a character. Small,
    square, icon-only; drag to reposition, click (no drag) to edit. */
@@ -1493,6 +1505,27 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   </div>
 </div>
 
+<!-- Scenes Modal -->
+<div class="modal-overlay" id="scenes-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title">SCENES</span>
+      <button class="modal-close" onclick="closeModal('scenes-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.5">Prep a map + security systems for each room ahead of time, then ACTIVATE one to swap it in live — no re-uploading mid-session. Only one scene is ever live; switching away saves the current map/devices into the scene you're leaving.</div>
+      <div id="scenes-list"></div>
+      <div class="inline-row" style="margin-top:8px">
+        <input type="text" id="scene-new-name" placeholder="New scene name (e.g. Server Room)" style="flex:1">
+        <button class="btn btn-primary btn-small" onclick="createScene()">+ CREATE</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-small" onclick="closeModal('scenes-modal')">CLOSE</button>
+    </div>
+  </div>
+</div>
+
 <!-- Award XP Modal -->
 <div class="modal-overlay" id="xp-modal">
   <div class="modal" style="max-width:320px">
@@ -1646,7 +1679,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 // ═══════════════════════════════════════════════════════════════
 let db = null;
 let session = { role: null, charId: null, gmPin: null };
-let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} }, securityObjects: {}, alarmLevel: 0, portraitReveal: null, mapPing: null, mapDrawings: [], netPing: null };
+let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} }, securityObjects: {}, alarmLevel: 0, portraitReveal: null, mapPing: null, mapDrawings: [], netPing: null, scenes: {}, activeSceneId: null };
 let combatViewMode = 'list';
 let mapImage = null;       // fetched from a Firebase path OUTSIDE 'campaign' — kept separate from `state`
 // { charId: dataUrl } — the CROPPED square used for tokens/thumbnails everywhere.
@@ -1908,6 +1941,8 @@ function startSync() {
     state.encounterQueue = data.encounterQueue || [];
     state.map = data.map || { tokens: {} };
     state.securityObjects = data.securityObjects || {};
+    state.scenes = data.scenes || {};
+    state.activeSceneId = data.activeSceneId || null;
     state.alarmLevel = data.alarmLevel ?? 0;
     state.portraitReveal = data.portraitReveal || null;
     // Fire the fullscreen reveal only for players, and only on a genuinely
@@ -2473,15 +2508,81 @@ function showNetPingSweep(sourceCharId) {
   });
 }
 
+// Automated detection-zone flagging — a camera/sensor's cone or radius
+// overlay has always been drawn on the map, but nothing checked whether a
+// token was actually standing inside it. This does that check for real,
+// using the map container's on-screen pixel size (not the stored %
+// position alone) since the overlay itself is sized in fixed pixels (see
+// the boxSize/radiusPx comment in buildSecurityObjectsHtml) rather than
+// scaled to the map's percentage space. Only PCs/allies are checked —
+// a hostile security network "detecting" an enemy NPC isn't meaningful.
+// `interactive` mirrors buildSecurityObjectsHtml's own param: the GM
+// checks every device (they already see all of them); players only get
+// flagged by whatever's actually visible to them right now (permanently
+// revealed, or mid a Ping's temporary reveal) so a highlighted token
+// never appears with no visible source on their own screen.
+function computeSpottedCharIds(interactive) {
+  // Both screens' DOM stay mounted at once (toggled via display:none, not
+  // removed), so picking "whichever container exists" would silently find
+  // the OTHER role's stale, hidden (0x0) node first — has to match
+  // whichever screen this call is actually for, same as every other
+  // interactive-gated map builder.
+  const mapEl = document.getElementById(interactive ? 'map-container' : 'player-map-container');
+  if (!mapEl) return new Set();
+  const rect = mapEl.getBoundingClientRect();
+  if (!rect.width || !rect.height) return new Set();
+  const netPingActive = state.netPing?.roundsLeft > 0;
+  const tokens = state.map?.tokens || {};
+  const spotted = new Set();
+  Object.values(state.securityObjects || {}).forEach(o => {
+    if (!interactive && !o.revealed && !netPingActive) return;
+    if (o.sdp_max != null && (o.sdp_current ?? o.sdp_max) <= 0) return; // destroyed
+    const shape = o.detectionShape || 'point';
+    if (shape !== 'cone' && shape !== 'radius') return; // point devices (locks) have no zone
+    const radiusPx = (o.visualRange ?? 30) * 3;
+    if (radiusPx <= 0) return;
+    const ox = (o.pos?.x ?? 50) / 100 * rect.width;
+    const oy = (o.pos?.y ?? 50) / 100 * rect.height;
+    Object.entries(tokens).forEach(([cid, pos]) => {
+      if (spotted.has(cid)) return;
+      const c = state.characters[cid]; if (!c) return;
+      if (c.isNPC && !c.isAlly) return; // only PCs/allies can be "spotted"
+      const tx = (pos?.x ?? 50) / 100 * rect.width;
+      const ty = (pos?.y ?? 50) / 100 * rect.height;
+      const dx = tx - ox, dy = ty - oy;
+      if (Math.hypot(dx, dy) > radiusPx) return;
+      if (shape === 'radius') { spotted.add(cid); return; }
+      // Cone check — same compass-style (0=up, clockwise) angle convention
+      // polarOffset uses for drawing the cone itself, just inverted to go
+      // from an (dx,dy) offset back to an angle.
+      const angle = (Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360;
+      const rot = o.rotation || 0;
+      const half = (o.coneAngle ?? 70) / 2;
+      const diff = Math.abs(((angle - rot + 540) % 360) - 180);
+      if (diff <= half) spotted.add(cid);
+    });
+  });
+  return spotted;
+}
+function applySpottedHighlights(interactive) {
+  const mapEl = document.getElementById(interactive ? 'map-container' : 'player-map-container');
+  if (!mapEl) return;
+  const spotted = computeSpottedCharIds(interactive);
+  mapEl.querySelectorAll('.map-token').forEach(el => {
+    el.classList.toggle('spotted', spotted.has(el.dataset.id));
+  });
+}
+
 function renderMapView() {
   const el = document.getElementById('combat-map-view');
   if (!el) return;
   if (!mapImage) {
     el.innerHTML = `
       <div style="text-align:center;padding:30px 16px;color:var(--text3);font-size:11px">
-        No map uploaded yet.<br><br>
+        ${state.activeSceneId && state.scenes?.[state.activeSceneId] ? `Scene: ${esc(state.scenes[state.activeSceneId].name)} — ` : ''}No map uploaded yet.<br><br>
         <input type="file" accept="image/*" id="map-upload-input" style="display:none" onchange="handleMapUpload(event)">
         <button class="btn btn-primary btn-small" onclick="document.getElementById('map-upload-input').click()">UPLOAD MAP</button>
+        <button class="btn btn-ghost btn-small" onclick="openScenesModal()" title="Prep and switch between named rooms/scenes">🗂 SCENES</button>
       </div>`;
     return;
   }
@@ -2500,12 +2601,14 @@ function renderMapView() {
       <button class="btn btn-ghost btn-small" onclick="document.getElementById('map-upload-input').click()">CHANGE MAP</button>
       <button class="btn btn-danger btn-small" onclick="removeMap()">REMOVE MAP</button>
       <button class="btn btn-primary btn-small" onclick="openAddSecurityObjectModal()">+ ADD DEVICE</button>
+      <button class="btn btn-ghost btn-small" onclick="openScenesModal()" title="Prep and switch between named rooms/scenes">🗂 SCENES${state.activeSceneId && state.scenes?.[state.activeSceneId] ? ': ' + esc(state.scenes[state.activeSceneId].name) : ''}</button>
       <span style="flex:1"></span>
       <button class="btn btn-ghost btn-small map-tool-btn ${mapTool === 'ping' ? 'active' : ''}" onclick="toggleMapTool('ping')" title="Click the map to ping a spot for everyone">📍 PING</button>
       <button class="btn btn-ghost btn-small map-tool-btn ${mapTool === 'draw' ? 'active' : ''}" onclick="toggleMapTool('draw')" title="Drag on the map to draw">✏ DRAW</button>
       <input type="color" id="map-draw-color" value="${drawColor}" onchange="setDrawColor(this.value)" title="Drawing color" style="width:32px;height:32px;padding:2px;background:var(--surface2);border:1px solid var(--border2);cursor:pointer">
       <button class="btn btn-ghost btn-small" onclick="clearMapDrawings()" ${(state.mapDrawings||[]).length ? '' : 'disabled'}>CLEAR DRAWINGS</button>
     </div>`;
+  applySpottedHighlights(true);
 }
 
 function renderPlayerMapView() {
@@ -2516,7 +2619,7 @@ function renderPlayerMapView() {
     return;
   }
   el.innerHTML = `
-    <div style="position:relative;width:100%;overflow:hidden;border:1px solid var(--border2);background:#000">
+    <div id="player-map-container" style="position:relative;width:100%;overflow:hidden;border:1px solid var(--border2);background:#000">
       <img src="${mapImage}" style="display:block;width:100%;height:auto;user-select:none;pointer-events:none" draggable="false">
       ${buildMapDrawingsHtml()}
       ${buildSecurityObjectsHtml(false)}
@@ -2525,6 +2628,7 @@ function renderPlayerMapView() {
       <div class="map-ping-marker"></div>
       <div class="net-ping-marker"></div>
     </div>`;
+  applySpottedHighlights(false);
 }
 
 let mapDragState = null;
@@ -2950,6 +3054,102 @@ async function removeMap() {
   mapImage = null;
   renderMapView();
   showToast('Map removed.');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SCENES — named, GM-prepped map + security-system snapshots for
+// room-to-room missions, so switching rooms mid-session is "pick from a
+// list" instead of re-uploading a map live. Only ONE scene is ever "live"
+// at a time — its data sits in the exact same top-level securityObjects/
+// map.tokens/mapDrawings/mapImage fields every existing map function
+// already reads and writes, completely unchanged. Every OTHER scene just
+// sits as a snapshot in state.scenes[id] until activated. Switching INTO
+// a scene overwrites the live fields with that scene's snapshot;
+// switching AWAY from one saves the live fields back into its own
+// snapshot first, so nothing prepped or fought over is lost either way.
+// Nothing auto-migrates an existing campaign's current map — the first
+// scene only gets created the moment the GM opens the Scenes panel,
+// simply wrapping whatever's live right then under the name "Scene 1".
+// ═══════════════════════════════════════════════════════════════
+async function ensureScenesSeeded() {
+  if (Object.keys(state.scenes || {}).length) return;
+  const id = 'scene_' + Date.now();
+  state.scenes = { [id]: { name: 'Scene 1' } };
+  state.activeSceneId = id;
+  await dbUpdate({ scenes: state.scenes, activeSceneId: id });
+}
+function openScenesModal() {
+  ensureScenesSeeded().then(renderScenesModal);
+  openModal('scenes-modal');
+}
+function renderScenesModal() {
+  const el = document.getElementById('scenes-list');
+  if (!el) return;
+  const entries = Object.entries(state.scenes || {});
+  el.innerHTML = entries.length ? entries.map(([id, s]) => {
+    const isLive = id === state.activeSceneId;
+    return `<div class="inline-row" style="justify-content:space-between;gap:8px;padding:6px 8px;border:1px solid ${isLive ? 'var(--cyan)' : 'var(--border2)'};margin-bottom:4px">
+      <input type="text" value="${esc(s.name || '')}" style="flex:1;font-size:12px" onchange="renameScene('${id}',this.value)">
+      ${isLive ? '<span style="font-size:10px;color:var(--cyan);white-space:nowrap">● LIVE</span>' : `<button class="btn btn-primary btn-small" onclick="switchScene('${id}')">ACTIVATE</button>`}
+      <button class="btn btn-danger btn-icon" onclick="deleteScene('${id}')" ${isLive ? 'disabled title="Switch away first"' : ''}>✕</button>
+    </div>`;
+  }).join('') : '<div style="color:var(--text3);font-size:11px">No scenes yet.</div>';
+}
+async function createScene() {
+  const input = document.getElementById('scene-new-name');
+  const name = input.value.trim();
+  if (!name) return;
+  const id = 'scene_' + Date.now();
+  const scenes = { ...state.scenes, [id]: { name } };
+  state.scenes = scenes;
+  await dbWrite('scenes', scenes);
+  input.value = '';
+  renderScenesModal();
+  showToast(`Scene "${name}" created — ACTIVATE it to start prepping the map.`);
+}
+async function renameScene(id, name) {
+  const trimmed = (name || '').trim();
+  if (!trimmed || !state.scenes[id]) return;
+  state.scenes[id] = { ...state.scenes[id], name: trimmed };
+  await dbWrite('scenes/' + id + '/name', trimmed);
+}
+async function deleteScene(id) {
+  if (id === state.activeSceneId) { showToast("Can't delete the live scene — activate another one first."); return; }
+  if (!confirm('Delete this scene? Its prepped map and security setup will be lost.')) return;
+  const scenes = { ...state.scenes };
+  delete scenes[id];
+  state.scenes = scenes;
+  await dbWrite('scenes', scenes);
+  await db.ref('mapImages/' + id).set(null);
+  renderScenesModal();
+}
+// Swaps the live map (mapImage/securityObjects/map.tokens/mapDrawings)
+// for a different scene's prepped snapshot, saving the outgoing scene's
+// current live state back into its own bucket first so switching away
+// mid-fight never loses anything.
+async function switchScene(newId) {
+  if (newId === state.activeSceneId || !state.scenes?.[newId]) return;
+  const oldId = state.activeSceneId;
+  if (oldId) {
+    await dbUpdate({
+      ['scenes/' + oldId + '/securityObjects']: state.securityObjects || {},
+      ['scenes/' + oldId + '/tokens']: state.map?.tokens || {},
+      ['scenes/' + oldId + '/mapDrawings']: state.mapDrawings || [],
+    });
+    await db.ref('mapImages/' + oldId).set(mapImage || null);
+  }
+  const target = state.scenes[newId] || {};
+  const snap = await db.ref('mapImages/' + newId).get();
+  const targetImage = snap.exists() ? snap.val() : null;
+  await db.ref('mapImage').set(targetImage);
+  await dbUpdate({
+    securityObjects: target.securityObjects || {},
+    'map/tokens': target.tokens || {},
+    mapDrawings: target.mapDrawings || [],
+    activeSceneId: newId,
+  });
+  showToast(`Switched to "${target.name || 'scene'}"`);
+  renderScenesModal();
 }
 
 // ═══════════════════════════════════════════════════════════════
