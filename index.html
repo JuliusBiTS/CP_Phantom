@@ -336,6 +336,26 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 }
 .map-ping-marker.show::after { animation-delay: 0.25s; }
 @keyframes map-ping-pulse { 0% { transform: scale(0.3); opacity: 1; } 100% { transform: scale(6); opacity: 0; } }
+/* Ping hack's network-reveal sweep — same one-shot expanding-ring trick
+   as the GM's map ping above, just cyan (netrunning's established color
+   throughout this app) and a touch bigger/slower to read as "a wave
+   washing outward across the grid" rather than a quick "look here" jab. */
+.net-ping-marker { position: absolute; width: 1px; height: 1px; transform: translate(-50%, -50%); pointer-events: none; z-index: 5; }
+.net-ping-marker.show::before, .net-ping-marker.show::after {
+  content: ''; position: absolute; left: 50%; top: 50%;
+  width: 16px; height: 16px; margin: -8px 0 0 -8px;
+  border: 2px solid var(--cyan); border-radius: 50%;
+  animation: net-ping-sweep 1.8s ease-out;
+}
+.net-ping-marker.show::after { animation-delay: 0.3s; }
+@keyframes net-ping-sweep { 0% { transform: scale(0.3); opacity: 1; } 100% { transform: scale(10); opacity: 0; } }
+/* Persistent "connected" look for the rest of Ping's duration: a dashed
+   line per device (marching-ants flow) and a pulsing glow on any device
+   the hack made visible that the GM hadn't already permanently revealed. */
+.net-ping-line { stroke: var(--cyan); stroke-width: 0.3; stroke-dasharray: 1.5 1.2; opacity: 0.65; animation: net-ping-flow 1s linear infinite; }
+@keyframes net-ping-flow { to { stroke-dashoffset: -2.7; } }
+.security-token.net-linked { box-shadow: 0 0 10px var(--cyan-glow); animation: net-linked-pulse 1.4s ease-in-out infinite; }
+@keyframes net-linked-pulse { 0%,100% { box-shadow: 0 0 6px var(--cyan-glow); } 50% { box-shadow: 0 0 14px var(--cyan-glow); } }
 /* Map tool toggle buttons (Ping/Draw) get a visibly "active" state so the
    GM can tell which click-behavior is currently armed on the map. */
 .map-tool-btn.active { background: var(--cyan-dim); border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px var(--cyan-glow); }
@@ -1626,7 +1646,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 // ═══════════════════════════════════════════════════════════════
 let db = null;
 let session = { role: null, charId: null, gmPin: null };
-let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} }, securityObjects: {}, alarmLevel: 0, portraitReveal: null, mapPing: null, mapDrawings: [] };
+let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} }, securityObjects: {}, alarmLevel: 0, portraitReveal: null, mapPing: null, mapDrawings: [], netPing: null };
 let combatViewMode = 'list';
 let mapImage = null;       // fetched from a Firebase path OUTSIDE 'campaign' — kept separate from `state`
 // { charId: dataUrl } — the CROPPED square used for tokens/thumbnails everywhere.
@@ -1666,6 +1686,9 @@ let lastPortraitRevealTs = undefined;
 // fresh page load doesn't replay whatever ping happened to be sitting
 // in the DB already.
 let lastMapPingTs = undefined;
+// Same "skip the first sync" convention again, for the Ping hack's
+// network-reveal sweep animation (see showNetPingSweep).
+let lastNetPingTs = undefined;
 // null | 'ping' | 'draw' — which map-click behavior is currently active
 // on the GM's own map view. Mutually exclusive with normal token/security
 // dragging (see the early-return guards in startTokenDrag/startSecurityDrag).
@@ -1915,8 +1938,21 @@ function startSync() {
     } else if (lastMapPingTs === undefined) {
       lastMapPingTs = null;
     }
+    state.netPing = data.netPing || null;
+    // Same skip-first-sync rule again, for the Ping hack's network-reveal
+    // sweep — see showNetPingSweep. roundsLeft ticking down/clearing to
+    // null happens in nextRound(), same place status effect durations do.
+    let shouldSweep = false;
+    if (state.netPing && state.netPing.ts !== lastNetPingTs) {
+      const isFirstNetPingSync = lastNetPingTs === undefined;
+      lastNetPingTs = state.netPing.ts;
+      shouldSweep = !isFirstNetPingSync;
+    } else if (lastNetPingTs === undefined) {
+      lastNetPingTs = null;
+    }
     renderAll();
     if (shouldPulse) showMapPingPulse(state.mapPing.x, state.mapPing.y);
+    if (shouldSweep) showNetPingSweep(state.netPing.sourceCharId);
   });
   // Map image and portraits live OUTSIDE the 'campaign' tree on purpose — see
   // the comment above the `mapImage`/`portraits` declarations. This keeps
@@ -2313,6 +2349,25 @@ function buildMapDrawingsHtml() {
   return `<svg id="map-draw-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none">${strokes}</svg>`;
 }
 
+// While a Ping hack's network reveal is active (state.netPing), a thin
+// dashed "connected" line is drawn from the netrunner's own map token to
+// every security object — the CP2077 "netwatch" look. Same percentage-
+// space/preserveAspectRatio trick as buildMapDrawingsHtml above, so a
+// line's thickness varying slightly by direction on a non-square map is
+// an accepted, imperceptible tradeoff rather than something worth the
+// fixed-pixel-space treatment the detection cones/radii needed.
+function buildNetPingLinesHtml() {
+  const empty = '<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></svg>';
+  if (!(state.netPing?.roundsLeft > 0)) return empty;
+  const srcPos = state.map?.tokens?.[state.netPing.sourceCharId];
+  if (!srcPos) return empty;
+  const lines = Object.values(state.securityObjects || {}).map(o => {
+    const p = o.pos || { x: 50, y: 50 };
+    return `<line x1="${srcPos.x}" y1="${srcPos.y}" x2="${p.x}" y2="${p.y}" class="net-ping-line"/>`;
+  }).join('');
+  return `<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none">${lines}</svg>`;
+}
+
 function toggleMapTool(tool) {
   mapTool = mapTool === tool ? null : tool;
   renderMapView();
@@ -2401,6 +2456,23 @@ function showMapPingPulse(x, y) {
   });
 }
 
+// One-shot cyan radar-sweep centered on the netrunner's own token, fired
+// the instant a Ping hack succeeds — same restart-the-animation trick as
+// showMapPingPulse above. The persistent "connected" look (glowing device
+// nodes + dashed lines) is handled separately by buildSecurityObjectsHtml/
+// buildNetPingLinesHtml, which just re-render normally every renderAll().
+function showNetPingSweep(sourceCharId) {
+  const pos = state.map?.tokens?.[sourceCharId];
+  if (!pos) return;
+  document.querySelectorAll('.net-ping-marker').forEach(el => {
+    el.style.left = pos.x + '%';
+    el.style.top = pos.y + '%';
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+  });
+}
+
 function renderMapView() {
   const el = document.getElementById('combat-map-view');
   if (!el) return;
@@ -2418,8 +2490,10 @@ function renderMapView() {
       <img src="${mapImage}" style="display:block;width:100%;height:auto;user-select:none;pointer-events:none" draggable="false">
       ${buildMapDrawingsHtml()}
       ${buildSecurityObjectsHtml(true)}
+      ${buildNetPingLinesHtml()}
       ${buildMapTokensHtml(true)}
       <div class="map-ping-marker"></div>
+      <div class="net-ping-marker"></div>
     </div>
     <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
       <input type="file" accept="image/*" id="map-upload-input" style="display:none" onchange="handleMapUpload(event)">
@@ -2446,8 +2520,10 @@ function renderPlayerMapView() {
       <img src="${mapImage}" style="display:block;width:100%;height:auto;user-select:none;pointer-events:none" draggable="false">
       ${buildMapDrawingsHtml()}
       ${buildSecurityObjectsHtml(false)}
+      ${buildNetPingLinesHtml()}
       ${buildMapTokensHtml(false)}
       <div class="map-ping-marker"></div>
+      <div class="net-ping-marker"></div>
     </div>`;
 }
 
@@ -2662,14 +2738,27 @@ const SECURITY_CATEGORY_COLOR = { sensor: 'var(--cyan)', lock: 'var(--gold-brigh
 const SECURITY_CATEGORY_ICON = { sensor: '📷', lock: '🔒', trap: '⚠' };
 function buildSecurityObjectsHtml(interactive) {
   const objects = state.securityObjects || {};
+  // A successful Ping hack temporarily shows players every device on the
+  // grid regardless of the GM's own permanent .revealed flag — see
+  // state.netPing/useHack's netReveal branch. It's a bypass of the
+  // visibility check only, not a change to .revealed itself, so once it
+  // expires (nextRound ticking roundsLeft to 0) everything not
+  // permanently revealed goes right back to hidden.
+  const netPingActive = state.netPing?.roundsLeft > 0;
   return Object.entries(objects).map(([id, o]) => {
-    // Players only ever see revealed objects; the GM always sees
-    // everything, with unrevealed ones dimmed as a reminder.
-    if (!interactive && !o.revealed) return '';
+    // Players only ever see revealed objects (or everything, mid-Ping);
+    // the GM always sees everything, with unrevealed ones dimmed as a
+    // reminder.
+    if (!interactive && !o.revealed && !netPingActive) return '';
     const cat = o.category || 'sensor';
     const color = SECURITY_CATEGORY_COLOR[cat] || 'var(--text2)';
     const icon = SECURITY_CATEGORY_ICON[cat] || '●';
     const dimStyle = (interactive && !o.revealed) ? 'opacity:0.45;filter:grayscale(60%);' : '';
+    // Devices newly visible-via-Ping (not otherwise revealed) get the
+    // pulsing "network node" treatment instead of their normal static
+    // icon, so it's visually obvious THIS is temporary hack visibility
+    // rather than something the GM permanently revealed.
+    const netLinked = netPingActive && !o.revealed;
     const shape = o.detectionShape || 'point';
     const visualRange = o.visualRange ?? 30;
     const radiusPx = visualRange * 3;
@@ -2690,7 +2779,7 @@ function buildSecurityObjectsHtml(interactive) {
       </svg>`;
     }
     const dragAttr = interactive ? ` onpointerdown="startSecurityDrag(event,'${id}')"` : '';
-    const marker = `<div class="security-token" data-id="${id}" title="${esc(o.name || o.deviceType || 'Device')}"
+    const marker = `<div class="security-token${netLinked ? ' net-linked' : ''}" data-id="${id}" title="${esc(o.name || o.deviceType || 'Device')}${netLinked ? ' — hacked network access' : ''}"
       style="left:${o.pos?.x??50}%;top:${o.pos?.y??50}%;border-color:${color};color:${color};${dimStyle}"${dragAttr}>${icon}</div>`;
     return overlay + marker;
   }).join('');
@@ -3216,7 +3305,8 @@ function renderHacksSection(c, id) {
   const hacks = c.hacks || [];
   if (!hacks.length && !c.cyberdeck && !c.firewall) return '';
   const fw = computeLiveFirewall(c);
-  const targetOptions = (state.combat?.order || []).filter(tid => tid !== id).map(tid => ({ tid, tc: state.characters[tid] })).filter(o => o.tc);
+  const { characters, devices } = getHackTargetOptions(id);
+  const hasTargets = characters.length || devices.length;
   return `<div class="detail-row" style="align-items:flex-start">
     <span class="detail-label" style="margin-top:4px">HACKS</span>
     <div style="display:flex;flex-direction:column;gap:5px;flex:1">
@@ -3235,10 +3325,12 @@ function renderHacksSection(c, id) {
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:2px">
             <span style="font-size:10px;color:var(--cyan)">${esc(live.pwLabel)}${live.pw!=null?' · '+live.pw:''}</span>
             ${live.dice ? `<span style="font-size:10px;color:var(--cyan)">→ ${live.dice}×d20</span>` : ''}
-            ${targetOptions.length ? `<select id="hack-target-${id}-${hi}" style="font-size:10px" onchange="onHackTargetChange('${id}',${hi},this.value)">
+            ${hasTargets ? `<select id="hack-target-${id}-${hi}" style="font-size:10px" onchange="onHackTargetChange('${id}',${hi},this.value)">
               <option value="">vs target...</option>
-              ${targetOptions.map(o => `<option value="${o.tid}">${esc(o.tc.name)}</option>`).join('')}
+              ${characters.length ? `<optgroup label="Characters">${characters.map(o => `<option value="${o.key}">${esc(o.name)}</option>`).join('')}</optgroup>` : ''}
+              ${devices.length ? `<optgroup label="Devices">${devices.map(o => `<option value="${o.key}">${esc(o.name)}</option>`).join('')}</optgroup>` : ''}
             </select>
+            <input type="number" id="hack-roll-${id}-${hi}" placeholder="roll" style="width:44px;font-size:10px" title="Your total dice roll for this hack">
             <span id="hack-vs-${id}-${hi}" style="font-size:10px;color:var(--text2)"></span>` : ''}
           </div>
           ${condChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">${condChips.join('')}</div>` : ''}
@@ -3775,7 +3867,8 @@ function renderPlayerView() {
     const deckLabel = c.cyberdeck ? `${c.cyberdeck} Deck${deckInfo ? ` (${deckInfo.slots} slots, +${deckInfo.ipRegen} IP/rd)` : ''}` : 'Netrunning';
     document.getElementById('player-netrunning-header').textContent =
       `${deckLabel}${liveFw ? ' · Firewall ' + liveFw : ''} · ${ipCur}/${ipMax} IP`;
-    const targetOptions = order.filter(tid => tid !== id).map(tid => ({ tid, tc: state.characters[tid] })).filter(o => o.tc);
+    const { characters: hackChars, devices: hackDevices } = getHackTargetOptions(id);
+    const hasHackTargets = hackChars.length || hackDevices.length;
     document.getElementById('player-hacks-list').innerHTML = hacks.length ? hacks.map((h, hi) => {
       const live = computeLiveHackStats(c, h);
       const canAfford = ipCur >= live.ip;
@@ -3789,10 +3882,12 @@ function renderPlayerView() {
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
           <span style="font-size:10px;color:var(--cyan)">${esc(live.pwLabel)}${live.pw!=null?' · '+live.pw:''}</span>
           ${live.dice ? `<span style="font-size:10px;color:var(--cyan)">→ ${live.dice}×d20</span>` : ''}
-          ${targetOptions.length ? `<select id="player-hack-target-${hi}" style="font-size:10px;width:auto" onchange="onPlayerHackTargetChange(${hi},this.value)">
+          ${hasHackTargets ? `<select id="player-hack-target-${hi}" style="font-size:10px;width:auto" onchange="onPlayerHackTargetChange(${hi},this.value)">
             <option value="">vs target...</option>
-            ${targetOptions.map(o => `<option value="${o.tid}">${esc(o.tc.name)}</option>`).join('')}
+            ${hackChars.length ? `<optgroup label="Characters">${hackChars.map(o => `<option value="${o.key}">${esc(o.name)}</option>`).join('')}</optgroup>` : ''}
+            ${hackDevices.length ? `<optgroup label="Devices">${hackDevices.map(o => `<option value="${o.key}">${esc(o.name)}</option>`).join('')}</optgroup>` : ''}
           </select>
+          <input type="number" id="player-hack-roll-${hi}" placeholder="roll" style="width:44px;font-size:10px" title="Your total dice roll for this hack">
           <span id="player-hack-vs-${hi}" style="font-size:10px;color:var(--text2)"></span>` : ''}
         </div>
         ${condChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${condChips.join('')}</div>` : ''}
@@ -4168,6 +4263,12 @@ async function nextRound() {
       updates['characters/' + id + '/ip_current'] = newIp;
     }
   }
+  // Ping's network reveal ticks down and clears the same way a status
+  // effect's duration does.
+  if (state.netPing?.roundsLeft > 0) {
+    const roundsLeft = state.netPing.roundsLeft - 1;
+    updates['netPing'] = roundsLeft > 0 ? { ...state.netPing, roundsLeft } : null;
+  }
   await dbUpdate(updates);
   showToast('Round ' + round);
 }
@@ -4226,31 +4327,54 @@ async function useHack(id, hi) {
   const live = computeLiveHackStats(c, hack);
   const newIp = Math.min(c.ip_max || 0, Math.max(0, (c.ip_current ?? c.ip_max ?? 0) - live.ip));
   const updates = { ['characters/' + id + '/ip_current']: newIp };
-  // Combat/Control hacks with a matched autoStatus (Overheat, Contagion,
-  // Cyberware Malfunction, etc.) push their effect straight onto the
-  // selected target's status_effects — the same array the round-tick
-  // already ticks — so a GM no longer has to remember to hand-add it.
-  let statusMsg = '';
-  const autoStatus = matchHackName(hack.name)?.autoStatus;
-  const targetId = document.getElementById(`hack-target-${id}-${hi}`)?.value;
-  const target = targetId ? state.characters[targetId] : null;
-  if (autoStatus && target) {
-    updates['characters/' + targetId + '/status_effects'] = applyAutoStatusEffect(target, autoStatus);
-    statusMsg = ` · ${target.name}: ${autoStatus.name}`;
+  // A hack only does anything beyond spending IP if the roll actually
+  // beats the target's Firewall — matches every hack description's own
+  // "roll result vs Firewall" framing. The roll itself is whatever the
+  // player physically rolled (this app doesn't roll dice for anyone but
+  // the GM's NPCs), entered into the small number field next to the
+  // target picker. No target selected (or no roll entered) just spends
+  // the IP with no further effect, same as before this existed.
+  const match = matchHackName(hack.name);
+  const targetKey = document.getElementById(`hack-target-${id}-${hi}`)?.value;
+  const roll = parseInt(document.getElementById(`hack-roll-${id}-${hi}`)?.value) || 0;
+  let resultMsg = '';
+  if (targetKey) {
+    const fw = resolveHackTargetFirewall(targetKey, c);
+    if (fw) {
+      const success = roll > fw.value;
+      resultMsg = ` · ${success ? 'HIT' : 'MISS'} (${roll} vs FW ${fw.value})`;
+      if (success) {
+        // Combat/Control hacks with a matched autoStatus (Overheat,
+        // Contagion, Cyberware Malfunction, etc.) push their effect onto
+        // the target's status_effects — only characters have a status
+        // track, so this is skipped for a device target.
+        if (match?.autoStatus && !targetKey.startsWith('sec:')) {
+          const target = state.characters[targetKey];
+          updates['characters/' + targetKey + '/status_effects'] = applyAutoStatusEffect(target, match.autoStatus);
+          resultMsg += ` · ${fw.name}: ${match.autoStatus.name}`;
+        }
+        // Ping's netReveal broadcasts a network-wide reveal (see
+        // state.netPing) — the chosen target here was just the entry
+        // point that had to be beaten, not what gets revealed.
+        if (match?.netReveal) {
+          updates['netPing'] = { ts: Date.now(), sourceCharId: id, roundsLeft: match.netReveal.rounds };
+          resultMsg += ` · Network revealed (${match.netReveal.rounds} rounds)`;
+        }
+      }
+    }
   }
   await dbUpdate(updates);
-  showToast(`${hack.name}: -${live.ip} IP${statusMsg}`);
+  showToast(`${hack.name}: -${live.ip} IP${resultMsg}`);
 }
 
 // Pure client-side preview (no Firebase write, doesn't need to survive a
 // re-render) — mirrors how the damage modal's calculator updates its
 // preview text directly rather than persisting UI-only selection state.
-function onHackTargetChange(id, hi, targetId) {
+function onHackTargetChange(id, hi, targetKey) {
   const el = document.getElementById(`hack-vs-${id}-${hi}`);
   if (!el) return;
-  const target = state.characters[targetId];
-  if (!target) { el.textContent = ''; return; }
-  el.textContent = `vs ${target.name}: Firewall ${computeLiveFirewall(target, state.characters[id])}`;
+  const fw = resolveHackTargetFirewall(targetKey, state.characters[id]);
+  el.textContent = fw ? `vs ${fw.name}: Firewall ${fw.value}` : '';
 }
 
 async function toggleFlink(id) {
@@ -5668,16 +5792,30 @@ async function usePlayerHack(hi) {
   const live = computeLiveHackStats(c, hack);
   const newIp = Math.min(c.ip_max || 0, Math.max(0, (c.ip_current ?? c.ip_max ?? 0) - live.ip));
   const updates = { ['characters/' + id + '/ip_current']: newIp };
-  let statusMsg = '';
-  const autoStatus = matchHackName(hack.name)?.autoStatus;
-  const targetId = document.getElementById(`player-hack-target-${hi}`)?.value;
-  const target = targetId ? state.characters[targetId] : null;
-  if (autoStatus && target) {
-    updates['characters/' + targetId + '/status_effects'] = applyAutoStatusEffect(target, autoStatus);
-    statusMsg = ` · ${target.name}: ${autoStatus.name}`;
+  const match = matchHackName(hack.name);
+  const targetKey = document.getElementById(`player-hack-target-${hi}`)?.value;
+  const roll = parseInt(document.getElementById(`player-hack-roll-${hi}`)?.value) || 0;
+  let resultMsg = '';
+  if (targetKey) {
+    const fw = resolveHackTargetFirewall(targetKey, c);
+    if (fw) {
+      const success = roll > fw.value;
+      resultMsg = ` · ${success ? 'HIT' : 'MISS'} (${roll} vs FW ${fw.value})`;
+      if (success) {
+        if (match?.autoStatus && !targetKey.startsWith('sec:')) {
+          const target = state.characters[targetKey];
+          updates['characters/' + targetKey + '/status_effects'] = applyAutoStatusEffect(target, match.autoStatus);
+          resultMsg += ` · ${fw.name}: ${match.autoStatus.name}`;
+        }
+        if (match?.netReveal) {
+          updates['netPing'] = { ts: Date.now(), sourceCharId: id, roundsLeft: match.netReveal.rounds };
+          resultMsg += ` · Network revealed (${match.netReveal.rounds} rounds)`;
+        }
+      }
+    }
   }
   await dbUpdate(updates);
-  showToast(`${hack.name}: -${live.ip} IP${statusMsg}`);
+  showToast(`${hack.name}: -${live.ip} IP${resultMsg}`);
 }
 
 // Techniques cost Stamina, not IP, but otherwise mirror usePlayerHack.
@@ -5696,12 +5834,11 @@ async function usePlayerTechnique(ti) {
 }
 
 // Pure client-side preview, mirrors the GM's onHackTargetChange.
-function onPlayerHackTargetChange(hi, targetId) {
+function onPlayerHackTargetChange(hi, targetKey) {
   const el = document.getElementById(`player-hack-vs-${hi}`);
   if (!el) return;
-  const target = state.characters[targetId];
-  if (!target) { el.textContent = ''; return; }
-  el.textContent = `vs ${target.name}: Firewall ${computeLiveFirewall(target, state.characters[session.charId])}`;
+  const fw = resolveHackTargetFirewall(targetKey, state.characters[session.charId]);
+  el.textContent = fw ? `vs ${fw.name}: Firewall ${fw.value}` : '';
 }
 
 async function adjustPlayerStat(stat, delta) {
@@ -7903,7 +8040,7 @@ const HACK_CATALOG = {
     {name:'Whistle', ip:4, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:"Lures a single target, which moves up to its Speed toward the netrunner's ping — isolates it from the group. Ideal for stealth takedowns."},
   ],
   Utility: [
-    {name:'Ping', ip:2, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'All enemies/devices on the network visible for 3 rounds, even through walls.'},
+    {name:'Ping', ip:2, pwStats:['intelligence','focus'], pwLabel:'Int+Foc', effect:'All enemies/devices on the network visible for 3 rounds, even through walls.', netReveal:{rounds:3}},
     {name:'Memory Wipe', ip:8, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Target leaves combat mode and forgets the netrunner. In combat: target loses its initiative slot this round.'},
     {name:'Bait', ip:5, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Target is lured to a position — leaves cover and moves there.'},
     {name:'System Collapse', ip:11, pwStats:['intelligence','creativity'], pwLabel:'Int+Cre', effect:'Target instantly unconscious (KO, not dead). Only works on targets below 30% Health.'},
@@ -7945,6 +8082,46 @@ function computeLiveHackStats(c, h) {
   const pwMods = getActiveTalentMods(c, 'pw', 'hacks');
   if (pw !== null && pwMods.total) pw += pwMods.total;
   return { pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, ip: h.ip ?? match?.ip ?? 0, effect: h.effect || match?.effect || '', talentNames: pwMods.names };
+}
+
+// A hack's "vs target" dropdown offers both characters AND placed security
+// objects (cameras, locks, sensors — anything with its own Firewall in
+// SECURITY_DEVICE_CATALOG) — hacking a camera or a turret needs to beat
+// ITS Firewall same as hacking an enemy netrunner's deck. targetKey is
+// either a character id or a security-object id prefixed 'sec:' so the two
+// id spaces (which could otherwise collide) never get confused.
+function getHackTargetOptions(excludeId) {
+  const characters = (state.combat?.order || [])
+    .filter(tid => tid !== excludeId)
+    .map(tid => ({ key: tid, name: state.characters[tid]?.name }))
+    .filter(o => o.name);
+  const devices = Object.entries(state.securityObjects || {})
+    .map(([sid, o]) => ({ key: 'sec:' + sid, name: o.name || o.deviceType || 'Device' }));
+  return { characters, devices };
+}
+function getHackTargetInfo(targetKey) {
+  if (!targetKey) return null;
+  if (targetKey.startsWith('sec:')) {
+    const o = state.securityObjects?.[targetKey.slice(4)];
+    if (!o) return null;
+    return { name: o.name || o.deviceType || 'Device', isSecurity: true, firewall: o.firewall ?? 0 };
+  }
+  const c = state.characters[targetKey];
+  if (!c) return null;
+  return { name: c.name, isSecurity: false, char: c };
+}
+// Effective Firewall to beat — characters go through computeLiveFirewall
+// (cyberware bonuses + the attacker's own targetFirewall talent mods,
+// e.g. Firewall Bypass); security objects have no cyberware but still get
+// the same talent-mod reduction applied, for consistency.
+function resolveHackTargetFirewall(targetKey, attacker) {
+  const info = getHackTargetInfo(targetKey);
+  if (!info) return null;
+  if (info.isSecurity) {
+    const reduction = attacker ? getActiveTalentMods(attacker, 'targetFirewall').total : 0;
+    return { name: info.name, value: Math.max(0, info.firewall - reduction) };
+  }
+  return { name: info.name, value: computeLiveFirewall(info.char, attacker) };
 }
 
 // Auto-applies a hack's status effect onto its target when USE is clicked
