@@ -344,6 +344,27 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   z-index: 2;
 }
 .security-token:active { cursor: grabbing; }
+/* Drag-to-aim handles for a cone device's rotation/angle (see
+   startConeRotateDrag/startConeAngleDrag) — small circles sitting right
+   on the cone's own edge so it's obvious what dragging them controls.
+   Smaller than the device marker itself so they read as "controls for
+   the shape," not another device. */
+.cone-handle {
+  position: absolute;
+  width: 1.3%;
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.8);
+  border: 2px solid;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  z-index: 3;
+}
+.cone-handle:active { cursor: grabbing; }
 /* GM map ping — a "look here" broadcast, not a persistent object. Two
    staggered expanding rings that fade out; re-triggered by toggling the
    'show' class off/on with a forced reflow in between (see
@@ -836,8 +857,13 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         <button id="combat-view-map-btn" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setCombatView('map')">MAP</button>
       </div>
       <div class="combatants" id="combatants-list"></div>
-      <div id="combat-map-view" style="display:none;padding:12px 16px"></div>
     </div>
+    <!-- Lives OUTSIDE #combat-active on purpose — the map (and Scenes prep
+         inside it) is just as useful before a fight starts as during one,
+         so it's shown whenever there's no combat list to look at instead
+         of being locked behind "combat must be active". See renderAll's
+         showMap logic. -->
+    <div id="combat-map-view" style="display:none;padding:12px 16px"></div>
   </div>
 
   <!-- CHARACTERS TAB -->
@@ -1520,7 +1546,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 <div class="modal-overlay" id="scenes-modal">
   <div class="modal" style="max-width:420px">
     <div class="modal-header">
-      <span class="modal-title">SCENES</span>
+      <span class="modal-title">SCENES <span id="scenes-count" style="color:var(--text3);font-weight:400"></span></span>
       <button class="modal-close" onclick="closeModal('scenes-modal')">✕</button>
     </div>
     <div class="modal-body">
@@ -1528,7 +1554,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <div id="scenes-list"></div>
       <div style="margin-top:8px">
         <input type="text" id="scene-new-name" placeholder="New scene name (e.g. Server Room)" style="width:100%;margin-bottom:4px">
-        <button class="btn btn-primary btn-small" style="width:100%" onclick="createScene()">+ CREATE</button>
+        <button class="btn btn-primary btn-small" id="scene-create-btn" style="width:100%" onclick="createScene()">+ CREATE</button>
       </div>
     </div>
     <div class="modal-footer">
@@ -2208,7 +2234,12 @@ function renderAll() {
     if (combatActive) document.getElementById('gm-round-display').textContent = 'R' + (state.combat.round || 1);
     document.getElementById('combat-idle').style.display = combatActive ? 'none' : 'block';
     document.getElementById('combat-active').style.display = combatActive ? 'block' : 'none';
-    if (combatActive) renderCombat(); else renderPreCombat();
+    // Outside combat there's no combatant list to toggle to, so the map
+    // (and Scenes prep) just shows unconditionally — no LIST/MAP toggle
+    // needed since there's no list. During combat, the existing toggle
+    // still governs it.
+    document.getElementById('combat-map-view').style.display = (!combatActive || combatViewMode === 'map') ? 'block' : 'none';
+    if (combatActive) renderCombat(); else { renderPreCombat(); renderMapView(); }
     renderCharList();
     renderAlarmWidget();
   } else if (session.role === 'player') {
@@ -2916,12 +2947,26 @@ function buildSecurityObjectsHtml(interactive) {
     // map scale is set.
     const { rx, ry } = getSecurityRadiusPercent(o);
     const px = o.pos?.x ?? 50, py = o.pos?.y ?? 50;
+    const rotation = o.rotation || 0, coneAngle = o.coneAngle ?? 70;
     let overlay = '';
+    let handles = '';
     if (shape === 'cone' && rx > 0) {
-      const path = buildConePath(px, py, o.rotation || 0, o.coneAngle ?? 70, rx, ry);
+      const path = buildConePath(px, py, rotation, coneAngle, rx, ry);
       overlay = `<svg class="security-overlay" data-id="${id}" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;${dimStyle}">
         <path d="${path}" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="0.15" stroke-opacity="0.6" vector-effect="non-scaling-stroke"/>
       </svg>`;
+      // Drag-to-aim handles, GM-only — one at the cone's centerline tip
+      // (drag anywhere around the device to set rotation) and one at its
+      // right edge ray (drag to widen/narrow the cone). Positioned with
+      // the same aspect-compensated rx/ry the cone itself is drawn with,
+      // so they always sit exactly on the visible edge regardless of the
+      // map's aspect ratio.
+      if (interactive) {
+        const rotOff = polarOffset(rotation, rx, ry);
+        const angOff = polarOffset(rotation + coneAngle / 2, rx, ry);
+        handles = `<div class="cone-handle cone-handle-rotate" data-id="${id}" title="Drag to rotate" style="left:${px + rotOff.x}%;top:${py + rotOff.y}%;border-color:var(--gold-bright);color:var(--gold-bright)" onpointerdown="startConeRotateDrag(event,'${id}')">⟳</div>
+          <div class="cone-handle cone-handle-angle" data-id="${id}" title="Drag to widen/narrow the cone" style="left:${px + angOff.x}%;top:${py + angOff.y}%;border-color:var(--cyan);color:var(--cyan)" onpointerdown="startConeAngleDrag(event,'${id}')">◇</div>`;
+      }
     } else if (shape === 'radius' && rx > 0) {
       overlay = `<svg class="security-overlay" data-id="${id}" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;${dimStyle}">
         <ellipse cx="${px}" cy="${py}" rx="${rx}" ry="${ry}" fill="${color}" fill-opacity="0.12" stroke="${color}" stroke-width="0.15" stroke-opacity="0.6" vector-effect="non-scaling-stroke"/>
@@ -2930,7 +2975,7 @@ function buildSecurityObjectsHtml(interactive) {
     const dragAttr = interactive ? ` onpointerdown="startSecurityDrag(event,'${id}')"` : '';
     const marker = `<div class="security-token${netLinked ? ' net-linked' : ''}" data-id="${id}" title="${esc(o.name || o.deviceType || 'Device')}${netLinked ? ' — hacked network access' : ''}"
       style="left:${o.pos?.x??50}%;top:${o.pos?.y??50}%;border-color:${color};color:${color};${dimStyle}"${dragAttr}>${icon}</div>`;
-    return overlay + marker;
+    return overlay + marker + handles;
   }).join('');
 }
 let securityDragState = null;
@@ -2953,8 +2998,29 @@ function onSecurityDragMove(e) {
   const { id, mapEl } = securityDragState;
   const marker = mapEl.querySelector(`.security-token[data-id="${id}"]`);
   if (marker) { marker.style.left = x + '%'; marker.style.top = y + '%'; }
-  const overlay = mapEl.querySelector(`.security-overlay[data-id="${id}"]`);
-  if (overlay) { overlay.style.left = x + '%'; overlay.style.top = y + '%'; }
+  // The overlay SVG itself now spans the whole container (see
+  // buildSecurityObjectsHtml's %-space rewrite) rather than being
+  // positioned via left/top, so the actual cone/circle SHAPE has to be
+  // recomputed at the new position — setting left/top on the <svg> here
+  // would silently do nothing and leave the zone visually frozen at its
+  // old spot mid-drag.
+  const o = state.securityObjects?.[id];
+  if (o) {
+    const { rx, ry } = getSecurityRadiusPercent(o);
+    const path = mapEl.querySelector(`.security-overlay[data-id="${id}"] path`);
+    if (path) path.setAttribute('d', buildConePath(x, y, o.rotation || 0, o.coneAngle ?? 70, rx, ry));
+    const ellipse = mapEl.querySelector(`.security-overlay[data-id="${id}"] ellipse`);
+    if (ellipse) { ellipse.setAttribute('cx', x); ellipse.setAttribute('cy', y); }
+    const rotHandle = mapEl.querySelector(`.cone-handle-rotate[data-id="${id}"]`);
+    const angHandle = mapEl.querySelector(`.cone-handle-angle[data-id="${id}"]`);
+    if (rotHandle || angHandle) {
+      const rotation = o.rotation || 0, coneAngle = o.coneAngle ?? 70;
+      const rotOff = polarOffset(rotation, rx, ry);
+      const angOff = polarOffset(rotation + coneAngle / 2, rx, ry);
+      if (rotHandle) { rotHandle.style.left = (x + rotOff.x) + '%'; rotHandle.style.top = (y + rotOff.y) + '%'; }
+      if (angHandle) { angHandle.style.left = (x + angOff.x) + '%'; angHandle.style.top = (y + angOff.y) + '%'; }
+    }
+  }
 }
 async function onSecurityDragEnd() {
   document.removeEventListener('pointermove', onSecurityDragMove);
@@ -2968,6 +3034,79 @@ async function onSecurityDragEnd() {
     // A click, not a drag — open the edit panel instead of repositioning.
     openSecurityObjectModal(st.id);
   }
+}
+
+// Drag-to-aim for a cone device's rotation/angle — the sliders in the edit
+// modal still exist for precise numeric entry, but eyeballing an exact
+// degree there is slow; dragging the handle rendered at the cone's edge
+// (see buildSecurityObjectsHtml) is much faster for "point it about
+// there." Both handlers share one drag-state var and one move/end pair,
+// switched on `mode`, mirroring startSecurityDrag/onSecurityDragMove's
+// shape.
+let coneDragState = null;
+function startConeRotateDrag(e, id) {
+  if (mapTool) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const mapEl = document.getElementById('map-container');
+  if (!mapEl) return;
+  coneDragState = { id, mapEl, mode: 'rotate' };
+  document.addEventListener('pointermove', onConeDragMove);
+  document.addEventListener('pointerup', onConeDragEnd);
+}
+function startConeAngleDrag(e, id) {
+  if (mapTool) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const mapEl = document.getElementById('map-container');
+  if (!mapEl) return;
+  coneDragState = { id, mapEl, mode: 'angle' };
+  document.addEventListener('pointermove', onConeDragMove);
+  document.addEventListener('pointerup', onConeDragEnd);
+}
+function onConeDragMove(e) {
+  if (!coneDragState) return;
+  const { id, mapEl, mode } = coneDragState;
+  const o = state.securityObjects?.[id]; if (!o) return;
+  const rect = mapEl.getBoundingClientRect();
+  const px = o.pos?.x ?? 50, py = o.pos?.y ?? 50;
+  // Real on-screen pixels (not raw %-space deltas) for the angle math —
+  // the map's own aspect ratio already makes the container's rendered
+  // width/height correctly proportioned, so this gives the TRUE visual
+  // angle even on a non-square map, same approach computeSpottedCharIds
+  // uses for its own angle check.
+  const ox = px / 100 * rect.width + rect.left;
+  const oy = py / 100 * rect.height + rect.top;
+  const dx = e.clientX - ox, dy = e.clientY - oy;
+  const angle = (Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360;
+  let rotation = o.rotation || 0;
+  let coneAngle = o.coneAngle ?? 70;
+  if (mode === 'rotate') {
+    rotation = Math.round(angle);
+    coneDragState.rotation = rotation;
+  } else {
+    const diff = Math.abs(((angle - rotation + 540) % 360) - 180);
+    coneAngle = Math.max(10, Math.min(180, Math.round(diff * 2)));
+    coneDragState.coneAngle = coneAngle;
+  }
+  const { rx, ry } = getSecurityRadiusPercent(o);
+  const path = mapEl.querySelector(`.security-overlay[data-id="${id}"] path`);
+  if (path) path.setAttribute('d', buildConePath(px, py, rotation, coneAngle, rx, ry));
+  const rotHandle = mapEl.querySelector(`.cone-handle-rotate[data-id="${id}"]`);
+  const angHandle = mapEl.querySelector(`.cone-handle-angle[data-id="${id}"]`);
+  const rotOff = polarOffset(rotation, rx, ry);
+  const angOff = polarOffset(rotation + coneAngle / 2, rx, ry);
+  if (rotHandle) { rotHandle.style.left = (px + rotOff.x) + '%'; rotHandle.style.top = (py + rotOff.y) + '%'; }
+  if (angHandle) { angHandle.style.left = (px + angOff.x) + '%'; angHandle.style.top = (py + angOff.y) + '%'; }
+}
+async function onConeDragEnd() {
+  document.removeEventListener('pointermove', onConeDragMove);
+  document.removeEventListener('pointerup', onConeDragEnd);
+  const st = coneDragState;
+  coneDragState = null;
+  if (!st) return;
+  if (st.rotation !== undefined) await updateSecurityObjectField(st.id, 'rotation', st.rotation);
+  if (st.coneAngle !== undefined) await updateSecurityObjectField(st.id, 'coneAngle', st.coneAngle);
 }
 
 function openAddSecurityObjectModal() {
@@ -3141,10 +3280,15 @@ function openScenesModal() {
   ensureScenesSeeded().then(renderScenesModal);
   openModal('scenes-modal');
 }
+const MAX_SCENES = 10;
 function renderScenesModal() {
   const el = document.getElementById('scenes-list');
   if (!el) return;
   const entries = Object.entries(state.scenes || {});
+  const countEl = document.getElementById('scenes-count');
+  if (countEl) countEl.textContent = `${entries.length}/${MAX_SCENES}`;
+  const createBtn = document.getElementById('scene-create-btn');
+  if (createBtn) createBtn.disabled = entries.length >= MAX_SCENES;
   // Name input gets its own full-width row — cramming it into one flex
   // row alongside the ACTIVATE + delete buttons squeezed it down to ~22px
   // wide (buttons have real min-content width from their label text, the
@@ -3165,6 +3309,10 @@ async function createScene() {
   const input = document.getElementById('scene-new-name');
   const name = input.value.trim();
   if (!name) return;
+  if (Object.keys(state.scenes || {}).length >= MAX_SCENES) {
+    showToast(`Max ${MAX_SCENES} scenes — delete one you no longer need first.`);
+    return;
+  }
   const id = 'scene_' + Date.now();
   const scenes = { ...state.scenes, [id]: { name } };
   state.scenes = scenes;
