@@ -275,7 +275,15 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 /* ── COMBAT MAP ── */
 .map-token {
   position: absolute;
-  width: 40px; height: 40px;
+  /* % of the map container's width (not a fixed px size) so a token takes
+     up the same proportion of the map on a phone as on a wide desktop
+     monitor — a fixed-px token used to look bigger on mobile purely
+     because the container itself rendered narrower. aspect-ratio keeps it
+     square without relying on percentage HEIGHT, which doesn't reliably
+     resolve against an auto-height container (the map's height comes from
+     the image's own aspect ratio, not an explicit CSS height). */
+  width: 3.6%;
+  aspect-ratio: 1 / 1;
   transform: translate(-50%, -50%);
   background-size: cover;
   background-position: center;
@@ -321,7 +329,9 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
    square, icon-only; drag to reposition, click (no drag) to edit. */
 .security-token {
   position: absolute;
-  width: 22px; height: 22px;
+  /* Same %-of-container sizing as .map-token above, same reasoning. */
+  width: 2%;
+  aspect-ratio: 1 / 1;
   transform: translate(-50%, -50%);
   background: rgba(0,0,0,0.75);
   border: 2px solid;
@@ -1438,6 +1448,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
           </select>
         </div>
         <div id="dmg-calc-pw" style="font-size:11px;color:var(--cyan);margin-bottom:2px"></div>
+        <div id="dmg-calc-distance" style="font-size:10px;margin-bottom:2px"></div>
         <div id="dmg-calc-situational" style="font-size:10px;color:var(--text2);margin-bottom:6px"></div>
         <div class="inline-row" style="gap:6px;align-items:center">
           <span style="font-size:10px;color:var(--text3);white-space:nowrap;letter-spacing:0.08em">ROLL RESULT</span>
@@ -1679,7 +1690,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 // ═══════════════════════════════════════════════════════════════
 let db = null;
 let session = { role: null, charId: null, gmPin: null };
-let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} }, securityObjects: {}, alarmLevel: 0, portraitReveal: null, mapPing: null, mapDrawings: [], netPing: null, scenes: {}, activeSceneId: null };
+let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} }, securityObjects: {}, alarmLevel: 0, portraitReveal: null, mapPing: null, mapDrawings: [], netPing: null, scenes: {}, activeSceneId: null, mapScaleMetersWidth: null, mapImageAspect: null };
 let combatViewMode = 'list';
 let mapImage = null;       // fetched from a Firebase path OUTSIDE 'campaign' — kept separate from `state`
 // { charId: dataUrl } — the CROPPED square used for tokens/thumbnails everywhere.
@@ -1943,6 +1954,8 @@ function startSync() {
     state.securityObjects = data.securityObjects || {};
     state.scenes = data.scenes || {};
     state.activeSceneId = data.activeSceneId || null;
+    state.mapScaleMetersWidth = data.mapScaleMetersWidth || null;
+    state.mapImageAspect = data.mapImageAspect || null;
     state.alarmLevel = data.alarmLevel ?? 0;
     state.portraitReveal = data.portraitReveal || null;
     // Fire the fullscreen reveal only for players, and only on a genuinely
@@ -2539,8 +2552,16 @@ function computeSpottedCharIds(interactive) {
     if (o.sdp_max != null && (o.sdp_current ?? o.sdp_max) <= 0) return; // destroyed
     const shape = o.detectionShape || 'point';
     if (shape !== 'cone' && shape !== 'radius') return; // point devices (locks) have no zone
-    const radiusPx = (o.visualRange ?? 30) * 3;
-    if (radiusPx <= 0) return;
+    // Same {rx,ry} percent-of-map values buildSecurityObjectsHtml draws
+    // the overlay with (calibrated to real meters when a map scale is
+    // set, otherwise the %-of-width fallback) — converted to actual
+    // on-screen pixels here since token positions are measured in pixels
+    // too. An ellipse containment test (not a plain circular one) since
+    // rx/ry can differ on a non-square map.
+    const { rx, ry } = getSecurityRadiusPercent(o);
+    if (rx <= 0 || ry <= 0) return;
+    const radiusPxX = rx / 100 * rect.width;
+    const radiusPxY = ry / 100 * rect.height;
     const ox = (o.pos?.x ?? 50) / 100 * rect.width;
     const oy = (o.pos?.y ?? 50) / 100 * rect.height;
     Object.entries(tokens).forEach(([cid, pos]) => {
@@ -2550,7 +2571,7 @@ function computeSpottedCharIds(interactive) {
       const tx = (pos?.x ?? 50) / 100 * rect.width;
       const ty = (pos?.y ?? 50) / 100 * rect.height;
       const dx = tx - ox, dy = ty - oy;
-      if (Math.hypot(dx, dy) > radiusPx) return;
+      if ((dx * dx) / (radiusPxX * radiusPxX) + (dy * dy) / (radiusPxY * radiusPxY) > 1) return;
       if (shape === 'radius') { spotted.add(cid); return; }
       // Cone check — same compass-style (0=up, clockwise) angle convention
       // polarOffset uses for drawing the cone itself, just inverted to go
@@ -2602,6 +2623,9 @@ function renderMapView() {
       <button class="btn btn-danger btn-small" onclick="removeMap()">REMOVE MAP</button>
       <button class="btn btn-primary btn-small" onclick="openAddSecurityObjectModal()">+ ADD DEVICE</button>
       <button class="btn btn-ghost btn-small" onclick="openScenesModal()" title="Prep and switch between named rooms/scenes">🗂 SCENES${state.activeSceneId && state.scenes?.[state.activeSceneId] ? ': ' + esc(state.scenes[state.activeSceneId].name) : ''}</button>
+      <span style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text3)" title="Real-world width this map represents — powers weapon range checks and to-scale detection zones">
+        📏 <input type="number" min="0.1" step="0.5" placeholder="unset" value="${state.mapScaleMetersWidth || ''}" style="width:60px;font-size:10px" onchange="setMapScale(this.value)"> m wide
+      </span>
       <span style="flex:1"></span>
       <button class="btn btn-ghost btn-small map-tool-btn ${mapTool === 'ping' ? 'active' : ''}" onclick="toggleMapTool('ping')" title="Click the map to ping a spot for everyone">📍 PING</button>
       <button class="btn btn-ghost btn-small map-tool-btn ${mapTool === 'draw' ? 'active' : ''}" onclick="toggleMapTool('draw')" title="Drag on the map to draw">✏ DRAW</button>
@@ -2827,19 +2851,39 @@ function openPortraitGallery() {
 // ═══════════════════════════════════════════════════════════════
 // Compass-style angle (0 = up/north, clockwise-positive) to a point
 // offset from a center — used for both the cone wedge and its drag-handle.
-function polarOffset(angleDeg, radius) {
+// rx/ry (not a single radius) so a cone drawn in the map's stretched %
+// coordinate space (see buildSecurityObjectsHtml) still reads as a
+// geometrically correct wedge on screen even when the map isn't square —
+// same compensation idea as metersToPercentRadius's ellipse.
+function polarOffset(angleDeg, rx, ry) {
   const rad = (angleDeg * Math.PI) / 180;
-  return { x: Math.sin(rad) * radius, y: -Math.cos(rad) * radius };
+  return { x: Math.sin(rad) * rx, y: -Math.cos(rad) * ry };
 }
-function buildConePath(cx, cy, rotation, coneAngle, radius) {
+function buildConePath(cx, cy, rotation, coneAngle, rx, ry) {
   const half = coneAngle / 2;
-  const p1 = polarOffset(rotation - half, radius);
-  const p2 = polarOffset(rotation + half, radius);
+  const p1 = polarOffset(rotation - half, rx, ry);
+  const p2 = polarOffset(rotation + half, rx, ry);
   const largeArc = coneAngle > 180 ? 1 : 0;
-  return `M ${cx},${cy} L ${cx+p1.x},${cy+p1.y} A ${radius},${radius} 0 ${largeArc} 1 ${cx+p2.x},${cy+p2.y} Z`;
+  return `M ${cx},${cy} L ${cx+p1.x},${cy+p1.y} A ${rx},${ry} 0 ${largeArc} 1 ${cx+p2.x},${cy+p2.y} Z`;
 }
 const SECURITY_CATEGORY_COLOR = { sensor: 'var(--cyan)', lock: 'var(--gold-bright)', trap: 'var(--red-bright)' };
 const SECURITY_CATEGORY_ICON = { sensor: '📷', lock: '🔒', trap: '⚠' };
+// A device's detection radius/cone, expressed as {rx,ry} percent-of-map
+// values. Uses the device's REAL rangeMeters (already in
+// SECURITY_DEVICE_CATALOG) converted through the calibrated map scale
+// when both are available, so the drawn zone is an actual to-scale
+// detection range instead of a guess. Falls back to the manual "Visual
+// Size" slider (now expressed as a %-of-map-width radius instead of the
+// old fixed-pixel one, so it at least stays proportionally consistent
+// across screen sizes even with no scale set) when either piece is
+// missing.
+function getSecurityRadiusPercent(o) {
+  const rangeMeters = SECURITY_DEVICE_CATALOG[o.deviceType]?.rangeMeters;
+  const calibrated = rangeMeters != null ? metersToPercentRadius(rangeMeters) : null;
+  if (calibrated) return calibrated;
+  const fallbackPercent = (o.visualRange ?? 30) / 3;
+  return { rx: fallbackPercent, ry: fallbackPercent };
+}
 function buildSecurityObjectsHtml(interactive) {
   const objects = state.securityObjects || {};
   // A successful Ping hack temporarily shows players every device on the
@@ -2864,22 +2908,23 @@ function buildSecurityObjectsHtml(interactive) {
     // rather than something the GM permanently revealed.
     const netLinked = netPingActive && !o.revealed;
     const shape = o.detectionShape || 'point';
-    const visualRange = o.visualRange ?? 30;
-    const radiusPx = visualRange * 3;
-    // Box is 3x the old 320x320 (and the center offset 3x'd to match) —
-    // the "Visual Size" slider goes up to 100 (radiusPx up to 300), which
-    // was already clipping against the old box's 160px half-width well
-    // before the slider even maxed out.
-    const boxSize = 960, center = 480;
+    // Percentage-of-map space (viewBox 0-100, stretched to fill the
+    // container via preserveAspectRatio="none", same trick the freehand
+    // drawings/net-ping lines use) instead of the old fixed-pixel box —
+    // the zone now stays the same size relative to the map on any screen,
+    // and (via getSecurityRadiusPercent) to-scale in real meters once a
+    // map scale is set.
+    const { rx, ry } = getSecurityRadiusPercent(o);
+    const px = o.pos?.x ?? 50, py = o.pos?.y ?? 50;
     let overlay = '';
-    if (shape === 'cone' && radiusPx > 0) {
-      const path = buildConePath(center, center, o.rotation || 0, o.coneAngle ?? 70, radiusPx);
-      overlay = `<svg class="security-overlay" data-id="${id}" width="${boxSize}" height="${boxSize}" viewBox="0 0 ${boxSize} ${boxSize}" style="position:absolute;left:${o.pos?.x??50}%;top:${o.pos?.y??50}%;transform:translate(-50%,-50%);pointer-events:none;${dimStyle}">
-        <path d="${path}" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="1.5" stroke-opacity="0.6"/>
+    if (shape === 'cone' && rx > 0) {
+      const path = buildConePath(px, py, o.rotation || 0, o.coneAngle ?? 70, rx, ry);
+      overlay = `<svg class="security-overlay" data-id="${id}" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;${dimStyle}">
+        <path d="${path}" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="0.15" stroke-opacity="0.6" vector-effect="non-scaling-stroke"/>
       </svg>`;
-    } else if (shape === 'radius' && radiusPx > 0) {
-      overlay = `<svg class="security-overlay" data-id="${id}" width="${boxSize}" height="${boxSize}" viewBox="0 0 ${boxSize} ${boxSize}" style="position:absolute;left:${o.pos?.x??50}%;top:${o.pos?.y??50}%;transform:translate(-50%,-50%);pointer-events:none;${dimStyle}">
-        <circle cx="${center}" cy="${center}" r="${radiusPx}" fill="${color}" fill-opacity="0.12" stroke="${color}" stroke-width="1.5" stroke-opacity="0.6"/>
+    } else if (shape === 'radius' && rx > 0) {
+      overlay = `<svg class="security-overlay" data-id="${id}" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;${dimStyle}">
+        <ellipse cx="${px}" cy="${py}" rx="${rx}" ry="${ry}" fill="${color}" fill-opacity="0.12" stroke="${color}" stroke-width="0.15" stroke-opacity="0.6" vector-effect="non-scaling-stroke"/>
       </svg>`;
     }
     const dragAttr = interactive ? ` onpointerdown="startSecurityDrag(event,'${id}')"` : '';
@@ -3038,9 +3083,18 @@ async function handleMapUpload(event) {
   if (!file) return;
   showToast('Compressing & uploading map...');
   try {
-    const dataUrl = await compressImageFit(file, 1600, 0.8);
+    const { dataUrl, width, height } = await compressImageFit(file, 1600, 0.8);
     await db.ref('mapImage').set(dataUrl);
     mapImage = dataUrl;
+    // Captured once at upload time (rather than re-detected from the
+    // rendered <img> on every render) so the meters-per-% scale math
+    // below never has to wait on image-decode timing — it's just another
+    // piece of scene data, synced normally. A new map image resets any
+    // scale the GM had set for the old one, since the two images are
+    // unrelated.
+    state.mapImageAspect = width / height;
+    state.mapScaleMetersWidth = null;
+    await dbUpdate({ mapImageAspect: state.mapImageAspect, mapScaleMetersWidth: null });
     renderMapView();
     showToast('Map updated!');
   } catch (e) {
@@ -3135,6 +3189,8 @@ async function switchScene(newId) {
       ['scenes/' + oldId + '/securityObjects']: state.securityObjects || {},
       ['scenes/' + oldId + '/tokens']: state.map?.tokens || {},
       ['scenes/' + oldId + '/mapDrawings']: state.mapDrawings || [],
+      ['scenes/' + oldId + '/scaleMetersWidth']: state.mapScaleMetersWidth || null,
+      ['scenes/' + oldId + '/imageAspect']: state.mapImageAspect || null,
     });
     await db.ref('mapImages/' + oldId).set(mapImage || null);
   }
@@ -3146,10 +3202,63 @@ async function switchScene(newId) {
     securityObjects: target.securityObjects || {},
     'map/tokens': target.tokens || {},
     mapDrawings: target.mapDrawings || [],
+    mapScaleMetersWidth: target.scaleMetersWidth || null,
+    mapImageAspect: target.imageAspect || null,
     activeSceneId: newId,
   });
   showToast(`Switched to "${target.name || 'scene'}"`);
   renderScenesModal();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MAP SCALE — a real meters-wide value per map, so a giant industrial site
+// and a tiny apartment (both just 0-100% coordinate space otherwise) can
+// be compared to actual weapon ranges/detection radii instead of an
+// eyeballed pixel guess. state.mapScaleMetersWidth/mapImageAspect are
+// top-level "whatever's live right now" fields exactly like mapImage
+// itself — switchScene already saves/restores them per scene. Every
+// helper below returns null (not a fallback guess) when no scale is set,
+// so callers can cleanly skip distance-based effects instead of silently
+// computing a wrong number.
+// ═══════════════════════════════════════════════════════════════
+async function setMapScale(value) {
+  const val = parseFloat(value);
+  const clean = !isNaN(val) && val > 0 ? val : null;
+  state.mapScaleMetersWidth = clean;
+  await dbWrite('mapScaleMetersWidth', clean);
+  renderMapView();
+}
+// Real-world meters represented by 1% of the map's width and height.
+// Height differs from width whenever the image isn't square — 1% of a
+// taller-than-wide floor plan covers more (or less) ground than 1% of its
+// width, so this leans on the image's own aspect ratio (captured once at
+// upload time, see handleMapUpload) rather than assuming a square map.
+function getMetersPerPercent() {
+  if (!state.mapScaleMetersWidth) return null;
+  const perPercentX = state.mapScaleMetersWidth / 100;
+  const perPercentY = perPercentX / (state.mapImageAspect || 1);
+  return { x: perPercentX, y: perPercentY };
+}
+// Real distance in meters between two {x,y} points in the map's 0-100%
+// coordinate space (token positions, security-object positions, etc.).
+// Returns null if no scale has been set for the current map.
+function getRealDistanceMeters(posA, posB) {
+  const mpp = getMetersPerPercent();
+  if (!mpp || !posA || !posB) return null;
+  const dx = ((posA.x ?? 50) - (posB.x ?? 50)) * mpp.x;
+  const dy = ((posA.y ?? 50) - (posB.y ?? 50)) * mpp.y;
+  return Math.hypot(dx, dy);
+}
+// Converts a real radius (meters) into the {rx,ry} percentages an SVG
+// <ellipse> needs to render as a TRUE circle on screen — the overlay's
+// viewBox is stretched to fill the container via preserveAspectRatio=
+// "none" (same trick buildMapDrawingsHtml uses), so a plain equal-rx/ry
+// circle would come out visually squashed on any non-square map unless
+// the two radii are pre-compensated using the same aspect ratio.
+function metersToPercentRadius(meters) {
+  const mpp = getMetersPerPercent();
+  if (!mpp || meters == null) return null;
+  return { rx: meters / mpp.x, ry: meters / mpp.y };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -3169,7 +3278,7 @@ function compressImageFit(file, maxDim, quality) {
         const canvas = document.createElement('canvas');
         canvas.width = width; canvas.height = height;
         canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
+        resolve({ dataUrl: canvas.toDataURL('image/jpeg', quality), width, height });
       };
       img.onerror = () => reject(new Error('Invalid image'));
       img.src = e.target.result;
@@ -4835,6 +4944,7 @@ function populateDmgCalc() {
     .map(([cid, c]) => `<option value="${cid}">${esc(c.name)}</option>`).join('');
   document.getElementById('dmg-calc-weapon').innerHTML = '<option value="">Weapon...</option>';
   document.getElementById('dmg-calc-pw').textContent = '';
+  document.getElementById('dmg-calc-distance').textContent = '';
   document.getElementById('dmg-calc-situational').textContent = '';
   document.getElementById('dmg-calc-roll').value = '';
   const resultEl = document.getElementById('dmg-calc-result');
@@ -4849,20 +4959,42 @@ function onDmgCalcAttackerChange() {
   onDmgCalcChange();
 }
 function onDmgCalcChange() {
-  const attacker = state.characters[document.getElementById('dmg-calc-attacker').value];
+  const attackerId = document.getElementById('dmg-calc-attacker').value;
+  const attacker = state.characters[attackerId];
   const wi = document.getElementById('dmg-calc-weapon').value;
   const weapon = attacker?.weapons?.[wi];
   const pwEl = document.getElementById('dmg-calc-pw');
+  const distEl = document.getElementById('dmg-calc-distance');
   const sitEl = document.getElementById('dmg-calc-situational');
   const resultEl = document.getElementById('dmg-calc-result');
   if (!attacker || !weapon) {
-    pwEl.textContent = ''; sitEl.textContent = ''; resultEl.textContent = '—'; resultEl.dataset.value = '';
+    pwEl.textContent = ''; distEl.textContent = ''; sitEl.textContent = ''; resultEl.textContent = '—'; resultEl.dataset.value = '';
     return;
   }
   const live = computeLiveWeaponStats(getStatsSourceChar(attacker), weapon);
-  pwEl.textContent = live.pw != null
-    ? `PW: ${live.pwLabel} · ${live.pw} → roll ${live.dice}×d20`
+  // §6.4a/§7.7 — real measured distance halves PW beyond the weapon's
+  // effective range (up to its max range); beyond max range a normal
+  // attack isn't possible without a talent/weapon exception, which the
+  // GM applies by judgment. Weapon bonus/damage are untouched by
+  // distance — only the PW (and so the dice count) changes.
+  const dist = getDistancePWInfo(attackerId, dmgTargetId, weapon.name);
+  let effectivePw = live.pw;
+  if (dist && live.pw != null) {
+    if (dist.multiplier == null) effectivePw = null;
+    else effectivePw = Math.floor(live.pw * dist.multiplier);
+  }
+  pwEl.textContent = effectivePw != null
+    ? `PW: ${live.pwLabel} · ${effectivePw} → roll ${pwDiceCount(effectivePw)}×d20`
     : `PW: ${live.pwLabel || '(no stats set — enter roll manually)'}`;
+  if (dist) {
+    const m = Math.round(dist.distanceMeters);
+    if (dist.zone === 'effective') distEl.textContent = `Distance: ${m}m (within effective range ${dist.band.effective}m) — full PW`;
+    else if (dist.zone === 'extended') { distEl.textContent = `Distance: ${m}m (beyond effective ${dist.band.effective}m, within max ${dist.band.max}m) — PW halved`; distEl.style.color = 'var(--gold-bright)'; }
+    else { distEl.textContent = `Distance: ${m}m — BEYOND MAX RANGE (${dist.band.max}m). Normally not possible without a talent/weapon exception.`; distEl.style.color = 'var(--red-bright)'; }
+    if (dist.zone === 'effective') distEl.style.color = 'var(--text2)';
+  } else {
+    distEl.textContent = '';
+  }
   sitEl.textContent = live.situational.length ? 'Also check: ' + live.situational.join(' · ') : '';
   const roll = parseInt(document.getElementById('dmg-calc-roll').value) || 0;
   const target = state.characters[dmgTargetId];
@@ -6305,6 +6437,34 @@ const WEAPON_TABLE = {
   'Minigun':             {bonus:13, pw:['strength','focus'],     label:'Str+Foc', tags:['Autofire'], slotType:'exotic'},
   'Anti-Materiel Rifle': {bonus:16, pw:['focus','senses'],       label:'Foc+Sen', mag:1, slotType:'exotic'},
 };
+// §6.4a — effective/maximum range per weapon category (v12 rulebook
+// update). Inside effective range: full PW. Beyond effective, up to
+// max range: half PW. Beyond max range: no normal attack (unless a
+// talent/attachment/weapon profile creates an exception, resolved by the
+// GM manually — the tool only flags it, it doesn't block anything).
+// Weapon bonus and damage are explicitly NOT reduced by distance, only
+// PW — see getDistancePWInfo. Weapons with no entry here (melee, shields,
+// Flamethrower/Cryo Thrower) aren't part of the generic ranged-distance
+// system at all, so no distance effect is ever applied to them.
+const WEAPON_RANGE_BANDS = {
+  'Medium Pistol': { effective: 15, max: 50 },
+  'Heavy Pistol': { effective: 15, max: 50 },
+  'Very Heavy Pistol': { effective: 15, max: 50 },
+  'Malorian Arms 3516': { effective: 15, max: 50 },
+  'SMG': { effective: 25, max: 75 },
+  'Heavy SMG': { effective: 25, max: 75 },
+  'Shotgun': { effective: 12, max: 30 },
+  'Assault Rifle': { effective: 50, max: 200 },
+  'Minigun': { effective: 100, max: 300 }, // closest match to "LMG and comparable heavy automatic weapons"
+  'Sniper Rifle': { effective: 300, max: 1000 },
+  'Anti-Materiel Rifle': { effective: 300, max: 1000 }, // closest match to "Precision Rifle"
+  'Grenade Launcher': { effective: 100, max: 300 },
+  'Rocket Launcher': { effective: 100, max: 300 },
+};
+function getWeaponRangeBand(weaponName) {
+  const canonical = Object.keys(WEAPON_TABLE).find(k => k.toLowerCase() === String(weaponName || '').trim().toLowerCase());
+  return canonical ? WEAPON_RANGE_BANDS[canonical] || null : null;
+}
 const ARMOR_TABLE = {
   'Leathers':         {sp_body:4,  sp_head:null},
   'Kevlar Vest':      {sp_body:7,  sp_head:null},
@@ -6674,14 +6834,14 @@ async function applyLootGenericItem() {
 // tier so stronger enemies are more likely to be better equipped.
 // ═══════════════════════════════════════════════════════════════
 const ATTACHMENT_CATALOG = [
-  {name:'Iron Sights Upgrade', effect:'+2 weapon bonus at medium range (13-50m)', costTier:'guenstig', mods:[{appliesTo:'wb', amount:2, conditional:true, label:'Medium range (13-50m)'}]},
-  {name:'2.5x Scope', effect:'+4 weapon bonus medium range, -2 PW on Autofire', costTier:'normal', mods:[{appliesTo:'wb', amount:4, conditional:true, label:'Medium range (13-50m)'}, {appliesTo:'pw', amount:-2, conditional:true, label:'Autofire'}]},
-  {name:'Sniper Scope', effect:'+6 weapon bonus long range (50m+), no Autofire', costTier:'teuer', mods:[{appliesTo:'wb', amount:6, conditional:true, label:'Long range (50m+)'}]},
+  {name:'Iron Sights Upgrade', effect:'+2 weapon bonus beyond 12m, while still within the weapon\'s effective range (§6.4a/§7.7)', costTier:'guenstig', mods:[{appliesTo:'wb', amount:2, conditional:true, label:'Beyond 12m, within effective range'}]},
+  {name:'2.5x Scope', effect:'+4 weapon bonus beyond 12m within effective range (§6.4a/§7.7), -2 PW on Autofire', costTier:'normal', mods:[{appliesTo:'wb', amount:4, conditional:true, label:'Beyond 12m, within effective range'}, {appliesTo:'pw', amount:-2, conditional:true, label:'Autofire'}]},
+  {name:'Sniper Scope', effect:'+6 weapon bonus beyond effective range up to maximum range (§6.4a/§7.7), no Autofire', costTier:'teuer', mods:[{appliesTo:'wb', amount:6, conditional:true, label:'Beyond effective, within max range'}]},
   {name:'Thermal Scope', effect:'Sees through smoke/darkness, +2 weapon bonus at night', costTier:'teuer', mods:[{appliesTo:'wb', amount:2, conditional:true, label:'Night/darkness'}]},
   {name:'Smart Scope', effect:'Requires Neural Link. +1 weapon bonus always.', costTier:'sehr teuer', alwaysOn:{bonus:1}},
   {name:'Suppressor', effect:'Shot inaudible beyond 15m, -1 weapon bonus', costTier:'normal', alwaysOn:{bonus:-1}},
   {name:'Muzzle Brake', effect:'-2 Autofire PW penalty', costTier:'normal', mods:[{appliesTo:'pw', amount:-2, conditional:true, label:'Autofire'}]},
-  {name:'Extended Barrel', effect:'+2 weapon bonus long range, no longer concealable', costTier:'normal', mods:[{appliesTo:'wb', amount:2, conditional:true, label:'Long range (50m+)'}]},
+  {name:'Extended Barrel', effect:'+2 weapon bonus beyond effective range (§6.4a/§7.7), no longer concealable', costTier:'normal', mods:[{appliesTo:'wb', amount:2, conditional:true, label:'Beyond effective range'}]},
   {name:'Compensator', effect:'Blindfire: 1/4 PW → 1/2 PW', costTier:'teuer'},
   {name:'Laser Sight', effect:'Darkness PW penalty reduced by 4', costTier:'normal', mods:[{appliesTo:'pw', amount:4, conditional:true, label:'Darkness (offsets penalty)'}]},
   {name:'UV Laser Sight', effect:'Like Laser Sight, only visible with Cyberoptics', costTier:'teuer', mods:[{appliesTo:'pw', amount:4, conditional:true, label:'Darkness, Cyberoptics only'}]},
@@ -6934,6 +7094,34 @@ function computeLiveWeaponStats(c, w) {
   if (attachWbMods.total) bonus += attachWbMods.total;
   const attachmentNames = [...new Set([...attachPwMods.names, ...attachWbMods.names])];
   return { bonus, pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, situational, magMax, talentNames, attachmentNames, slotType };
+}
+
+// §6.4a/§7.7 — real measured distance (via the map's calibrated scale)
+// between an attacker's and target's map tokens, resolved against the
+// weapon's effective/maximum range. Only the PW is affected — weapon
+// bonus and damage are explicitly untouched by distance per the
+// rulebook, so this never touches computeLiveWeaponStats itself; it's
+// applied only in the "vs target" damage calculator, same scoping
+// principle already used for targetFirewall talent mods. Returns null
+// (no distance effect) whenever anything needed to measure it is
+// missing — no map scale set, either token not placed, or the weapon
+// isn't part of the generic ranged-distance system (melee, shields,
+// unlisted heavy weapons) — so callers can just skip showing anything
+// rather than guessing.
+function getDistancePWInfo(attackerId, targetId, weaponName) {
+  const band = getWeaponRangeBand(weaponName);
+  if (!band) return null;
+  const posA = state.map?.tokens?.[attackerId];
+  const posB = state.map?.tokens?.[targetId];
+  const distanceMeters = getRealDistanceMeters(posA, posB);
+  if (distanceMeters == null) return null;
+  if (distanceMeters <= band.effective) {
+    return { distanceMeters, band, multiplier: 1, zone: 'effective' };
+  }
+  if (distanceMeters <= band.max) {
+    return { distanceMeters, band, multiplier: 0.5, zone: 'extended' };
+  }
+  return { distanceMeters, band, multiplier: null, zone: 'beyond-max' };
 }
 
 // A controlled drone's (or companion's) attack roll uses its OPERATOR's
@@ -7631,11 +7819,11 @@ const TALENT_CATALOG = {
     { name: 'Hawk Eye', levels: [
       { lvl:'I', req:'Mind 8', effect:'+2 on Focus+Senses rolls (Sniper PW)', mods:[{appliesTo:'pw',scope:'ranged',amount:2,conditional:false}] },
       { lvl:'II', req:'Mind 12', effect:'+4 on Focus+Senses rolls', mods:[{appliesTo:'pw',scope:'ranged',amount:4,conditional:false}] },
-      { lvl:'III', req:'Mind 16', effect:'+6. No range limit for Sniper.', mods:[{appliesTo:'pw',scope:'ranged',amount:6,conditional:false}] },
+      { lvl:'III', req:'Mind 16', effect:'+6. Sniper Rifle can attack beyond its maximum range if the target is clearly perceived and a ballistic line of sight exists — such attacks use half PW (another effect, e.g. Atempause, can remove that halving).', mods:[{appliesTo:'pw',scope:'ranged',amount:6,conditional:false}] },
       { lvl:'IV', req:'Mind 20', effect:'+8. Can fire through smoke/dim light without malus.', mods:[{appliesTo:'pw',scope:'ranged',amount:8,conditional:false}] },
     ]},
     { name: 'Deckungsmeister', levels: [
-      { lvl:'I', req:'Mobility 8', effect:'Peeking: no reaction roll needed if you immediately return to cover', mods:[] },
+      { lvl:'I', req:'Mobility 8', effect:'Feuerbereitschaft reaction shots against your Quick Peek use only half PW. Snap Shot, Killzone and other explicitly-named talent reaction shots still use their own stated PW.', mods:[] },
       { lvl:'II', req:'Mobility 12', effect:'Blindfire: 1/4 PW -> 1/3 PW', mods:[] },
       { lvl:'III', req:'Mobility 18', effect:'Blindfire: 1/3 PW -> 1/2 PW. Scope bonuses also apply on blindfire.', mods:[] },
     ]},
@@ -7650,8 +7838,8 @@ const TALENT_CATALOG = {
       { lvl:'III', req:'Mobility 25', effect:'Second shot no PW malus. 3x/fight.', mods:[] },
     ]},
     { name: 'Snap Shot', levels: [
-      { lvl:'I', req:'Mobility 15', effect:'Reaction roll usable offensively too: shoot a peeking/charging enemy (half PW)', mods:[] },
-      { lvl:'II', req:'Mobility 20', effect:'Snap Shot at full PW. Can counter an enemy Flink announcement.', mods:[] },
+      { lvl:'I', req:'Mobility 15', effect:'1x/round, when a visible enemy uses Quick Peek or starts a visible attack: immediate reaction shot at half PW. No prior Feuerbereitschaft needed. Normal ammo/Stamina cost. Target still gets a normal defensive reaction unless another rule prevents it.', mods:[] },
+      { lvl:'II', req:'Mobility 20', effect:'Snap Shot at full PW. Can also trigger off — and resolve before — a visible enemy\'s Flink announcement.', mods:[] },
     ]},
     { name: 'Ghost Shot', levels: [
       { lvl:'I', req:'Mobility 10', effect:'With Suppressor: stay in stealth after firing if stationary', mods:[] },
@@ -7904,8 +8092,8 @@ const TALENT_CATALOG = {
       { lvl:'II', req:'Power 14', effect:'+10 Max HP. Explosion damage -6. No knockback from explosions.', mods:[] },
     ]},
     { name: 'Javelin-Raketen', levels: [
-      { lvl:'I', req:'Gauntlet I, Zielgenauigkeit I', effect:'Rocket Launcher range +50%. Can hit targets outside your own sightline if an ally has sight (Squadsight).', mods:[] },
-      { lvl:'II', req:'Gauntlet II, Zielgenauigkeit II', effect:'Range x2. No range malus at all on Rocket Launcher.', mods:[] },
+      { lvl:'I', req:'Gauntlet I, Zielgenauigkeit I', effect:'Rocket Launcher effective/max range both +50% — 150m/450m instead of the base 100m/300m (§6.4a). Can hit targets outside your own sightline if an ally has sight (Squadsight).', mods:[] },
+      { lvl:'II', req:'Gauntlet II, Zielgenauigkeit II', effect:'Both range values double instead — 200m/600m. No distance-based PW halving inside that extended maximum range.', mods:[] },
     ]},
   ],
   Tactician: [
@@ -7919,8 +8107,8 @@ const TALENT_CATALOG = {
       { lvl:'II', req:'Holo-Markierung III', effect:'Up to 5 targets in an 8m radius. No fight limit. All Holo-Markierung bonuses apply.', mods:[] },
     ]},
     { name: 'Deckungsfeuer', levels: [
-      { lvl:'I', req:'Mind 10', effect:'Reaction roll also triggers on enemy attacks/hacks/other actions, not just movement', mods:[] },
-      { lvl:'II', req:'Mind 16', effect:'Reaction roll vs ANY enemy action in sight. No malus on these reaction shots.', mods:[] },
+      { lvl:'I', req:'Mind 10', effect:'Feuerbereitschaft can also trigger when an enemy in the watched area starts an attack, hack, grenade throw, or other visible main action, not just movement. Resolves before that action.', mods:[] },
+      { lvl:'II', req:'Mind 16', effect:'Feuerbereitschaft no longer ends after its first reaction shot — it can trigger up to two matching reaction shots before your next turn. Both use full PW and their own normal Stamina/ammo cost.', mods:[] },
     ]},
     { name: 'Blitzreflexe', levels: [
       { lvl:'I', req:'Mobility 10', effect:'The first reaction/overwatch shot per round vs this character always misses — no roll', mods:[] },
@@ -7963,7 +8151,7 @@ const TALENT_CATALOG = {
       { lvl:'II', req:'Mind 16', effect:'Zone 25m wide. Suppressed targets who move: +25% damage from reaction shot.', mods:[] },
     ]},
     { name: 'Killzone', levels: [
-      { lvl:'I', req:'Mind 14', effect:'1x/fight: main action. All enemies moving through a 90-degree sight cone next round get an automatic reaction shot (no roll).', mods:[] },
+      { lvl:'I', req:'Mind 14', effect:'1x/fight: main action, active until the start of your next turn. Any enemy moving through the chosen 90-degree cone triggers a reaction shot (no additional trigger roll needed — the target still gets its normal defensive reaction), resolved before the movement continues. Each enemy can only trigger it once during that duration.', mods:[] },
       { lvl:'II', req:'Mind 20', effect:'2x/fight. 180-degree cone. Killzone reaction shots can crit.', mods:[] },
     ]},
     { name: 'Stabiler Schuss', levels: [
@@ -8168,7 +8356,7 @@ const TECHNIQUE_CATALOG = {
     { name: 'Execution Shot', stamina:6, pw:{mode:'override', stats:['focus','senses'], label:'Foc+Sen'}, effect:'Only vs a target under 30% HP with no reaction possible (KO’d, grappled, etc.): instant death or KO, no damage roll, no death save.' },
   ],
   SniperRifle: [
-    { name: 'Atempause', stamina:2, pw:{mode:'same'}, effect:'This shot ignores all range penalties — full PW at any distance.' },
+    { name: 'Atempause', stamina:2, pw:{mode:'same'}, effect:'This shot ignores the distance-based PW halving up to the Sniper Rifle\'s current maximum range (§6.4a/§7.7). With Hawk Eye III, it also ignores the halving on attacks beyond that maximum range.' },
     { name: 'Todesstoss', stamina:6, pw:{mode:'delta', amount:10}, effect:'Charge: no main action this round. Next round: shot at +10 PW and double weapon bonus.' },
     { name: 'Kettenschuss', stamina:4, pw:{mode:'override', stats:['focus','senses'], label:'Foc+Sen', amount:-4}, effect:'Shot passes through the first target into a second directly behind (-4 PW on the second).' },
     { name: 'Geisterschuetze', stamina:4, pw:{mode:'same'}, effect:"Position never revealed by this shot — no muzzle flash, no report. Works without a Suppressor too." },
@@ -8180,7 +8368,7 @@ const TECHNIQUE_CATALOG = {
     { name: 'Breacher', stamina:2, pw:{mode:'same'}, effect:"Shot ignores cover HP entirely — even Thick Steel." },
     { name: 'Kniescheibe', stamina:3, pw:{mode:'same'}, effect:'Aimed Shot to the legs with no Aimed-Shot malus. Hit: Speed halved for 3 rounds.' },
     { name: 'Point-Blank Execution', stamina:4, pw:{mode:'same'}, effect:'Only vs a target at 0-2m: damage x2, ignores half SP.' },
-    { name: 'Slug-Upgrade', stamina:2, pw:{mode:'same'}, effect:'Switch to slug mode: single-target at full shotgun power out to 25m instead of the normal 6m spread.' },
+    { name: 'Slug-Upgrade', stamina:2, pw:{mode:'same'}, effect:'Switches to a single slug projectile instead of shot: hits only one target, using its own effective/max range of 25m/75m (§6.4a) instead of the shotgun\'s normal 12m/30m. Normal distance rules apply within those values.' },
   ],
   HeavyWeapons: [
     { name: 'Flaechenbombardement', stamina:7, pw:{mode:'override', stats:['focus','strength'], label:'Foc+Str'}, effect:'Explosion area doubled to 20m x 20m. Damage unchanged.' },
