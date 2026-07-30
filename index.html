@@ -5104,9 +5104,21 @@ async function toggleCombatQueue(id) {
     const currentId = order[state.combat.currentTurn || 0];
     const idx = order.indexOf(id);
     const initRolls = { ...(state.combat.initRolls || {}) };
+    const updates = {};
     if (idx >= 0) {
       order.splice(idx, 1);
       delete initRolls[id];
+      // Leaving the fight hides the token from players again (same as a
+      // freshly-placed one) instead of leaving it stuck on the map forever —
+      // position is kept, not deleted, so re-joining combat later restores
+      // it right where it was. The GM can still fully wipe the token via its
+      // ✕ "remove from map" badge if they want it gone for good.
+      const existingPos = state.map?.tokens?.[id];
+      if (existingPos && !existingPos.hidden) {
+        const pos = { ...existingPos, hidden: true };
+        state.map = { ...state.map, tokens: { ...(state.map?.tokens || {}), [id]: pos } };
+        updates['map/tokens/' + id + '/hidden'] = true;
+      }
     } else {
       const c = state.characters[id];
       if (c && !slotsNextToOwner(c)) {
@@ -5124,8 +5136,9 @@ async function toggleCombatQueue(id) {
     state.combat.order = order;
     state.combat.currentTurn = newTurn;
     state.combat.initRolls = initRolls;
-    await dbUpdate({ 'combat/order': order, 'combat/currentTurn': newTurn, 'combat/initRolls': initRolls });
+    await dbUpdate({ 'combat/order': order, 'combat/currentTurn': newTurn, 'combat/initRolls': initRolls, ...updates });
     renderCombat();
+    if (Object.keys(updates).length) renderMapView();
   } else {
     const queue = [...(state.encounterQueue || [])];
     const idx = queue.indexOf(id);
