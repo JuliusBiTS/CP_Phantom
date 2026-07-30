@@ -324,6 +324,26 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   0%, 100% { filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6)) drop-shadow(0 0 6px var(--red-bright)); }
   50% { filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6)) drop-shadow(0 0 14px var(--red-bright)); }
 }
+/* GM-only per-token controls (see toggleTokenHidden/removeTokenFromMap) —
+   small corner badges nested INSIDE the token div itself so they move
+   with it automatically during a drag, no separate map-space position
+   math needed (unlike the cone handles, which aren't nested inside a
+   single positioned parent the same way). */
+.token-badge {
+  position: absolute;
+  width: 34%; height: 34%;
+  min-width: 12px; min-height: 12px;
+  background: rgba(0,0,0,0.85);
+  border: 1px solid var(--border2);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 60%;
+  cursor: pointer;
+  touch-action: none;
+  z-index: 4;
+}
+.token-badge-eye { top: -15%; right: -15%; }
+.token-badge-remove { bottom: -15%; right: -15%; color: var(--red-bright); border-color: var(--red-bright); }
 /* Security objects (§25) — deliberately NOT one of the character shapes
    above, so a camera/lock/trap marker never reads as a character. Small,
    square, icon-only; drag to reposition, click (no drag) to edit. */
@@ -1664,6 +1684,20 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   </div>
 </div>
 
+<!-- Add Token to Map Modal -->
+<div class="modal-overlay" id="add-token-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">ADD TOKEN TO MAP</span>
+      <button class="modal-close" onclick="closeModal('add-token-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="add-token-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-small" onclick="closeModal('add-token-modal')">CANCEL</button>
+    </div>
+  </div>
+</div>
+
 <!-- Edit Security Device Modal -->
 <div class="modal-overlay" id="security-edit-modal">
   <div class="modal">
@@ -2332,8 +2366,20 @@ function setCombatView(mode) {
 
 function buildMapTokensHtml(interactive) {
   const order = state.combat?.order || [];
-  return order.map(id => {
+  // A token can exist on the map without the character being in active
+  // combat at all — prepping an encounter (placing enemies, deciding
+  // who's visible) is meant to happen BEFORE combat starts, not just
+  // during it. Union of "currently fighting" and "has a saved map
+  // position" covers both.
+  const tokenIds = new Set(order);
+  Object.keys(state.map?.tokens || {}).forEach(id => tokenIds.add(id));
+  return [...tokenIds].map(id => {
     const c = state.characters[id]; if (!c) return '';
+    const pos = state.map?.tokens?.[id] || { x: 50, y: 50 };
+    // A hidden token is invisible to players outright — not dimmed, not
+    // present in the DOM at all, so there's no way to detect it's even
+    // there (e.g. via devtools) before the GM reveals it.
+    if (!interactive && pos.hidden) return '';
     ensurePortraitListener(id);
     const portrait = portraits[id];
     // Drones take the same ally/enemy color as any other NPC (no fixed
@@ -2343,7 +2389,6 @@ function buildMapTokensHtml(interactive) {
     // square=vehicle, hexagon=drone, circle=everyone else (PC/NPC/Ally
     // stay color-only).
     const shape = c.isDrone ? 'hexagon' : (c.isVehicle ? 'square' : (c.isCompanion ? 'octagon' : 'circle'));
-    const pos = state.map?.tokens?.[id] || { x: 50, y: 50 };
     const bg = portrait ? `background-image:url('${portrait}');` : '';
     const initials = esc(c.name.slice(0, 2).toUpperCase());
     // GM tokens open the dossier via the click-vs-drag pointer handlers
@@ -2408,8 +2453,18 @@ function buildMapTokensHtml(interactive) {
     // so the drop shadow is a filter here and applied to every shape alike.
     const shadow = 'drop-shadow(0 2px 8px rgba(0,0,0,0.6))';
     const filterStyle = isDead ? `filter:${shadow} grayscale(85%) brightness(0.65);` : `filter:${shadow};`;
+    // GM-only badges: a "remove from map" ✕ and an eye toggle for whether
+    // players can see this token at all — prepping an ambush means
+    // placing an enemy hidden, then flipping it visible the moment it's
+    // meant to be spotted. Hidden gets a dashed outline too so the GM can
+    // tell at a glance what players currently can't see, without needing
+    // to check each one individually.
+    const hiddenStyle = (interactive && pos.hidden) ? 'outline:2px dashed var(--text3);outline-offset:2px;opacity:0.6;' : '';
+    const badges = interactive ? `
+      <span class="token-badge token-badge-eye" onpointerdown="event.stopPropagation();toggleTokenHidden('${id}')" title="${pos.hidden ? 'Hidden from players — click to reveal' : 'Visible to players — click to hide'}">${pos.hidden ? '🚫' : '👁'}</span>
+      <span class="token-badge token-badge-remove" onpointerdown="event.stopPropagation();removeTokenFromMap('${id}')" title="Remove from map">✕</span>` : '';
     return `<div class="map-token shape-${shape}" data-id="${id}" title="${esc(c.name)}"
-      style="left:${pos.x}%;top:${pos.y}%;${bg}${cursorStyle}${filterStyle}"${dragAttr}>${portrait ? '' : initials}${ring}</div>`;
+      style="left:${pos.x}%;top:${pos.y}%;${bg}${cursorStyle}${filterStyle}${hiddenStyle}"${dragAttr}>${portrait ? '' : initials}${ring}${badges}</div>`;
   }).join('');
 }
 
@@ -2653,6 +2708,7 @@ function renderMapView() {
       <button class="btn btn-ghost btn-small" onclick="document.getElementById('map-upload-input').click()">CHANGE MAP</button>
       <button class="btn btn-danger btn-small" onclick="removeMap()">REMOVE MAP</button>
       <button class="btn btn-primary btn-small" onclick="openAddSecurityObjectModal()">+ ADD DEVICE</button>
+      <button class="btn btn-primary btn-small" onclick="openAddTokenModal()" title="Place a character on the map ahead of combat">+ ADD TOKEN</button>
       <button class="btn btn-ghost btn-small" onclick="openScenesModal()" title="Prep and switch between named rooms/scenes">🗂 SCENES${state.activeSceneId && state.scenes?.[state.activeSceneId] ? ': ' + esc(state.scenes[state.activeSceneId].name) : ''}</button>
       <span style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text3)" title="Real-world width this map represents — powers weapon range checks and to-scale detection zones">
         📏 <input type="number" min="0.1" step="0.5" placeholder="unset" value="${state.mapScaleMetersWidth || ''}" style="width:60px;font-size:10px" onchange="setMapScale(this.value)"> m wide
@@ -2713,11 +2769,59 @@ async function onTokenDragEnd() {
   mapDragState = null;
   if (!st) return;
   if (st.moved && st.x !== undefined) {
-    await dbWrite('map/tokens/' + st.id, { x: st.x, y: st.y });
+    // Preserves .hidden — a bare {x,y} overwrite would otherwise silently
+    // un-hide (or un-reveal) the token the instant it's dragged, since a
+    // full object write replaces whatever was there rather than merging.
+    const hidden = state.map?.tokens?.[st.id]?.hidden;
+    await dbWrite('map/tokens/' + st.id, hidden ? { x: st.x, y: st.y, hidden: true } : { x: st.x, y: st.y });
   } else {
     // A click, not a drag — open the portrait dossier instead of repositioning.
     openPortraitViewer(st.id);
   }
+}
+
+// Prepping an encounter means placing enemies (and deciding who's visible)
+// before combat even starts — a token no longer needs the character to be
+// in state.combat.order at all (see buildMapTokensHtml's union above).
+// New tokens default hidden: an enemy that's just been dropped onto the
+// map at a placeholder position hasn't been "spotted" by anyone yet, so
+// showing it to players immediately would be a worse default than having
+// the GM explicitly reveal it once it's actually positioned.
+function openAddTokenModal() {
+  const order = state.combat?.order || [];
+  const onMap = new Set([...order, ...Object.keys(state.map?.tokens || {})]);
+  const available = Object.entries(state.characters).filter(([id]) => !onMap.has(id));
+  document.getElementById('add-token-modal-body').innerHTML = available.length
+    ? available.map(([id, c]) => `<button class="btn btn-ghost btn-small" style="text-align:left;justify-content:flex-start" onclick="addTokenToMap('${id}')">${esc(c.name)} <span style="color:var(--text3);font-size:10px">· ${c.isCompanion ? 'COMPANION' : c.isDrone ? 'DRONE' : c.isVehicle ? 'VEHICLE' : c.isAlly ? 'ALLY' : c.isNPC ? 'NPC' : 'PC'}</span></button>`).join('')
+    : '<div style="color:var(--text3);font-size:11px">Every character already has a map position.</div>';
+  openModal('add-token-modal');
+}
+async function addTokenToMap(id) {
+  const c = state.characters[id]; if (!c) return;
+  const pos = { x: 50, y: 50, hidden: true };
+  state.map = { ...state.map, tokens: { ...(state.map?.tokens || {}), [id]: pos } };
+  await dbWrite('map/tokens/' + id, pos);
+  closeModal('add-token-modal');
+  renderMapView();
+  showToast(`${c.name} placed on the map — hidden from players until you click its eye icon.`);
+}
+async function removeTokenFromMap(id) {
+  const tokens = { ...(state.map?.tokens || {}) };
+  delete tokens[id];
+  state.map = { ...state.map, tokens };
+  await dbWrite('map/tokens/' + id, null);
+  renderMapView();
+}
+async function toggleTokenHidden(id) {
+  // Falls back to the same default position the renderer uses for a
+  // character with no explicit map/tokens entry yet (e.g. one already in
+  // combat.order that's never been dragged) — otherwise toggling
+  // visibility on one of those would silently do nothing.
+  const pos = state.map?.tokens?.[id] || { x: 50, y: 50 };
+  const updated = { ...pos, hidden: !pos.hidden };
+  state.map = { ...state.map, tokens: { ...(state.map?.tokens || {}), [id]: updated } };
+  await dbWrite('map/tokens/' + id, updated);
+  renderMapView();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2909,11 +3013,32 @@ const SECURITY_CATEGORY_ICON = { sensor: '📷', lock: '🔒', trap: '⚠' };
 // across screen sizes even with no scale set) when either piece is
 // missing.
 function getSecurityRadiusPercent(o) {
-  const rangeMeters = SECURITY_DEVICE_CATALOG[o.deviceType]?.rangeMeters;
+  // A manual drag on the distance handle (see startZoneDistanceDrag) sets
+  // rangeMetersOverride, which wins over the device's catalog rangeMeters
+  // — an explicit "I dragged this to a specific size" beats the book
+  // default for that one placed instance.
+  const rangeMeters = o.rangeMetersOverride ?? SECURITY_DEVICE_CATALOG[o.deviceType]?.rangeMeters;
   const calibrated = rangeMeters != null ? metersToPercentRadius(rangeMeters) : null;
   if (calibrated) return calibrated;
   const fallbackPercent = (o.visualRange ?? 30) / 3;
   return { rx: fallbackPercent, ry: fallbackPercent };
+}
+// The drawn zone itself always uses the TRUE rx/ry above — accuracy there
+// matters (it's what "is a token inside this zone" checks against too).
+// But a device's real range can vastly exceed a small map's own size
+// (a 40m camera on an 8m-wide apartment scene draws a zone many times
+// wider than the map itself), which would put its drag handles literally
+// off-screen and unreachable. Handles get their own capped display
+// distance instead — always close enough to click regardless of how the
+// true radius compares to the map — scaled down proportionally (not just
+// clamped independently per axis) so they stay on the same ray the real
+// edge sits on.
+const HANDLE_DISPLAY_CAP = 30;
+function getHandleRadius(rx, ry) {
+  const maxR = Math.max(rx, ry);
+  if (maxR <= HANDLE_DISPLAY_CAP || maxR <= 0) return { hrx: rx, hry: ry };
+  const scale = HANDLE_DISPLAY_CAP / maxR;
+  return { hrx: rx * scale, hry: ry * scale };
 }
 function buildSecurityObjectsHtml(interactive) {
   const objects = state.securityObjects || {};
@@ -2955,22 +3080,33 @@ function buildSecurityObjectsHtml(interactive) {
       overlay = `<svg class="security-overlay" data-id="${id}" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;${dimStyle}">
         <path d="${path}" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="0.15" stroke-opacity="0.6" vector-effect="non-scaling-stroke"/>
       </svg>`;
-      // Drag-to-aim handles, GM-only — one at the cone's centerline tip
-      // (drag anywhere around the device to set rotation) and one at its
-      // right edge ray (drag to widen/narrow the cone). Positioned with
-      // the same aspect-compensated rx/ry the cone itself is drawn with,
-      // so they always sit exactly on the visible edge regardless of the
-      // map's aspect ratio.
+      // Drag-to-aim handles, GM-only — rotate (centerline tip), angle
+      // (right edge, widen/narrow the cone) and distance (left edge, drag
+      // to resize the range). Positioned at the CAPPED handle radius (see
+      // getHandleRadius) rather than the true rx/ry the shape itself is
+      // drawn with, so they stay reachable even when the true radius
+      // extends far past the visible map.
       if (interactive) {
-        const rotOff = polarOffset(rotation, rx, ry);
-        const angOff = polarOffset(rotation + coneAngle / 2, rx, ry);
+        const { hrx, hry } = getHandleRadius(rx, ry);
+        const rotOff = polarOffset(rotation, hrx, hry);
+        const angOff = polarOffset(rotation + coneAngle / 2, hrx, hry);
+        const distOff = polarOffset(rotation - coneAngle / 2, hrx, hry);
         handles = `<div class="cone-handle cone-handle-rotate" data-id="${id}" title="Drag to rotate" style="left:${px + rotOff.x}%;top:${py + rotOff.y}%;border-color:var(--gold-bright);color:var(--gold-bright)" onpointerdown="startConeRotateDrag(event,'${id}')">⟳</div>
-          <div class="cone-handle cone-handle-angle" data-id="${id}" title="Drag to widen/narrow the cone" style="left:${px + angOff.x}%;top:${py + angOff.y}%;border-color:var(--cyan);color:var(--cyan)" onpointerdown="startConeAngleDrag(event,'${id}')">◇</div>`;
+          <div class="cone-handle cone-handle-angle" data-id="${id}" title="Drag to widen/narrow the cone" style="left:${px + angOff.x}%;top:${py + angOff.y}%;border-color:var(--cyan);color:var(--cyan)" onpointerdown="startConeAngleDrag(event,'${id}')">◇</div>
+          <div class="cone-handle cone-handle-distance" data-id="${id}" title="Drag to resize the range" style="left:${px + distOff.x}%;top:${py + distOff.y}%;border-color:var(--green-bright);color:var(--green-bright)" onpointerdown="startZoneDistanceDrag(event,'${id}')">↔</div>`;
       }
     } else if (shape === 'radius' && rx > 0) {
       overlay = `<svg class="security-overlay" data-id="${id}" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;${dimStyle}">
         <ellipse cx="${px}" cy="${py}" rx="${rx}" ry="${ry}" fill="${color}" fill-opacity="0.12" stroke="${color}" stroke-width="0.15" stroke-opacity="0.6" vector-effect="non-scaling-stroke"/>
       </svg>`;
+      // Radius zones are symmetric — no rotation/angle to set, but still
+      // need a reachable way to resize the range when it's calibrated far
+      // past the visible map.
+      if (interactive) {
+        const { hrx, hry } = getHandleRadius(rx, ry);
+        const distOff = polarOffset(0, hrx, hry);
+        handles = `<div class="cone-handle cone-handle-distance" data-id="${id}" title="Drag to resize the range" style="left:${px + distOff.x}%;top:${py + distOff.y}%;border-color:var(--green-bright);color:var(--green-bright)" onpointerdown="startZoneDistanceDrag(event,'${id}')">↔</div>`;
+      }
     }
     const dragAttr = interactive ? ` onpointerdown="startSecurityDrag(event,'${id}')"` : '';
     const marker = `<div class="security-token${netLinked ? ' net-linked' : ''}" data-id="${id}" title="${esc(o.name || o.deviceType || 'Device')}${netLinked ? ' — hacked network access' : ''}"
@@ -3013,12 +3149,17 @@ function onSecurityDragMove(e) {
     if (ellipse) { ellipse.setAttribute('cx', x); ellipse.setAttribute('cy', y); }
     const rotHandle = mapEl.querySelector(`.cone-handle-rotate[data-id="${id}"]`);
     const angHandle = mapEl.querySelector(`.cone-handle-angle[data-id="${id}"]`);
-    if (rotHandle || angHandle) {
+    const distHandle = mapEl.querySelector(`.cone-handle-distance[data-id="${id}"]`);
+    if (rotHandle || angHandle || distHandle) {
       const rotation = o.rotation || 0, coneAngle = o.coneAngle ?? 70;
-      const rotOff = polarOffset(rotation, rx, ry);
-      const angOff = polarOffset(rotation + coneAngle / 2, rx, ry);
+      const { hrx, hry } = getHandleRadius(rx, ry);
+      const rotOff = polarOffset(rotation, hrx, hry);
+      const angOff = polarOffset(rotation + coneAngle / 2, hrx, hry);
+      const distAngle = (o.detectionShape === 'cone') ? rotation - coneAngle / 2 : 0;
+      const distOff = polarOffset(distAngle, hrx, hry);
       if (rotHandle) { rotHandle.style.left = (x + rotOff.x) + '%'; rotHandle.style.top = (y + rotOff.y) + '%'; }
       if (angHandle) { angHandle.style.left = (x + angOff.x) + '%'; angHandle.style.top = (y + angOff.y) + '%'; }
+      if (distHandle) { distHandle.style.left = (x + distOff.x) + '%'; distHandle.style.top = (y + distOff.y) + '%'; }
     }
   }
 }
@@ -3036,13 +3177,13 @@ async function onSecurityDragEnd() {
   }
 }
 
-// Drag-to-aim for a cone device's rotation/angle — the sliders in the edit
-// modal still exist for precise numeric entry, but eyeballing an exact
-// degree there is slow; dragging the handle rendered at the cone's edge
-// (see buildSecurityObjectsHtml) is much faster for "point it about
-// there." Both handlers share one drag-state var and one move/end pair,
-// switched on `mode`, mirroring startSecurityDrag/onSecurityDragMove's
-// shape.
+// Drag-to-aim for a cone/radius device's rotation, angle and distance —
+// the sliders in the edit modal still exist for precise numeric entry,
+// but eyeballing an exact degree (or meter) there is slow; dragging the
+// handle rendered at the zone's edge (see buildSecurityObjectsHtml) is
+// much faster for "point it about there" / "about this big." All three
+// share one drag-state var and one move/end pair, switched on `mode`,
+// mirroring startSecurityDrag/onSecurityDragMove's shape.
 let coneDragState = null;
 function startConeRotateDrag(e, id) {
   if (mapTool) return;
@@ -3061,6 +3202,18 @@ function startConeAngleDrag(e, id) {
   const mapEl = document.getElementById('map-container');
   if (!mapEl) return;
   coneDragState = { id, mapEl, mode: 'angle' };
+  document.addEventListener('pointermove', onConeDragMove);
+  document.addEventListener('pointerup', onConeDragEnd);
+}
+// Shared by cone AND radius shapes — a radius zone has no rotation/angle
+// to set, just a size.
+function startZoneDistanceDrag(e, id) {
+  if (mapTool) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const mapEl = document.getElementById('map-container');
+  if (!mapEl) return;
+  coneDragState = { id, mapEl, mode: 'distance' };
   document.addEventListener('pointermove', onConeDragMove);
   document.addEventListener('pointerup', onConeDragEnd);
 }
@@ -3084,20 +3237,50 @@ function onConeDragMove(e) {
   if (mode === 'rotate') {
     rotation = Math.round(angle);
     coneDragState.rotation = rotation;
-  } else {
+  } else if (mode === 'angle') {
     const diff = Math.abs(((angle - rotation + 540) % 360) - 180);
     coneAngle = Math.max(10, Math.min(180, Math.round(diff * 2)));
     coneDragState.coneAngle = coneAngle;
+  } else {
+    // distance — resolves the pointer's real-world distance from the
+    // device (via the map's calibrated scale) and stores it as an
+    // explicit per-instance override of the catalog's rangeMeters. With
+    // no scale set, there's no meters to compute, so it falls back to
+    // directly deriving the 0-100 Visual Size slider value instead,
+    // inverting getSecurityRadiusPercent's own fallback formula
+    // (percent = visualRange/3).
+    const pointerXPercent = (e.clientX - rect.left) / rect.width * 100;
+    const pointerYPercent = (e.clientY - rect.top) / rect.height * 100;
+    const mpp = getMetersPerPercent();
+    if (mpp) {
+      const meters = getRealDistanceMeters({ x: px, y: py }, { x: pointerXPercent, y: pointerYPercent });
+      coneDragState.rangeMetersOverride = Math.max(1, Math.round(meters));
+    } else {
+      const distPercent = Math.hypot(pointerXPercent - px, pointerYPercent - py);
+      coneDragState.visualRange = Math.max(0, Math.min(100, Math.round(distPercent * 3)));
+    }
   }
-  const { rx, ry } = getSecurityRadiusPercent(o);
+  const liveObj = { ...o };
+  if (coneDragState.rotation !== undefined) liveObj.rotation = coneDragState.rotation;
+  if (coneDragState.coneAngle !== undefined) liveObj.coneAngle = coneDragState.coneAngle;
+  if (coneDragState.rangeMetersOverride !== undefined) liveObj.rangeMetersOverride = coneDragState.rangeMetersOverride;
+  if (coneDragState.visualRange !== undefined) liveObj.visualRange = coneDragState.visualRange;
+  const { rx, ry } = getSecurityRadiusPercent(liveObj);
   const path = mapEl.querySelector(`.security-overlay[data-id="${id}"] path`);
   if (path) path.setAttribute('d', buildConePath(px, py, rotation, coneAngle, rx, ry));
+  const ellipse = mapEl.querySelector(`.security-overlay[data-id="${id}"] ellipse`);
+  if (ellipse) { ellipse.setAttribute('rx', rx); ellipse.setAttribute('ry', ry); }
+  const { hrx, hry } = getHandleRadius(rx, ry);
   const rotHandle = mapEl.querySelector(`.cone-handle-rotate[data-id="${id}"]`);
   const angHandle = mapEl.querySelector(`.cone-handle-angle[data-id="${id}"]`);
-  const rotOff = polarOffset(rotation, rx, ry);
-  const angOff = polarOffset(rotation + coneAngle / 2, rx, ry);
+  const distHandle = mapEl.querySelector(`.cone-handle-distance[data-id="${id}"]`);
+  const rotOff = polarOffset(rotation, hrx, hry);
+  const angOff = polarOffset(rotation + coneAngle / 2, hrx, hry);
+  const distAngle = (o.detectionShape === 'cone') ? rotation - coneAngle / 2 : 0;
+  const distOff = polarOffset(distAngle, hrx, hry);
   if (rotHandle) { rotHandle.style.left = (px + rotOff.x) + '%'; rotHandle.style.top = (py + rotOff.y) + '%'; }
   if (angHandle) { angHandle.style.left = (px + angOff.x) + '%'; angHandle.style.top = (py + angOff.y) + '%'; }
+  if (distHandle) { distHandle.style.left = (px + distOff.x) + '%'; distHandle.style.top = (py + distOff.y) + '%'; }
 }
 async function onConeDragEnd() {
   document.removeEventListener('pointermove', onConeDragMove);
@@ -3107,6 +3290,8 @@ async function onConeDragEnd() {
   if (!st) return;
   if (st.rotation !== undefined) await updateSecurityObjectField(st.id, 'rotation', st.rotation);
   if (st.coneAngle !== undefined) await updateSecurityObjectField(st.id, 'coneAngle', st.coneAngle);
+  if (st.rangeMetersOverride !== undefined) await updateSecurityObjectField(st.id, 'rangeMetersOverride', st.rangeMetersOverride);
+  if (st.visualRange !== undefined) await updateSecurityObjectField(st.id, 'visualRange', st.visualRange);
 }
 
 function openAddSecurityObjectModal() {
@@ -3349,25 +3534,27 @@ async function deleteScene(id) {
   } catch (e) {
     console.error('deleteScene failed:', e);
     showToast('Could not delete scene: ' + (e.message || e));
-    renderScenesModal();
-    return;
   }
-  // Isolated from the main delete: a permission issue on this newer,
-  // separate top-level path shouldn't leave the scene un-deleted just
-  // because its leftover image blob couldn't be cleaned up too.
-  try { await db.ref('mapImages/' + id).set(null); }
-  catch (e) { console.error('Could not clean up scene image:', e); }
   renderScenesModal();
 }
-// Swaps the live map (mapImage/securityObjects/map.tokens/mapDrawings)
-// for a different scene's prepped snapshot, saving the outgoing scene's
+// Swaps the live map (mapImage/securityObjects/map.tokens/mapDrawings) for
+// a different scene's prepped snapshot, saving the outgoing scene's
 // current live state back into its own bucket first so switching away
-// mid-fight never loses anything. Updates local state directly (rather
+// mid-fight never loses anything. The scene's own map image is stored as
+// mapImageData INSIDE campaign/scenes/{id} — NOT the separate top-level
+// mapImages/{id} path this used originally, which turned out to silently
+// fail (very likely a Firebase security-rules restriction on a brand-new
+// top-level path that older paths like 'campaign' and 'mapImage' were
+// never covered by) — security objects/tokens/etc. all live under
+// 'campaign' and always saved correctly, only the image didn't, which is
+// exactly what a path-specific permission problem looks like. Storing it
+// under 'campaign' instead trades a larger synced payload (each inactive
+// scene's compressed image sits in the main campaign JSON) for something
+// that actually works reliably. Updates local state directly (rather
 // than only writing to Firebase and waiting for the sync listener to
 // echo it back) so the GM who just clicked ACTIVATE sees it switch
-// immediately, and wraps everything so a failure — e.g. a Firebase
-// project whose security rules don't yet cover the newer mapImages/*
-// path — shows up as a toast instead of silently doing nothing.
+// immediately, and wraps everything so a real failure shows a toast
+// instead of silently doing nothing.
 async function switchScene(newId) {
   if (newId === state.activeSceneId || !state.scenes?.[newId]) return;
   const oldId = state.activeSceneId;
@@ -3379,17 +3566,14 @@ async function switchScene(newId) {
         ['scenes/' + oldId + '/mapDrawings']: state.mapDrawings || [],
         ['scenes/' + oldId + '/scaleMetersWidth']: state.mapScaleMetersWidth || null,
         ['scenes/' + oldId + '/imageAspect']: state.mapImageAspect || null,
+        ['scenes/' + oldId + '/mapImageData']: mapImage || null,
       });
-      // Isolated on purpose — see the function comment above.
-      try { await db.ref('mapImages/' + oldId).set(mapImage || null); }
-      catch (e) { console.error('Could not save outgoing scene image:', e); }
     }
     const target = state.scenes[newId] || {};
-    let targetImage = null;
-    try {
-      const snap = await db.ref('mapImages/' + newId).get();
-      targetImage = snap.exists() ? snap.val() : null;
-    } catch (e) { console.error('Could not load target scene image:', e); }
+    const targetImage = target.mapImageData || null;
+    // 'mapImage' (singular) is the separate, already-proven-working
+    // top-level path the rest of the app renders from — still written
+    // here so renderMapView/the mapImage listener keep working unchanged.
     await db.ref('mapImage').set(targetImage);
     await dbUpdate({
       securityObjects: target.securityObjects || {},
