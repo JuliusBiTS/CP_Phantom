@@ -4214,6 +4214,14 @@ function renderCombatantCard(id, isActive) {
         <span class="detail-label">DRONE</span>
         <span>${esc(c.drone_template||'')} · ${c.drone_mode === 'autonomous' ? `Autonomous (Ini = ${esc(c.drone_initiative_note||'—')})` : `Controlled — Operator: ${esc(state.characters[c.owner_char_id]?.name || '— none set —')}`}${c.drone_loudness ? ' · ' + esc(c.drone_loudness) : ''}${c.drone_range ? ' · Range ' + esc(c.drone_range) : ''}</span>
       </div>` : ''}
+      ${c.tactics ? `<div class="detail-row" style="align-items:flex-start">
+        <span class="detail-label" style="margin-top:1px">TACTICS</span>
+        <span style="font-size:10px;color:var(--text2);line-height:1.5;white-space:pre-line">${esc(c.tactics)}</span>
+      </div>` : ''}
+      ${c.gm_note ? `<div class="detail-row" style="align-items:flex-start">
+        <span class="detail-label" style="margin-top:1px;color:#dd8800">GM NOTE</span>
+        <span style="font-size:10px;color:#aa8844;line-height:1.5;white-space:pre-line">${esc(c.gm_note)}</span>
+      </div>` : ''}
       <div class="detail-row">
         <span class="detail-label">${c.isVehicle ? 'SDP' : 'HP'}</span>
         <div class="adj-group">
@@ -6438,8 +6446,13 @@ async function saveCharacter() {
       ? document.getElementById('cm-notes').value
       : (existing.notes ?? ''),
     image_prompt: document.getElementById('cm-image-prompt').value.trim(),
-    // Generator-only flavor text, no edit-modal UI — preserve as-is.
+    // Generator-only text, no edit-modal UI — preserve as-is. Same reason
+    // as flavor: this is a field-by-field rebuild, not a merge, so
+    // anything not explicitly carried forward here gets silently wiped
+    // the first time this character is opened and saved for any reason.
     flavor: existing.flavor ?? '',
+    tactics: existing.tactics ?? '',
+    gm_note: existing.gm_note ?? '',
   };
   const id = editingCharId || ('char_' + Date.now());
   await dbWrite('characters/' + id, char);
@@ -9926,6 +9939,13 @@ function genResultToCharacter(enemy) {
     hacks: enemy.hacks || [],
     image_prompt: enemy.imagePrompt || '',
     flavor: enemy.flavor || '',
+    // The generator's whole point is producing exactly this kind of
+    // reference material — how the NPC fights, plus any GM-only secret —
+    // so it needs to survive past the preview and actually live on the
+    // character, same as flavor already does. See renderCombatantCard for
+    // where the GM sees it again mid-fight.
+    tactics: enemy.tactics || '',
+    gm_note: enemy.gmNote || '',
     status_effects: [], talents: [], inventory: [], eurodollar: 0
   };
 }
@@ -9965,6 +9985,8 @@ function genVehicleResultToCharacter(v) {
     loot: [], cyberware: [], cyberdeck: null, firewall: null, hacks: [],
     image_prompt: v.imagePrompt || '',
     flavor: v.flavor || '',
+    tactics: v.tactics || '',
+    gm_note: v.gmNote || '',
     status_effects: [], talents: [], inventory: [], eurodollar: 0
   };
 }
@@ -10012,6 +10034,8 @@ function genDroneResultToCharacter(v) {
     loot: [], cyberware: [], cyberdeck: null, firewall: null, hacks: [],
     image_prompt: v.imagePrompt || '',
     flavor: v.flavor || '',
+    tactics: v.tactics || '',
+    gm_note: v.gmNote || '',
     status_effects: [], talents: [], inventory: [], eurodollar: 0
   };
 }
@@ -10040,6 +10064,12 @@ async function addEncounterToCharacters(enc) {
   for (const e of enemies) {
     const id = 'char_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
     const char = genResultToCharacter(e);
+    // The encounter-level "group tactics"/GM note (how the squad works
+    // together, not just this one enemy) has nowhere else to live once
+    // the roster's individual character records are all that's left of
+    // this generation — folded onto each member rather than lost.
+    if (enc.encounterTactics) char.tactics = [char.tactics, `Squad tactics: ${enc.encounterTactics}`].filter(Boolean).join('\n\n');
+    if (enc.gmNote) char.gm_note = [char.gm_note, `Encounter: ${enc.gmNote}`].filter(Boolean).join('\n\n');
     state.characters[id] = char;
     updates['characters/' + id] = char;
   }
