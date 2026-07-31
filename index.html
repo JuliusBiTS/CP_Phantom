@@ -2390,13 +2390,14 @@ function setCombatView(mode) {
 }
 
 // netLinkedFilter (player view only): undefined renders everything (GM's
-// call site never passes it); 'exclude' skips tokens currently visible
-// only because of an active Ping bypass (see netLinked below) — used for
-// the normal pass that renders BEFORE/UNDER the fog-of-war layer; 'only'
-// renders JUST those tokens — used for a second pass rendered AFTER/ON TOP
-// of fog, so a hacked entity shows through fog the player hasn't actually
-// revealed yet, same "seen over the network, not with your own eyes" idea
-// as the security-object net-linked bypass this mirrors.
+// call site never passes it); 'exclude' is the normal pass that renders
+// BEFORE/UNDER the fog-of-war layer; 'only' is a second pass rendered
+// AFTER/ON TOP of fog. While a Ping is active, EVERY token moves into the
+// 'only' pass — not just ones the GM had eye-hidden — since the whole
+// point of the hack is seeing positions on the grid regardless of
+// physical line-of-sight, and fog is exactly that kind of physical
+// sight-blocker. Once the ping expires, tokens go right back to the
+// normal pass and fog covers them again same as before.
 function buildMapTokensHtml(interactive, netLinkedFilter) {
   const order = state.combat?.order || [];
   // A token can exist on the map without the character being in active
@@ -2415,14 +2416,19 @@ function buildMapTokensHtml(interactive, netLinkedFilter) {
   return [...tokenIds].map(id => {
     const c = state.characters[id]; if (!c) return '';
     const pos = state.map?.tokens?.[id] || { x: 50, y: 50 };
+    // The pulsing glow is reserved for tokens the hack is ACTUALLY doing
+    // work for (ones the GM had eye-hidden) — a token that was already
+    // visible and merely fog-covered doesn't need the extra "this is
+    // hacked intel" signal, it's just poking through mist like anything
+    // else does once its spot is revealed.
     const netLinked = netPingActive && pos.hidden;
     // A hidden token is invisible to players outright — not dimmed, not
     // present in the DOM at all, so there's no way to detect it's even
     // there (e.g. via devtools) before the GM reveals it — UNLESS a Ping
     // is currently bypassing that, same exception security objects get.
     if (!interactive && pos.hidden && !netPingActive) return '';
-    if (netLinkedFilter === 'exclude' && netLinked) return '';
-    if (netLinkedFilter === 'only' && !netLinked) return '';
+    if (netLinkedFilter === 'exclude' && netPingActive) return '';
+    if (netLinkedFilter === 'only' && !netPingActive) return '';
     ensurePortraitListener(id);
     const portrait = portraits[id];
     // Drones take the same ally/enemy color as any other NPC (no fixed
