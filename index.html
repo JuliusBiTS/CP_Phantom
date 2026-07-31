@@ -429,6 +429,10 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 @keyframes net-ping-flow { to { stroke-dashoffset: -2.7; } }
 .security-token.net-linked { box-shadow: 0 0 10px var(--cyan-glow); animation: net-linked-pulse 1.4s ease-in-out infinite; }
 @keyframes net-linked-pulse { 0%,100% { box-shadow: 0 0 6px var(--cyan-glow); } 50% { box-shadow: 0 0 14px var(--cyan-glow); } }
+/* Same treatment for a character token temporarily visible via Ping — box-
+   shadow lives on .map-token itself (not .token-shape), so it's unaffected
+   by that inner element's clip-path on octagon/hexagon shapes. */
+.map-token.net-linked { box-shadow: 0 0 10px var(--cyan-glow); animation: net-linked-pulse 1.4s ease-in-out infinite; }
 /* Map tool toggle buttons (Ping/Draw) get a visibly "active" state so the
    GM can tell which click-behavior is currently armed on the map. */
 .map-tool-btn.active { background: var(--cyan-dim); border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px var(--cyan-glow); }
@@ -2385,7 +2389,15 @@ function setCombatView(mode) {
   if (mode === 'map') renderMapView();
 }
 
-function buildMapTokensHtml(interactive) {
+// netLinkedFilter (player view only): undefined renders everything (GM's
+// call site never passes it); 'exclude' skips tokens currently visible
+// only because of an active Ping bypass (see netLinked below) — used for
+// the normal pass that renders BEFORE/UNDER the fog-of-war layer; 'only'
+// renders JUST those tokens — used for a second pass rendered AFTER/ON TOP
+// of fog, so a hacked entity shows through fog the player hasn't actually
+// revealed yet, same "seen over the network, not with your own eyes" idea
+// as the security-object net-linked bypass this mirrors.
+function buildMapTokensHtml(interactive, netLinkedFilter) {
   const order = state.combat?.order || [];
   // A token can exist on the map without the character being in active
   // combat at all — prepping an encounter (placing enemies, deciding
@@ -2394,13 +2406,23 @@ function buildMapTokensHtml(interactive) {
   // position" covers both.
   const tokenIds = new Set(order);
   Object.keys(state.map?.tokens || {}).forEach(id => tokenIds.add(id));
+  // A successful Ping hack temporarily shows players every entity on the
+  // grid too, not just security devices (see buildSecurityObjectsHtml) —
+  // it's a bypass of the visibility check only, not a change to the
+  // token's own hidden flag, so once it expires everything not
+  // permanently revealed goes right back to hidden.
+  const netPingActive = state.netPing?.roundsLeft > 0;
   return [...tokenIds].map(id => {
     const c = state.characters[id]; if (!c) return '';
     const pos = state.map?.tokens?.[id] || { x: 50, y: 50 };
+    const netLinked = netPingActive && pos.hidden;
     // A hidden token is invisible to players outright — not dimmed, not
     // present in the DOM at all, so there's no way to detect it's even
-    // there (e.g. via devtools) before the GM reveals it.
-    if (!interactive && pos.hidden) return '';
+    // there (e.g. via devtools) before the GM reveals it — UNLESS a Ping
+    // is currently bypassing that, same exception security objects get.
+    if (!interactive && pos.hidden && !netPingActive) return '';
+    if (netLinkedFilter === 'exclude' && netLinked) return '';
+    if (netLinkedFilter === 'only' && !netLinked) return '';
     ensurePortraitListener(id);
     const portrait = portraits[id];
     // Drones take the same ally/enemy color as any other NPC (no fixed
@@ -2484,7 +2506,7 @@ function buildMapTokensHtml(interactive) {
     const badges = interactive ? `
       <span class="token-badge token-badge-eye" onpointerdown="event.stopPropagation();toggleTokenHidden('${id}')" title="${pos.hidden ? 'Hidden from players — click to reveal' : 'Visible to players — click to hide'}">${pos.hidden ? '🚫' : '👁'}</span>
       <span class="token-badge token-badge-remove" onpointerdown="event.stopPropagation();removeTokenFromMap('${id}')" title="Remove from map">✕</span>` : '';
-    return `<div class="map-token" data-id="${id}" title="${esc(c.name)}"
+    return `<div class="map-token${netLinked ? ' net-linked' : ''}" data-id="${id}" title="${esc(c.name)}${netLinked ? ' — hacked network access' : ''}"
       style="left:${pos.x}%;top:${pos.y}%;${cursorStyle}${filterStyle}${hiddenStyle}"${dragAttr}><div class="token-shape shape-${shape}" style="${bg}">${portrait ? '' : initials}</div>${ring}${badges}</div>`;
   }).join('');
 }
@@ -2922,8 +2944,9 @@ function renderPlayerMapView() {
       ${buildMapDrawingsHtml()}
       ${buildSecurityObjectsHtml(false)}
       ${buildNetPingLinesHtml()}
-      ${buildMapTokensHtml(false)}
+      ${buildMapTokensHtml(false, 'exclude')}
       ${buildFogHtml(false)}
+      ${buildMapTokensHtml(false, 'only')}
       <div class="map-ping-marker"></div>
       <div class="net-ping-marker"></div>
     </div>`;
