@@ -701,6 +701,30 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .reveal-name { font-size: 26px; font-weight: 700; letter-spacing: 0.08em; }
 .reveal-flavor { max-width: 460px; font-size: 13px; line-height: 1.7; color: var(--text2); font-style: italic; }
 .reveal-hint { font-size: 10px; letter-spacing: 0.25em; color: var(--text3); margin-top: 8px; }
+/* Player-facing fullscreen map — a phone in portrait showing a landscape
+   battle map (the common case) only fills a small strip of the screen at
+   its normal width-constrained size. Rather than reparenting the map DOM
+   (which openFullscreenMap's own comment explains is unsafe — renderPlayerMapView
+   rebuilds #player-map-container from scratch on every sync), the SAME
+   element just gets a fixed, viewport-centered class added to it, sized to
+   the exact aspect-fit pixel width via JS (see positionFullscreenMapContainer)
+   so the image + every percentage-positioned token/overlay inside it stay
+   perfectly aligned, just bigger. The backdrop below fills the letterboxed
+   gaps a fixed-but-non-square-aspect-ratio container leaves exposed. */
+#map-fullscreen-backdrop { position: fixed; inset: 0; z-index: 10000; background: #000; display: none; }
+#map-fullscreen-backdrop.show { display: block; }
+.map-fullscreen-close-btn {
+  position: fixed; top: 12px; right: 12px; z-index: 10002; display: none;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(0,0,0,0.75); border: 1px solid var(--border2); color: var(--text);
+  font-size: 18px; align-items: center; justify-content: center; cursor: pointer;
+}
+.map-fullscreen-close-btn.show { display: flex; }
+#player-map-container.map-fullscreen-active {
+  position: fixed !important; top: 50% !important; left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 10001; border: none !important; margin: 0 !important; max-width: none !important;
+}
 /* ── PLAYER VIEW ── */
 .player-view { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
 .player-card {
@@ -1249,7 +1273,10 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   <div id="player-tab-map" class="tab-content main-scroll">
     <div class="player-view">
       <div class="player-card">
-        <div class="player-card-title">Combat Map <span style="color:var(--text3);font-weight:400">(view only)</span></div>
+        <div class="player-card-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <span>Combat Map <span style="color:var(--text3);font-weight:400">(view only)</span></span>
+          <button class="btn btn-ghost btn-small" onclick="openFullscreenMap()" title="Open the map fullscreen">⛶ FULLSCREEN</button>
+        </div>
         <div id="player-map-view"></div>
       </div>
     </div>
@@ -1753,6 +1780,8 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 
 <!-- GM-triggered fullscreen portrait reveal, broadcast to every player -->
 <div id="portrait-reveal-overlay" class="portrait-reveal-overlay" onclick="dismissPortraitReveal()"></div>
+<div id="map-fullscreen-backdrop" onclick="closeFullscreenMap()"></div>
+<button class="map-fullscreen-close-btn" id="map-fullscreen-close-btn" onclick="closeFullscreenMap()" title="Exit fullscreen">✕</button>
 
 <!-- Toast -->
 <div class="toast" id="toast"></div>
@@ -2942,11 +2971,12 @@ function renderPlayerMapView() {
   const el = document.getElementById('player-map-view');
   if (!el) return;
   if (!mapImage) {
+    if (mapFullscreenOpen) closeFullscreenMap(); // GM pulled the map out from under an open fullscreen view
     el.innerHTML = '<div style="color:var(--text3);font-size:11px">GM hasn\'t uploaded a map yet.</div>';
     return;
   }
   el.innerHTML = `
-    <div id="player-map-container" style="position:relative;width:100%;overflow:hidden;border:1px solid var(--border2);background:#000">
+    <div id="player-map-container" class="${mapFullscreenOpen ? 'map-fullscreen-active' : ''}" style="position:relative;width:100%;overflow:hidden;border:1px solid var(--border2);background:#000">
       <img src="${mapImage}" style="display:block;width:100%;height:auto;user-select:none;pointer-events:none" draggable="false">
       ${buildMapDrawingsHtml()}
       ${buildSecurityObjectsHtml(false)}
@@ -2958,6 +2988,61 @@ function renderPlayerMapView() {
       <div class="net-ping-marker"></div>
     </div>`;
   applySpottedHighlights(false);
+  if (mapFullscreenOpen) positionFullscreenMapContainer();
+}
+
+// Player-facing fullscreen map (see the CSS comment above
+// #map-fullscreen-backdrop) — a phone in portrait viewing a landscape
+// battle map only ever gets a small width-constrained strip at its normal
+// size. Native pinch-zoom is disabled app-wide (see the viewport meta tag)
+// so buttons don't shift under a stray pinch mid-combat; it's temporarily
+// re-enabled here for exactly as long as the fullscreen view is open, then
+// restored, rather than just turning it on permanently everywhere.
+let mapFullscreenOpen = false;
+let fullscreenMapPrevViewport = null;
+function openFullscreenMap() {
+  if (!mapImage) { showToast("No map to show yet — the GM hasn't uploaded one."); return; }
+  mapFullscreenOpen = true;
+  const meta = document.querySelector('meta[name="viewport"]');
+  if (meta) { fullscreenMapPrevViewport = meta.getAttribute('content'); meta.setAttribute('content', 'width=device-width, initial-scale=1.0'); }
+  document.getElementById('map-fullscreen-backdrop')?.classList.add('show');
+  document.getElementById('map-fullscreen-close-btn')?.classList.add('show');
+  window.addEventListener('resize', positionFullscreenMapContainer);
+  renderPlayerMapView();
+}
+function closeFullscreenMap() {
+  mapFullscreenOpen = false;
+  const meta = document.querySelector('meta[name="viewport"]');
+  if (meta && fullscreenMapPrevViewport) { meta.setAttribute('content', fullscreenMapPrevViewport); fullscreenMapPrevViewport = null; }
+  document.getElementById('map-fullscreen-backdrop')?.classList.remove('show');
+  document.getElementById('map-fullscreen-close-btn')?.classList.remove('show');
+  window.removeEventListener('resize', positionFullscreenMapContainer);
+  const container = document.getElementById('player-map-container');
+  if (container) container.style.width = '';
+  renderPlayerMapView();
+}
+// Rather than letting the container just go position:fixed at its
+// existing 100%-of-column width (tiny, since that column is only ever as
+// wide as the phone screen regardless), this computes the exact pixel
+// width that makes BOTH dimensions fit the viewport at once from the
+// image's real aspect ratio — same "fit the larger dimension" idea as
+// object-fit:contain, but applied to the CONTAINER'S width rather than
+// the image, so every percentage-positioned token/security overlay inside
+// it scales together with the image and stays aligned, instead of the
+// image being letterboxed inside a container overlays are no longer
+// sized relative to.
+function positionFullscreenMapContainer() {
+  if (!mapFullscreenOpen) return;
+  const container = document.getElementById('player-map-container');
+  const img = container?.querySelector('img');
+  if (!container || !img) return;
+  const apply = () => {
+    const natW = img.naturalWidth || 1, natH = img.naturalHeight || 1;
+    const scale = Math.min(window.innerWidth / natW, window.innerHeight / natH);
+    container.style.width = Math.floor(natW * scale) + 'px';
+  };
+  if (img.complete && img.naturalWidth) apply();
+  else img.addEventListener('load', apply, { once: true });
 }
 
 let mapDragState = null;
