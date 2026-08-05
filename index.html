@@ -1794,7 +1794,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 // ═══════════════════════════════════════════════════════════════
 let db = null;
 let session = { role: null, charId: null, gmPin: null };
-let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} }, securityObjects: {}, alarmLevel: 0, portraitReveal: null, mapPing: null, mapDrawings: [], netPing: null, scenes: {}, activeSceneId: null, mapScaleMetersWidth: null, mapImageAspect: null, fogShapes: [], fogEnabled: false };
+let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} }, securityObjects: {}, alarmLevel: 0, portraitReveal: null, mapPing: null, mapDrawings: [], netPing: null, scenes: {}, activeSceneId: null, mapScaleMetersWidth: null, mapImageAspect: null, fogShapes: [], fogEnabled: false, fogAutoReveal: false, fogVisionRadius: 15 };
 let combatViewMode = 'list';
 let mapImage = null;       // fetched from a Firebase path OUTSIDE 'campaign' — kept separate from `state`
 // { charId: dataUrl } — the CROPPED square used for tokens/thumbnails everywhere.
@@ -2085,6 +2085,8 @@ function startSync() {
     state.mapDrawings = data.mapDrawings || [];
     state.fogShapes = data.fogShapes || [];
     state.fogEnabled = data.fogEnabled || false;
+    state.fogAutoReveal = data.fogAutoReveal || false;
+    state.fogVisionRadius = data.fogVisionRadius ?? 15;
     state.mapPing = data.mapPing || null;
     // Same skip-first-sync rule as the portrait reveal, but shown to
     // EVERYONE (GM included) — a ping is just "look here", not a
@@ -2610,6 +2612,14 @@ function buildFogHtml(interactive) {
       const w = Math.abs(s.x2 - s.x1), h = Math.abs(s.y2 - s.y1);
       return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fillColor}"/>`;
     }
+    // Auto-reveal circles (see maybeBuildAutoRevealShape) — an ellipse, not
+    // a plain circle, for the same reason the security-object detection
+    // radius is: this viewBox is stretched to fill the container via
+    // preserveAspectRatio="none", so an equal rx/ry would render visually
+    // squashed on any non-square map unless pre-compensated for aspect.
+    if (s.shape === 'ellipse') {
+      return `<ellipse cx="${s.cx}" cy="${s.cy}" rx="${s.rx}" ry="${s.ry}" fill="${fillColor}"/>`;
+    }
     return `<polyline points="${(s.points || []).map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="${fillColor}" stroke-width="${s.size || 6}" stroke-linecap="round" stroke-linejoin="round"/>`;
   };
   const shapesHtml = (state.fogShapes || []).map(shapeEl).join('');
@@ -2758,6 +2768,57 @@ async function resetFog() {
   state.fogShapes = [];
   await dbWrite('fogShapes', []);
   renderMapView();
+}
+// AUTO-REVEAL — the "smart" alternative to hand-painting: reveal a radius
+// around each PC token automatically as it moves, instead of the GM
+// tracing rooms with the brush. This is radius-of-sight, not true line-
+// of-sight — there's no wall/obstacle data anywhere in this app to
+// raycast against, so a PC standing right next to a thin wall still
+// reveals straight through it. Framed as "how far you can make things out
+// around you" rather than "what you can literally see," same tradeoff
+// the security-object detection zones already make (also radius-only).
+async function toggleFogAutoReveal() {
+  state.fogAutoReveal = !state.fogAutoReveal;
+  const updates = { fogAutoReveal: state.fogAutoReveal };
+  // Turning this on shouldn't leave already-placed PCs in the dark until
+  // their next move — reveal around wherever they already are right away.
+  if (state.fogAutoReveal && state.fogEnabled) {
+    const shapes = [...(state.fogShapes || [])];
+    let added = false;
+    Object.entries(state.map?.tokens || {}).forEach(([id, pos]) => {
+      const shape = buildAutoRevealShapeFor(id, pos);
+      if (shape) { shapes.push(shape); added = true; }
+    });
+    if (added) { state.fogShapes = shapes; updates.fogShapes = shapes; }
+  }
+  await dbUpdate(updates);
+  renderMapView();
+}
+function setFogVisionRadius(val) {
+  const meters = parseFloat(val);
+  state.fogVisionRadius = !isNaN(meters) && meters > 0 ? meters : 15;
+  dbWrite('fogVisionRadius', state.fogVisionRadius);
+}
+// Real vision radius in map-% — same calibrated-meters-with-uncalibrated-
+// fallback pattern getSecurityRadiusPercent already uses for detection zones.
+function getFogVisionRadiusPercent() {
+  const meters = state.fogVisionRadius ?? 15;
+  const calibrated = metersToPercentRadius(meters);
+  if (calibrated) return calibrated;
+  const fallbackPercent = meters / 3;
+  return { rx: fallbackPercent, ry: fallbackPercent };
+}
+// Only PCs push back the fog as they walk — NPCs/allies/companions/
+// vehicles/drones don't (an enemy squad shouldn't light up the map around
+// itself just by moving into position). Returns null (nothing to add)
+// whenever fog/auto-reveal isn't on or the character isn't a PC, so
+// callers can append the result unconditionally without a separate check.
+function buildAutoRevealShapeFor(id, pos) {
+  if (!state.fogEnabled || !state.fogAutoReveal) return null;
+  const c = state.characters[id];
+  if (!c || c.isNPC || c.isCompanion || c.isVehicle || c.isDrone) return null;
+  const { rx, ry } = getFogVisionRadiusPercent();
+  return { shape: 'ellipse', type: 'reveal', cx: pos.x, cy: pos.y, rx, ry };
 }
 function onFogBrushMove(e) {
   if (!fogStrokeState) return;
@@ -2963,6 +3024,12 @@ function renderMapView() {
       <span style="flex:1"></span>
       <button class="btn btn-ghost btn-small" onclick="toggleFogEnabled()" title="${state.fogEnabled ? 'Turn off the fog layer (keeps your drawn shapes)' : 'Turn on fog — covers the whole map until revealed'}">${state.fogEnabled ? '🌫 FOG: ON' : 'FOG: OFF'}</button>
       <button class="btn btn-danger btn-small" onclick="resetFog()" ${(state.fogShapes||[]).length ? '' : 'disabled'} title="Re-cover the entire map with fog">RESET FOG</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;align-items:center;padding:8px;border:1px solid var(--border2);background:var(--surface)">
+      <span style="font-size:10px;color:var(--text3)">AUTO-REVEAL</span>
+      <button class="btn btn-small ${state.fogAutoReveal ? 'btn-primary' : 'btn-ghost'}" onclick="toggleFogAutoReveal()" title="Automatically reveal a radius around each PC token as it moves, instead of hand-painting">${state.fogAutoReveal ? '👁 ON' : 'OFF'}</button>
+      <span style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text3)">VISION RADIUS <input type="number" min="1" step="1" value="${state.fogVisionRadius ?? 15}" style="width:55px" onchange="setFogVisionRadius(this.value)"> m</span>
+      <span style="font-size:9px;color:var(--text3)">${state.mapScaleMetersWidth ? '' : '(set the map scale above for an accurate radius)'}</span>
     </div>` : ''}`;
   applySpottedHighlights(true);
 }
@@ -3076,7 +3143,20 @@ async function onTokenDragEnd() {
     // un-hide (or un-reveal) the token the instant it's dragged, since a
     // full object write replaces whatever was there rather than merging.
     const hidden = state.map?.tokens?.[st.id]?.hidden;
-    await dbWrite('map/tokens/' + st.id, hidden ? { x: st.x, y: st.y, hidden: true } : { x: st.x, y: st.y });
+    const pos = hidden ? { x: st.x, y: st.y, hidden: true } : { x: st.x, y: st.y };
+    const updates = { ['map/tokens/' + st.id]: pos };
+    // AUTO-REVEAL (see toggleFogAutoReveal) — bundled into the same write
+    // as the position update so a player watching the map never sees the
+    // token land somewhere still-fogged for even a moment.
+    const revealShape = buildAutoRevealShapeFor(st.id, { x: st.x, y: st.y });
+    if (revealShape) {
+      const shapes = [...(state.fogShapes || []), revealShape];
+      updates.fogShapes = shapes;
+      state.fogShapes = shapes;
+    }
+    state.map = { ...state.map, tokens: { ...(state.map?.tokens || {}), [st.id]: pos } };
+    await dbUpdate(updates);
+    renderMapView();
   } else {
     // A click, not a drag — open the portrait dossier instead of repositioning.
     openPortraitViewer(st.id);
@@ -3884,6 +3964,8 @@ async function switchScene(newId) {
         ['scenes/' + oldId + '/mapImageData']: mapImage || null,
         ['scenes/' + oldId + '/fogShapes']: state.fogShapes || [],
         ['scenes/' + oldId + '/fogEnabled']: state.fogEnabled || false,
+        ['scenes/' + oldId + '/fogAutoReveal']: state.fogAutoReveal || false,
+        ['scenes/' + oldId + '/fogVisionRadius']: state.fogVisionRadius ?? 15,
       });
     }
     const target = state.scenes[newId] || {};
@@ -3901,6 +3983,8 @@ async function switchScene(newId) {
       activeSceneId: newId,
       fogShapes: target.fogShapes || [],
       fogEnabled: target.fogEnabled || false,
+      fogAutoReveal: target.fogAutoReveal || false,
+      fogVisionRadius: target.fogVisionRadius ?? 15,
     });
     state.securityObjects = target.securityObjects || {};
     state.map = { ...state.map, tokens: target.tokens || {} };
@@ -3910,6 +3994,8 @@ async function switchScene(newId) {
     state.activeSceneId = newId;
     state.fogShapes = target.fogShapes || [];
     state.fogEnabled = target.fogEnabled || false;
+    state.fogAutoReveal = target.fogAutoReveal || false;
+    state.fogVisionRadius = target.fogVisionRadius ?? 15;
     mapImage = targetImage;
     renderMapView();
     showToast(`Switched to "${target.name || 'scene'}"`);
