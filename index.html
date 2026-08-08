@@ -1216,9 +1216,12 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   <div id="player-tab-talents" class="tab-content main-scroll">
     <div class="player-view">
       <div class="player-card">
-        <div class="player-card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div class="player-card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
           <span>Talents & Techniques (tap to toggle used)</span>
-          <span id="player-talent-badge" style="display:none;font-size:10px;padding:3px 8px;background:rgba(255,255,255,0.05);border:1px solid var(--gold-bright);color:var(--gold-bright);letter-spacing:0.08em;white-space:nowrap">★ TALENT POINT AVAILABLE</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button id="player-talent-badge" onclick="openTalentPickerModal(session.charId,false)" style="display:none;font-size:10px;padding:3px 8px;background:rgba(255,255,255,0.05);border:1px solid var(--gold-bright);color:var(--gold-bright);letter-spacing:0.08em;white-space:nowrap;cursor:pointer">★ TALENT POINT AVAILABLE — TAP TO CHOOSE</button>
+            <button class="btn btn-ghost btn-small" onclick="openTalentPickerModal(session.charId,false)">📖 BROWSE TALENTS</button>
+          </div>
         </div>
         <div id="player-talents-list" style="display:flex;flex-direction:column;gap:6px"></div>
       </div>
@@ -1446,7 +1449,10 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
       <div id="cm-cyberware-list" style="display:flex;flex-direction:column;gap:4px"></div>
       <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addCyberwareRow()">+ ADD CYBERWARE</button>
 
-      <div class="section-heading">Talents (max 10 slots) — pick from the book to auto-apply its PW/WB/Firewall bonus</div>
+      <div class="section-heading" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <span>Talents (max 10 slots) — pick from the book to auto-apply its PW/WB/Firewall bonus</span>
+        <button class="btn btn-ghost btn-small" onclick="openTalentPickerModal(editingCharId,true)" title="Browse every talent this character could ever take, with a one-click take/undo — same picker the player sees, but unfiltered">📖 BROWSE ALL TALENTS</button>
+      </div>
       <div id="cm-talents-list" style="display:flex;flex-direction:column;gap:4px"></div>
       <button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="addTalentRow()">+ ADD TALENT</button>
 
@@ -1514,6 +1520,22 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
     <div class="modal-body" id="abilities-modal-body"></div>
     <div class="modal-footer">
       <button class="btn btn-primary btn-small" onclick="closeModal('abilities-modal')">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- Talent/Technique Picker — shared between the player's own "browse &
+     spend a talent point" view and the GM's "browse everything" view, see
+     openTalentPickerModal. -->
+<div class="modal-overlay" id="talent-picker-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">TALENTS &amp; TECHNIQUES — <span id="talent-picker-modal-name"></span></span>
+      <button class="modal-close" onclick="closeModal('talent-picker-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="talent-picker-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary btn-small" onclick="closeModal('talent-picker-modal')">CLOSE</button>
     </div>
   </div>
 </div>
@@ -6150,6 +6172,269 @@ async function adjTalentSpent(id, delta) {
   const spent = Math.max(0, Math.min(earned, (c.talentPointsSpent || 0) + delta));
   await dbWrite('characters/' + id + '/talentPointsSpent', spent);
   if (editingCharId === id) renderProgressionSection(id);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TALENT/TECHNIQUE PICKER (§11/§12) — a shared modal for two audiences:
+// the player picking a talent for their OWN character with an unspent
+// point (filtered to what's realistic soon, see the visibility rule
+// below), and the GM browsing the full, unfiltered catalog for any
+// character. Techniques are shown alongside for reference only — no take
+// button, no point cost, since §12.1 acquires them through training
+// (money+time) or loot/reward, not the tree-level point system talents use.
+//
+// Every requirement string in TALENT_CATALOG is formatted "<Tree> <N>[,
+// <extra>]" — e.g. "Mind 16, Stabiler Schuss I" or "Power 10, shield
+// equipped". The leading "<Tree> <N>" clause is the ONE hard-enforced
+// gate (clean, numeric, always present); anything after the comma is
+// free-form prose (a prior talent, an equipment state, a narrative
+// condition) with no consistent machine-checkable shape, so it's surfaced
+// as a highlighted hint the player/GM reads and judges themselves — same
+// "automate the clean numeric part, leave the situational part as human-
+// read reference text" split this app already uses for weapon tech/
+// attachment effects.
+let talentPickerCharId = null;
+let talentPickerInteractive = false;
+let talentPickerViewMode = 'talents'; // 'talents' | 'techniques'
+let talentPickerExpandedCats = new Set();
+const TALENT_CATEGORY_LABELS = {
+  Netrunner: 'Netrunner', Melee: 'Melee', Ranged: 'Ranged', MindSocial: 'Mind & Social',
+  General: 'General', Drone: 'GREMLIN Drones', Heavy: 'Heavy Weapons', Tactician: 'Tactician',
+  Sniper: 'Sniper', Medic: 'Medic / Healing', TechOperator: 'Tech-Operator & Fabricator',
+};
+const TECHNIQUE_CATEGORY_LABELS = {
+  MeleeGeneric: 'Melee — Generic', MeleeHeavy: 'Melee — Heavy Melee', MeleeLight: 'Melee — Light & Medium Melee',
+  MeleeCyber: 'Melee — Cyber-Melee', Brawling: 'Melee — Brawling', RangedGeneric: 'Ranged — Generic',
+  SMGAssault: 'Ranged — SMG & Assault Rifle', Pistol: 'Ranged — Pistol', SniperRifle: 'Ranged — Sniper Rifle',
+  Shotgun: 'Ranged — Shotgun', HeavyWeapons: 'Ranged — Heavy Weapons',
+};
+function openTalentPickerModal(charId, interactive) {
+  const c = state.characters[charId]; if (!c) return;
+  talentPickerCharId = charId;
+  talentPickerInteractive = !!interactive;
+  talentPickerViewMode = 'talents';
+  document.getElementById('talent-picker-modal-name').textContent = c.name || '';
+  renderTalentPickerModal();
+  openModal('talent-picker-modal');
+}
+function setTalentPickerView(mode) {
+  talentPickerViewMode = mode;
+  renderTalentPickerModal();
+}
+function toggleTalentPickerCategory(key) {
+  if (talentPickerExpandedCats.has(key)) talentPickerExpandedCats.delete(key);
+  else talentPickerExpandedCats.add(key);
+  renderTalentPickerModal();
+}
+function parseTalentReq(reqStr) {
+  const m = /^(Power|Mobility|Mind)\s+(\d+)\s*(?:,\s*(.+))?$/i.exec(String(reqStr || '').trim());
+  if (!m) return null;
+  return { tree: m[1].toLowerCase(), level: parseInt(m[2], 10), extra: m[3] || null };
+}
+// A talent's saved row on c.talents only ever stores ONE level's worth of
+// data (name/desc/req/mods get overwritten in place each time a higher
+// level is picked — see saveCharacter/onTalentSpecificChange) — this
+// figures out WHICH level that is. Prefers the row's own `lvl` marker
+// (set by takeTalentLevel going forward); falls back to matching the
+// stored req+effect text for rows saved before that field existed.
+function getOwnedTalentLevelIndex(catalogEntry, row) {
+  if (!row || !catalogEntry) return -1;
+  if (row.lvl) {
+    const i = catalogEntry.levels.findIndex(l => l.lvl === row.lvl);
+    if (i >= 0) return i;
+  }
+  return catalogEntry.levels.findIndex(l => l.req === row.req && l.effect === row.desc);
+}
+function getTalentPointsAvailable(c) {
+  return Math.max(0, talentXpProgress(c.globalXP || 0).earned - (c.talentPointsSpent || 0));
+}
+// One row per level of one talent, already filtered to what should be
+// shown. `interactive` (GM) sees every level regardless of tree level;
+// the player only sees levels they've already earned PLUS the next two
+// tree-levels' worth ahead — a deliberately small, spoiler-light window
+// rather than the entire tree dumped at once.
+function buildTalentLevelRows(c, talentEntry, interactive) {
+  const existingRow = (c.talents || []).find(t => t.name === talentEntry.name);
+  const ownedIdx = getOwnedTalentLevelIndex(talentEntry, existingRow);
+  const available = getTalentPointsAvailable(c);
+  const slotsFull = ownedIdx === -1 && (c.talents || []).filter(t => t.name).length >= 10;
+  const rows = [];
+  talentEntry.levels.forEach((level, i) => {
+    const req = parseTalentReq(level.req);
+    if (!req) return; // malformed/unexpected shape — skip defensively rather than crash the modal
+    const treeLevel = getTreeLevel(c, req.tree);
+    const owned = i <= ownedIdx;
+    const visible = interactive || owned || req.level <= treeLevel + 2;
+    if (!visible) return;
+    const isNext = i === ownedIdx + 1;
+    const meetsTreeLevel = treeLevel >= req.level;
+    const takeable = isNext && meetsTreeLevel && available > 0 && !(i === 0 && slotsFull);
+    rows.push({ level, i, req, treeLevel, owned, isNext, meetsTreeLevel, takeable, slotsFull: i === 0 && slotsFull });
+  });
+  return rows;
+}
+function talentPickerEntryHtml(c, catName, talentEntry) {
+  const rows = buildTalentLevelRows(c, talentEntry, talentPickerInteractive);
+  if (!rows.length) return '';
+  const treeLabel = { power: 'Power', mobility: 'Mobility', mind: 'Mind' };
+  const ownedCount = rows.filter(r => r.owned).length;
+  const levelsHtml = rows.map(r => {
+    let badge, color, action = '';
+    if (r.owned) {
+      badge = `Level ${r.level.lvl} ✓ learned`; color = 'var(--green-bright)';
+      // Only the highest owned level gets an undo control — lower, already-superseded levels don't need one.
+      if (r.i === ownedCount - 1) {
+        action = `<button class="btn btn-danger btn-small" style="padding:2px 8px;font-size:10px" onclick="downgradeTalentLevel('${esc(catName)}','${esc(talentEntry.name)}')" title="Step back one level — refunds the talent point">↺ UNDO</button>`;
+      }
+    } else if (r.takeable) {
+      badge = `Level ${r.level.lvl} — ready`; color = 'var(--gold-bright)';
+      action = `<button class="btn btn-primary btn-small" style="padding:2px 10px;font-size:10px" onclick="takeTalentLevel('${esc(catName)}','${esc(talentEntry.name)}',${r.i})">TAKE</button>`;
+    } else if (r.slotsFull) {
+      badge = `Level ${r.level.lvl} — all 10 talent slots full`; color = 'var(--red-bright)';
+    } else if (r.meetsTreeLevel && r.isNext) {
+      badge = `Level ${r.level.lvl} — ready, but no talent point left`; color = 'var(--text3)';
+    } else if (!r.isNext) {
+      badge = `Level ${r.level.lvl} — previous level still needed`; color = 'var(--text3)';
+    } else {
+      badge = `Level ${r.level.lvl} — needs ${treeLabel[r.req.tree]} Lv. ${r.req.level} (currently ${r.treeLevel})`; color = 'var(--text3)';
+    }
+    const extra = r.req.extra ? `<div style="font-size:9px;color:var(--gold-bright);margin-top:2px">⚠ also requires: ${esc(r.req.extra)}</div>` : '';
+    return `<div style="padding:6px 8px;border-left:2px solid ${color};background:var(--surface);margin-top:3px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:10px;color:${color};font-weight:700">${esc(badge)}</span>
+        ${action}
+      </div>
+      <div style="font-size:10px;color:var(--text2);margin-top:2px">${esc(r.level.effect)}</div>
+      ${extra}
+    </div>`;
+  }).join('');
+  return `<div style="margin-bottom:6px">
+    <div style="font-size:11px;font-weight:700;color:var(--text)">${esc(talentEntry.name)}</div>
+    ${levelsHtml}
+  </div>`;
+}
+function renderTalentPickerTalents(c) {
+  const parts = Object.entries(TALENT_CATALOG).map(([catName, talents]) => {
+    const entriesHtml = talents.map(t => talentPickerEntryHtml(c, catName, t)).filter(Boolean).join('');
+    if (!entriesHtml) return ''; // nothing in range for this character — drop the whole category
+    const key = 'talent:' + catName;
+    const isOpen = talentPickerExpandedCats.has(key);
+    return `
+      <div class="mission-group-header ${isOpen ? 'open' : ''}" data-cat="${esc(key)}" onclick="toggleTalentPickerCategory(this.dataset.cat)">
+        <span class="chevron">▶</span>
+        <span>${esc(TALENT_CATEGORY_LABELS[catName] || catName)}</span>
+      </div>
+      ${isOpen ? `<div class="mission-group-body">${entriesHtml}</div>` : ''}`;
+  }).join('');
+  return `<div class="char-list" style="padding:0">${parts || '<div style="color:var(--text3);font-size:11px">Nothing in range yet — earn more tree XP.</div>'}</div>`;
+}
+function renderTalentPickerTechniques() {
+  const parts = Object.entries(TECHNIQUE_CATALOG).map(([catName, techniques]) => {
+    const key = 'tech:' + catName;
+    const isOpen = talentPickerExpandedCats.has(key);
+    const entriesHtml = techniques.map(t => `
+      <div style="padding:6px 8px;border-left:2px solid var(--cyan-dim);background:var(--surface);margin-top:3px">
+        <div style="display:flex;justify-content:space-between;gap:8px">
+          <span style="font-size:11px;font-weight:700">${esc(t.name)}</span>
+          <span style="font-size:10px;color:var(--gold-bright)">${t.stamina ?? 0} Stamina</span>
+        </div>
+        <div style="font-size:10px;color:var(--text2);margin-top:2px">${esc(t.effect || '')}</div>
+      </div>`).join('');
+    return `
+      <div class="mission-group-header ${isOpen ? 'open' : ''}" data-cat="${esc(key)}" onclick="toggleTalentPickerCategory(this.dataset.cat)">
+        <span class="chevron">▶</span>
+        <span>${esc(TECHNIQUE_CATEGORY_LABELS[catName] || catName)}</span>
+      </div>
+      ${isOpen ? `<div class="mission-group-body">${entriesHtml}</div>` : ''}`;
+  }).join('');
+  return `<div class="char-list" style="padding:0">
+    <div style="font-size:9px;color:var(--text3);margin-bottom:6px">Techniques are acquired through training (money + time) or as loot/reward, not with talent points — ask your GM.</div>
+    ${parts}
+  </div>`;
+}
+function renderTalentPickerModal() {
+  const c = state.characters[talentPickerCharId];
+  const body = document.getElementById('talent-picker-modal-body');
+  if (!body || !c) return;
+  const available = getTalentPointsAvailable(c);
+  const lvl = { power: getTreeLevel(c, 'power'), mobility: getTreeLevel(c, 'mobility'), mind: getTreeLevel(c, 'mind') };
+  const header = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border)">
+      <span style="font-size:11px;color:${available > 0 ? 'var(--gold-bright)' : 'var(--text2)'};font-weight:700">★ ${available} talent point${available === 1 ? '' : 's'} available</span>
+      <span style="flex:1"></span>
+      <span style="font-size:10px;color:var(--text3)">POWER Lv ${lvl.power} · MOBILITY Lv ${lvl.mobility} · MIND Lv ${lvl.mind}</span>
+    </div>
+    <div class="inline-row" style="margin-bottom:10px">
+      <button class="btn btn-small ${talentPickerViewMode === 'talents' ? 'btn-primary' : 'btn-ghost'}" onclick="setTalentPickerView('talents')">TALENTS</button>
+      <button class="btn btn-small ${talentPickerViewMode === 'techniques' ? 'btn-primary' : 'btn-ghost'}" onclick="setTalentPickerView('techniques')">TECHNIQUES <span style="opacity:0.7">(view only)</span></button>
+    </div>
+    ${(!talentPickerInteractive && talentPickerViewMode === 'talents') ? `<div style="font-size:9px;color:var(--text3);margin-bottom:8px">Shows talents you can take right now, plus a preview of the next 2 levels.</div>` : ''}
+  `;
+  body.innerHTML = header + (talentPickerViewMode === 'talents' ? renderTalentPickerTalents(c) : renderTalentPickerTechniques());
+}
+async function takeTalentLevel(catName, talentName, levelIndex) {
+  const charId = talentPickerCharId;
+  const c = state.characters[charId]; if (!c) return;
+  const catalogEntry = TALENT_CATALOG[catName]?.find(t => t.name === talentName);
+  const level = catalogEntry?.levels[levelIndex];
+  if (!level) return;
+  // Re-verify fresh rather than trusting whatever the button's onclick
+  // captured at render time — points/levels may have changed since (a GM
+  // editing the same character in another tab, a Ping's talent-point-
+  // relevant XP award mid-session, etc.).
+  const row = buildTalentLevelRows(c, catalogEntry, true).find(r => r.i === levelIndex);
+  if (!row || !row.takeable) { showToast('This level is not available right now.'); renderTalentPickerModal(); return; }
+  if (!confirm(`Take ${talentName} ${level.lvl}? Costs 1 talent point.`)) return;
+  const talents = [...(c.talents || [])];
+  const idx = talents.findIndex(t => t.name === talentName);
+  const newRow = { name: talentName, lvl: level.lvl, desc: level.effect, req: level.req, mods: (level.mods || []).map(m => ({ ...m })) };
+  if (idx >= 0) talents[idx] = newRow; else talents.push(newRow);
+  const newSpent = (c.talentPointsSpent || 0) + 1;
+  await dbUpdate({
+    ['characters/' + charId + '/talents']: talents,
+    ['characters/' + charId + '/talentPointsSpent']: newSpent,
+  });
+  state.characters[charId] = { ...c, talents, talentPointsSpent: newSpent };
+  showToast(`${talentName} ${level.lvl} learned!`);
+  renderTalentPickerModal();
+  // The edit modal keeps its own disconnected form copy of the talent list
+  // (talentData) — if it's open behind this picker for the SAME character,
+  // refresh it too, or a Save click there would silently overwrite what
+  // was just taken with the stale pre-picker list.
+  if (editingCharId === charId) { renderTalentRows(talents); renderProgressionSection(charId); }
+  renderAll();
+}
+// Steps a talent back exactly one level (refunding exactly the 1 point
+// that level cost) rather than wiping it outright — mirrors how it was
+// earned, one level at a time, and matches the "always reversible, but
+// deliberately, one step at a time" ask this whole feature was built
+// around, not just a blunt full-remove.
+async function downgradeTalentLevel(catName, talentName) {
+  const charId = talentPickerCharId;
+  const c = state.characters[charId]; if (!c) return;
+  const catalogEntry = TALENT_CATALOG[catName]?.find(t => t.name === talentName);
+  const talents = [...(c.talents || [])];
+  const idx = talents.findIndex(t => t.name === talentName);
+  if (idx < 0 || !catalogEntry) return;
+  const ownedIdx = getOwnedTalentLevelIndex(catalogEntry, talents[idx]);
+  if (ownedIdx < 0) return;
+  if (!confirm(`Step ${talentName} back one level? 1 talent point will be refunded.`)) return;
+  if (ownedIdx === 0) {
+    talents.splice(idx, 1);
+  } else {
+    const prev = catalogEntry.levels[ownedIdx - 1];
+    talents[idx] = { name: talentName, lvl: prev.lvl, desc: prev.effect, req: prev.req, mods: (prev.mods || []).map(m => ({ ...m })) };
+  }
+  const newSpent = Math.max(0, (c.talentPointsSpent || 0) - 1);
+  await dbUpdate({
+    ['characters/' + charId + '/talents']: talents,
+    ['characters/' + charId + '/talentPointsSpent']: newSpent,
+  });
+  state.characters[charId] = { ...c, talents, talentPointsSpent: newSpent };
+  showToast(`${talentName} stepped back — talent point refunded.`);
+  renderTalentPickerModal();
+  if (editingCharId === charId) { renderTalentRows(talents); renderProgressionSection(charId); }
+  renderAll();
 }
 
 function getModalStats() {
