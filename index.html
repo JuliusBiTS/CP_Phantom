@@ -493,6 +493,8 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .status-poison { background: rgba(140,200,0,0.1); color: #aadd44; border-color: #88bb00; }
 .status-blind { background: rgba(200,200,200,0.1); color: #cccccc; border-color: var(--border2); }
 .status-custom { background: rgba(100,100,150,0.1); color: var(--text2); border-color: var(--border2); }
+.status-marked { background: rgba(217,164,65,0.12); color: var(--gold-bright); border-color: var(--gold-bright); }
+.status-rallied { background: rgba(111,184,173,0.12); color: var(--cyan); border-color: var(--cyan); }
 .combatant-detail { display: none; border-top: 1px solid var(--border2); padding: 12px; background: var(--surface2); }
 .combatant-detail.open { display: block; }
 .detail-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
@@ -1211,6 +1213,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
         <div class="player-card-title">Special Stats</div>
         <div id="player-stats-special" style="display:grid;grid-template-columns:1fr 1fr;gap:4px"></div>
       </div>
+      <div id="player-reaction-block"></div>
     </div>
   </div>
   <div id="player-tab-talents" class="tab-content main-scroll">
@@ -4378,6 +4381,29 @@ function renderWeaponsSection(c, id) {
   </div>`;
 }
 
+// Reaction rolls (§3.3) — Drive+Reflexes, boosted by talents like
+// Kampfinstinkt/Reflexkette. Shown as a reference PW/dice hint next to the
+// FLINK tracker rather than a rollable button, since (like weapon PW) the
+// actual die roll stays table-side — this just saves the GM from
+// re-deriving "Drive+Reflexes+talent mods" by hand every time a reaction
+// roll is called for.
+function renderReactionSection(c, id) {
+  const live = computeLiveReactionStats(c);
+  if (live.pw == null) return '';
+  const condChips = renderConditionalModChips(c, 'reaction');
+  return `<div class="detail-row" style="align-items:flex-start">
+    <span class="detail-label" style="margin-top:4px">REACTION</span>
+    <div style="flex:1">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:10px;color:var(--cyan)">Drive+Reflexes · ${live.pw}</span>
+        ${live.dice ? `<span style="font-size:10px;color:var(--cyan)">→ ${live.dice}×d20</span>` : ''}
+      </div>
+      ${condChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">${condChips.join('')}</div>` : ''}
+      ${live.talentNames?.length ? `<div style="font-size:10px;color:var(--blue-bright);padding-left:2px;margin-top:2px">✦ ${live.talentNames.map(esc).join(', ')}</div>` : ''}
+    </div>
+  </div>`;
+}
+
 // Techniques (§12) — the melee/ranged equivalent of Hacks. Each one rides
 // whichever of the character's weapons is currently selected for it
 // (techniqueWeaponSelection, transient like weaponFamilySelection — no
@@ -4697,6 +4723,7 @@ function renderCombatantCard(id, isActive) {
         <span class="detail-label">FLINK</span>
         <button class="btn ${flinkUsed ? 'btn-danger' : 'btn-ghost'} btn-small" onclick="toggleFlink('${id}')">${flinkUsed ? 'USED — RESET' : 'MARK USED'}</button>
       </div>` : ''}
+      ${renderReactionSection(c, id)}
       <div class="detail-row" style="align-items:flex-start">
         <span class="detail-label" style="margin-top:4px">STATUS</span>
         <div>
@@ -4711,6 +4738,10 @@ function renderCombatantCard(id, isActive) {
       </div>
       ${renderWeaponsSection(c, id)}
       ${renderTechniquesSection(c, id)}
+      ${renderStatusGrantSection(c, id)}
+      ${renderMarkSection(c, id)}
+      ${renderRallySection(c, id)}
+      ${renderTalentTriggerSection(c, id)}
       ${(c.isVehicle && c.vehicle_abilities?.length) ? `<div class="detail-row" style="align-items:flex-start">
         <span class="detail-label" style="margin-top:4px">ABILITIES</span>
         <div style="flex:1">${c.vehicle_abilities.map(a => `<div style="font-size:10px;color:var(--text2);margin-bottom:4px;line-height:1.5">▸ ${esc(a)}</div>`).join('')}</div>
@@ -5082,10 +5113,23 @@ function renderPlayerView() {
       statRow('Luck', st.luck??'—'),
       statRow('Humanity (current/max)', `${c.humanity_current ?? '—'} / ${c.humanity_max ?? '—'}`),
     ].join('');
+    const reaction = computeLiveReactionStats(c);
+    const reactionChips = renderConditionalModChips(c, 'reaction');
+    document.getElementById('player-reaction-block').innerHTML = reaction.pw == null ? '' : `
+      <div style="background:var(--surface2);border:1px solid var(--border);padding:7px 10px;grid-column:1/-1">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="font-size:10px;color:var(--text2);flex:1;letter-spacing:0.06em">REACTION ROLL (Drive+Reflexes)</div>
+          <div style="font-size:16px;font-weight:700;color:var(--text)">${reaction.pw}</div>
+          ${reaction.dice ? `<div style="font-size:10px;color:var(--cyan)">${reaction.dice}×d20</div>` : ''}
+        </div>
+        ${reactionChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px">${reactionChips.join('')}</div>` : ''}
+        ${reaction.talentNames?.length ? `<div style="font-size:10px;color:var(--blue-bright);margin-top:4px">✦ ${reaction.talentNames.map(esc).join(', ')}</div>` : ''}
+      </div>`;
   } else {
     ['player-derived','player-stats-power','player-stats-mobility','player-stats-mind','player-stats-special'].forEach(id => {
       document.getElementById(id).innerHTML = '<div style="color:var(--text3);font-size:11px">No stats set — ask your GM.</div>';
     });
+    document.getElementById('player-reaction-block').innerHTML = '';
   }
   // Notes (skip while the player is actively typing so remote updates don't clobber the cursor)
   const notesEl = document.getElementById('player-notes');
@@ -5341,6 +5385,10 @@ async function startCombat() {
     const abilities = c.abilities || [];
     if (abilities.some(a => a.usesMax > 0 && a.usesCurrent !== a.usesMax)) {
       updates['characters/' + id + '/abilities'] = abilities.map(a => a.usesMax > 0 ? { ...a, usesCurrent: a.usesMax } : a);
+    }
+    // Deep Reserves III: starts every fight at full IP.
+    if ((c.talents || []).some(t => t.fullIpAtCombatStart) && c.ip_max > 0 && c.ip_current !== c.ip_max) {
+      updates['characters/' + id + '/ip_current'] = c.ip_max;
     }
   });
   await dbUpdate(updates);
@@ -5839,8 +5887,15 @@ function onDmgCalcChange() {
     if (dist.multiplier == null) effectivePw = null;
     else effectivePw = Math.floor(live.pw * dist.multiplier);
   }
+  // Marked Target (Holo-Markierung/Holo-Zielfernrohr) is a team-wide bonus
+  // vs whichever enemy got marked — read off the DEFENDER's status
+  // effects here (not the attacker's talents), so it applies no matter
+  // who's rolling against them, matching how the mark is meant to work.
+  const marked = getMarkedBonus(state.characters[dmgTargetId]);
+  if (marked && effectivePw != null) effectivePw += marked.pw;
+  const effectiveBonus = live.bonus + (marked?.wb || 0);
   pwEl.textContent = effectivePw != null
-    ? `PW: ${live.pwLabel} · ${effectivePw} → roll ${pwDiceCount(effectivePw)}×d20`
+    ? `PW: ${live.pwLabel} · ${effectivePw} → roll ${pwDiceCount(effectivePw)}×d20${marked ? ` (${marked.name}: +${marked.pw} PW)` : ''}`
     : `PW: ${live.pwLabel || '(no stats set — enter roll manually)'}`;
   if (dist) {
     const m = Math.round(dist.distanceMeters);
@@ -5856,8 +5911,8 @@ function onDmgCalcChange() {
   const target = state.characters[dmgTargetId];
   const targetSP = target?.armor_body?.sp_temp ?? target?.armor_body?.sp_base ?? 0;
   if (roll > 0) {
-    const dmg = Math.max(1, roll + live.bonus - targetSP);
-    resultEl.textContent = `${dmg} dmg (${roll}+${live.bonus}-${targetSP})`;
+    const dmg = Math.max(1, roll + effectiveBonus - targetSP);
+    resultEl.textContent = `${dmg} dmg (${roll}+${effectiveBonus}-${targetSP})`;
     resultEl.dataset.value = dmg;
   } else {
     resultEl.textContent = '—';
@@ -6387,14 +6442,28 @@ async function takeTalentLevel(catName, talentName, levelIndex) {
   if (!confirm(`Take ${talentName} ${level.lvl}? Costs 1 talent point.`)) return;
   const talents = [...(c.talents || [])];
   const idx = talents.findIndex(t => t.name === talentName);
+  const oldMaxBonus = idx >= 0 ? talents[idx].maxBonus : undefined;
   const newRow = { name: talentName, lvl: level.lvl, desc: level.effect, req: level.req, mods: (level.mods || []).map(m => ({ ...m })) };
+  if (level.regen_stat) { newRow.regen_stat = level.regen_stat; newRow.regen_amount = level.regen_amount; }
+  if (level.maxBonus) newRow.maxBonus = { ...level.maxBonus };
+  if (level.fullIpAtCombatStart) newRow.fullIpAtCombatStart = true;
+  if (level.usesPerFight) newRow.usesPerFight = level.usesPerFight;
+  if (level.statusGrant) newRow.statusGrant = { ...level.statusGrant };
+  if (level.statusGrantChoice) newRow.statusGrantChoice = level.statusGrantChoice.map(o => ({ ...o }));
+  if (level.markBonus) newRow.markBonus = { ...level.markBonus };
+  if (level.rallyBonus) newRow.rallyBonus = { ...level.rallyBonus };
+  if (level.hackIpDiscount) newRow.hackIpDiscount = { ...level.hackIpDiscount };
+  if (level.trigger) newRow.trigger = { label: level.trigger.label, effects: level.trigger.effects.map(e => ({ ...e })) };
   if (idx >= 0) talents[idx] = newRow; else talents.push(newRow);
   const newSpent = (c.talentPointsSpent || 0) + 1;
-  await dbUpdate({
+  const updates = {
     ['characters/' + charId + '/talents']: talents,
     ['characters/' + charId + '/talentPointsSpent']: newSpent,
-  });
-  state.characters[charId] = { ...c, talents, talentPointsSpent: newSpent };
+  };
+  applyMaxBonusDelta(c, oldMaxBonus, level.maxBonus, updates, charId);
+  syncTalentAbility(c, talentName, newRow, updates, charId);
+  await dbUpdate(updates);
+  state.characters[charId] = { ...c, talents, talentPointsSpent: newSpent, ...patchFromUpdates(updates, charId, ['hp_max','hp_current','stamina_max','stamina_current','ip_max','ip_current','armor_body','abilities']) };
   showToast(`${talentName} ${level.lvl} learned!`);
   renderTalentPickerModal();
   // The edit modal keeps its own disconnected form copy of the talent list
@@ -6419,18 +6488,35 @@ async function downgradeTalentLevel(catName, talentName) {
   const ownedIdx = getOwnedTalentLevelIndex(catalogEntry, talents[idx]);
   if (ownedIdx < 0) return;
   if (!confirm(`Step ${talentName} back one level? 1 talent point will be refunded.`)) return;
+  const oldMaxBonus = talents[idx].maxBonus;
+  let newMaxBonus, prevRow = null;
   if (ownedIdx === 0) {
     talents.splice(idx, 1);
   } else {
     const prev = catalogEntry.levels[ownedIdx - 1];
-    talents[idx] = { name: talentName, lvl: prev.lvl, desc: prev.effect, req: prev.req, mods: (prev.mods || []).map(m => ({ ...m })) };
+    prevRow = { name: talentName, lvl: prev.lvl, desc: prev.effect, req: prev.req, mods: (prev.mods || []).map(m => ({ ...m })) };
+    if (prev.regen_stat) { prevRow.regen_stat = prev.regen_stat; prevRow.regen_amount = prev.regen_amount; }
+    if (prev.maxBonus) prevRow.maxBonus = { ...prev.maxBonus };
+    if (prev.fullIpAtCombatStart) prevRow.fullIpAtCombatStart = true;
+    if (prev.usesPerFight) prevRow.usesPerFight = prev.usesPerFight;
+    if (prev.statusGrant) prevRow.statusGrant = { ...prev.statusGrant };
+    if (prev.statusGrantChoice) prevRow.statusGrantChoice = prev.statusGrantChoice.map(o => ({ ...o }));
+    if (prev.markBonus) prevRow.markBonus = { ...prev.markBonus };
+    if (prev.rallyBonus) prevRow.rallyBonus = { ...prev.rallyBonus };
+    if (prev.hackIpDiscount) prevRow.hackIpDiscount = { ...prev.hackIpDiscount };
+    if (prev.trigger) prevRow.trigger = { label: prev.trigger.label, effects: prev.trigger.effects.map(e => ({ ...e })) };
+    newMaxBonus = prev.maxBonus;
+    talents[idx] = prevRow;
   }
   const newSpent = Math.max(0, (c.talentPointsSpent || 0) - 1);
-  await dbUpdate({
+  const updates = {
     ['characters/' + charId + '/talents']: talents,
     ['characters/' + charId + '/talentPointsSpent']: newSpent,
-  });
-  state.characters[charId] = { ...c, talents, talentPointsSpent: newSpent };
+  };
+  applyMaxBonusDelta(c, oldMaxBonus, newMaxBonus, updates, charId);
+  syncTalentAbility(c, talentName, prevRow, updates, charId);
+  await dbUpdate(updates);
+  state.characters[charId] = { ...c, talents, talentPointsSpent: newSpent, ...patchFromUpdates(updates, charId, ['hp_max','hp_current','stamina_max','stamina_current','ip_max','ip_current','armor_body','abilities']) };
   showToast(`${talentName} stepped back — talent point refunded.`);
   renderTalentPickerModal();
   if (editingCharId === charId) { renderTalentRows(talents); renderProgressionSection(charId); }
@@ -7116,15 +7202,16 @@ async function saveCharacter() {
   const initOverrideVal = parseInt(document.getElementById('cm-init').value);
   const ipOverrideVal = parseInt(document.getElementById('cm-ip').value);
   const humanityOverrideVal = parseInt(document.getElementById('cm-humanity').value);
+  const talentMaxBonusList = talentData.filter(t => t.name);
   const hpMax = !isNaN(hpOverrideVal) ? hpOverrideVal
-    : hasStats ? (stats.grit||0) + (stats.core||0) + hpBonus : 10;
+    : hasStats ? (stats.grit||0) + (stats.core||0) + hpBonus + sumTalentMaxBonus(talentMaxBonusList, 'hp') : 10;
   const staMax = !isNaN(staOverrideVal) ? staOverrideVal
-    : hasStats ? (stats.drive||0) + (stats.core||0) + staBonus : 10;
+    : hasStats ? (stats.drive||0) + (stats.core||0) + staBonus + sumTalentMaxBonus(talentMaxBonusList, 'stamina') : 10;
   const initiative = !isNaN(initOverrideVal) ? initOverrideVal
     : hasStats ? (stats.speed||0) + (stats.reflexes||0) : 0;
   const mindSum = ['intelligence','focus','creativity','will','cool','rep'].reduce((a,k) => a + (stats[k]||0), 0);
   const ipMax = !isNaN(ipOverrideVal) ? ipOverrideVal
-    : hasStats ? Math.floor(mindSum/5)*2 + ipBonus : 0;
+    : hasStats ? Math.floor(mindSum/5)*2 + ipBonus + sumTalentMaxBonus(talentMaxBonusList, 'ip') : 0;
   const cyberwareList = cyberwareData.filter(Boolean).map(v => String(v).trim()).filter(Boolean);
   const cyberwareImpact = computeLiveCyberwareImpact({ cyberware: cyberwareList });
   const humanityMax = !isNaN(humanityOverrideVal) ? humanityOverrideVal
@@ -8102,6 +8189,87 @@ function talentScopeMatches(modScope, weaponSlotType) {
 const SCOPE_GATED_MODS = new Set(['pw', 'wb', 'armorAblation']);
 // Sums every matching mod on c.talents — non-conditional ones always
 // count, conditional ones only while their toggle is on.
+// Sums the permanent pool bonuses from talents like Zaeher Ueberlebender
+// (+Max HP) or Eisenhaut (+SP) — separate from the conditional PW/WB mods
+// engine above since these are always-on snapshot adjustments to a stored
+// field (hp_max/stamina_max/ip_max/armor sp_base), not a live per-roll
+// overlay. Used both when saveCharacter recomputes the formula-derived
+// value from scratch (so the bonus survives an unrelated GM edit) and when
+// takeTalentLevel/downgradeTalentLevel apply an immediate delta so the
+// character sheet updates the instant a level is taken, without requiring
+// the GM to reopen and resave the edit modal.
+function sumTalentMaxBonus(talents, stat) {
+  return (talents || []).reduce((sum, t) => sum + (t.maxBonus?.stat === stat ? (t.maxBonus.amount || 0) : 0), 0);
+}
+// Applies the CHANGE in a talent's maxBonus (e.g. taking Zaeher Ueberlebender
+// II after already owning I: +10 replaces +5, a delta of +5) directly to the
+// stored max/current pool fields, so the sheet updates immediately without
+// requiring a trip through the edit modal's Save button. Skipped for
+// hp/stamina/ip when the character uses a manual override, matching how
+// origin bonuses already defer to an override — a GM who's hand-set the
+// number is assumed to already be accounting for it themselves.
+// "Nx/fight" talents (Rennen und Schiessen, Killzone, the drone Protokoll
+// tree, etc.) get a tracked use-counter by materializing into the same
+// abilities[] list the GM's manual ability rows already use — reusing the
+// existing usesMax/usesCurrent dot-tracker UI and the per-fight reset in
+// startCombat(), rather than inventing a second counter system. Tagged
+// with talentSource so downgrading/re-leveling can find and update (or
+// remove) exactly this entry without touching any manually-added ability.
+function syncTalentAbility(c, talentName, newRow, updates, charId) {
+  const abilities = [...(c.abilities || [])];
+  const idx = abilities.findIndex(a => a.talentSource === talentName);
+  if (newRow?.usesPerFight > 0) {
+    const entry = { name: talentName, desc: newRow.desc || '', usesMax: newRow.usesPerFight, usesCurrent: newRow.usesPerFight, talentSource: talentName };
+    if (idx >= 0) abilities[idx] = entry; else abilities.push(entry);
+    updates['characters/' + charId + '/abilities'] = abilities;
+  } else if (idx >= 0) {
+    abilities.splice(idx, 1);
+    updates['characters/' + charId + '/abilities'] = abilities;
+  }
+}
+// takeTalentLevel/downgradeTalentLevel build a Firebase multi-path update
+// object (keys like 'characters/<id>/hp_max') for applyMaxBonusDelta's
+// direct field writes — this reads the same object back into a flat patch
+// so the LOCAL state.characters cache stays in sync immediately, instead
+// of waiting on the next realtime listener tick before the sheet reflects
+// its own change.
+function patchFromUpdates(updates, charId, fields) {
+  const prefix = 'characters/' + charId + '/';
+  const patch = {};
+  fields.forEach(f => {
+    if ((prefix + f) in updates) patch[f] = updates[prefix + f];
+  });
+  if ((prefix + 'armor_body/sp_base') in updates || (prefix + 'armor_body/sp_temp') in updates) {
+    patch.armor_body = {
+      ...patch.armor_body,
+      sp_base: updates[prefix + 'armor_body/sp_base'],
+      sp_temp: updates[prefix + 'armor_body/sp_temp'],
+    };
+  }
+  return patch;
+}
+function applyMaxBonusDelta(c, oldMaxBonus, newMaxBonus, updates, charId) {
+  const stat = newMaxBonus?.stat || oldMaxBonus?.stat;
+  const delta = (newMaxBonus?.amount || 0) - (oldMaxBonus?.amount || 0);
+  if (!stat || !delta) return;
+  const p = 'characters/' + charId + '/';
+  if (stat === 'hp' && !c.hp_override) {
+    const newMax = Math.max(1, (c.hp_max || 0) + delta);
+    updates[p+'hp_max'] = newMax;
+    updates[p+'hp_current'] = Math.min(newMax, Math.max(-(c.stats?.grit||0), (c.hp_current ?? c.hp_max ?? 0) + delta));
+  } else if (stat === 'stamina' && !c.sta_override) {
+    const newMax = Math.max(0, (c.stamina_max || 0) + delta);
+    updates[p+'stamina_max'] = newMax;
+    updates[p+'stamina_current'] = Math.min(newMax, Math.max(0, (c.stamina_current ?? c.stamina_max ?? 0) + delta));
+  } else if (stat === 'ip' && !c.ip_override) {
+    const newMax = Math.max(0, (c.ip_max || 0) + delta);
+    updates[p+'ip_max'] = newMax;
+    updates[p+'ip_current'] = Math.min(newMax, Math.max(0, (c.ip_current ?? c.ip_max ?? 0) + delta));
+  } else if (stat === 'armor' && c.armor_body) {
+    updates[p+'armor_body/sp_base'] = Math.max(0, (c.armor_body.sp_base || 0) + delta);
+    updates[p+'armor_body/sp_temp'] = Math.max(0, (c.armor_body.sp_temp ?? c.armor_body.sp_base ?? 0) + delta);
+  }
+}
 function getActiveTalentMods(c, appliesTo, weaponSlotType) {
   let total = 0;
   const names = [];
@@ -8263,6 +8431,13 @@ function computeLiveWeaponStats(c, w) {
   if (pw !== null && attachPwMods.total) pw += attachPwMods.total;
   if (attachWbMods.total) bonus += attachWbMods.total;
   const attachmentNames = [...new Set([...attachPwMods.names, ...attachWbMods.names])];
+  // Taktischer Ueberblick's "rallied" self-buff — applied to the ally, not
+  // the caster, so it lives on THIS character's own status_effects and
+  // folds into every live PW computation for them (weapons/hacks/
+  // techniques/reaction), matching the talent's "+PW on their next
+  // action" wording rather than being scoped to one weapon.
+  const rallied = getRalliedBonus(c);
+  if (pw !== null && rallied) { pw += rallied.amount; talentNames.push(rallied.name); }
   return { bonus, pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, situational, magMax, talentNames, attachmentNames, slotType };
 }
 
@@ -8781,27 +8956,27 @@ const CYBERDECK_INFO = {
 const TALENT_CATALOG = {
   Netrunner: [
     { name: 'Jack In', levels: [
-      { lvl:'I', req:'Mind 8', effect:'+1 IP/round', mods:[] },
-      { lvl:'II', req:'Mind 12', effect:'+2 IP/round', mods:[] },
-      { lvl:'III', req:'Mind 16', effect:'+3 IP/round', mods:[] },
-      { lvl:'IV', req:'Mind 20', effect:'+4 IP/round', mods:[] },
-      { lvl:'V', req:'Mind 25', effect:'+5 IP/round. Max IP pool +5.', mods:[] },
+      { lvl:'I', req:'Mind 8', effect:'+1 IP/round', mods:[], regen_stat:'ip', regen_amount:1 },
+      { lvl:'II', req:'Mind 12', effect:'+2 IP/round', mods:[], regen_stat:'ip', regen_amount:2 },
+      { lvl:'III', req:'Mind 16', effect:'+3 IP/round', mods:[], regen_stat:'ip', regen_amount:3 },
+      { lvl:'IV', req:'Mind 20', effect:'+4 IP/round', mods:[], regen_stat:'ip', regen_amount:4 },
+      { lvl:'V', req:'Mind 25', effect:'+5 IP/round. Max IP pool +5.', mods:[], regen_stat:'ip', regen_amount:5, maxBonus:{stat:'ip', amount:5} },
     ]},
     { name: 'RAM Recovery', levels: [
-      { lvl:'I', req:'Mind 10', effect:'On hack-kill: +2 IP instantly', mods:[] },
-      { lvl:'II', req:'Mind 14', effect:'On hack-kill: +4 IP instantly', mods:[] },
-      { lvl:'III', req:'Mind 18', effect:'On hack-kill: +4 IP + all hack cooldowns -1 round', mods:[] },
+      { lvl:'I', req:'Mind 10', effect:'On hack-kill: +2 IP instantly', mods:[], trigger:{label:'Hack-kill: +2 IP', effects:[{stat:'ip',delta:2}]} },
+      { lvl:'II', req:'Mind 14', effect:'On hack-kill: +4 IP instantly', mods:[], trigger:{label:'Hack-kill: +4 IP', effects:[{stat:'ip',delta:4}]} },
+      { lvl:'III', req:'Mind 18', effect:'On hack-kill: +4 IP + all hack cooldowns -1 round', mods:[], trigger:{label:'Hack-kill: +4 IP', effects:[{stat:'ip',delta:4}]} },
     ]},
     { name: 'Deep Reserves', levels: [
-      { lvl:'I', req:'Mind 8', effect:'Max IP pool +4', mods:[] },
-      { lvl:'II', req:'Mind 12', effect:'Max IP pool +8', mods:[] },
-      { lvl:'III', req:'Mind 20', effect:'Max IP pool +12. Starts every fight at full IP.', mods:[] },
+      { lvl:'I', req:'Mind 8', effect:'Max IP pool +4', mods:[], maxBonus:{stat:'ip', amount:4} },
+      { lvl:'II', req:'Mind 12', effect:'Max IP pool +8', mods:[], maxBonus:{stat:'ip', amount:8} },
+      { lvl:'III', req:'Mind 20', effect:'Max IP pool +12. Starts every fight at full IP.', mods:[], maxBonus:{stat:'ip', amount:12}, fullIpAtCombatStart:true },
     ]},
     { name: 'Efficient Code', levels: [
-      { lvl:'I', req:'Mind 12', effect:'Control Hacks cost 1 IP less (min. 1)', mods:[] },
-      { lvl:'II', req:'Mind 16', effect:'Combat Hacks also cost 1 IP less', mods:[] },
-      { lvl:'III', req:'Mind 20', effect:'Utility Hacks also cost 1 IP less', mods:[] },
-      { lvl:'IV', req:'Mind 24', effect:'ALL hacks cost 1 IP less (stacks with I-III)', mods:[] },
+      { lvl:'I', req:'Mind 12', effect:'Control Hacks cost 1 IP less (min. 1)', mods:[], hackIpDiscount:{Control:1} },
+      { lvl:'II', req:'Mind 16', effect:'Combat Hacks also cost 1 IP less', mods:[], hackIpDiscount:{Control:1, Combat:1} },
+      { lvl:'III', req:'Mind 20', effect:'Utility Hacks also cost 1 IP less', mods:[], hackIpDiscount:{Control:1, Combat:1, Utility:1} },
+      { lvl:'IV', req:'Mind 24', effect:'ALL hacks cost 1 IP less (stacks with I-III)', mods:[], hackIpDiscount:{Control:2, Combat:2, Utility:2, Environment:1, Duel:1} },
     ]},
     { name: 'System Expertise', levels: [
       { lvl:'I', req:'Mind 8', effect:'+2 PW on all Routine Hacks (Int+Focus)', mods:[{appliesTo:'pw',scope:'hacks',amount:2,conditional:false}] },
@@ -8829,9 +9004,9 @@ const TALENT_CATALOG = {
       { lvl:'II', req:'Mind 20', effect:'Combat Hacks: +60% damage. Crit Success also applies a status effect.', mods:[] },
     ]},
     { name: 'Overclock', levels: [
-      { lvl:'I', req:'— (core mechanic)', effect:'Pay 1 HP to gain 2 IP, any time, no limit. A non-hack action ends Overclock immediately (2-round hack cooldown after). IP regen pauses while active.', mods:[] },
-      { lvl:'II', req:'Mind 16', effect:'Ratio improves to 1:1. Max 5 rounds. Same exit rule/cooldown.', mods:[] },
-      { lvl:'III', req:'Mind 22', effect:'No round limit, 1:1 ratio, but 1 HP/round passive drain while active. Immune to Control Hacks while active. At 0 HP during Overclock: Grit roll — success knocked out, failure knocked out + permanent -1 Will.', mods:[] },
+      { lvl:'I', req:'— (core mechanic)', effect:'Pay 1 HP to gain 2 IP, any time, no limit. A non-hack action ends Overclock immediately (2-round hack cooldown after). IP regen pauses while active.', mods:[], trigger:{label:'Overclock: -1 HP → +2 IP', effects:[{stat:'hp',delta:-1},{stat:'ip',delta:2}]} },
+      { lvl:'II', req:'Mind 16', effect:'Ratio improves to 1:1. Max 5 rounds. Same exit rule/cooldown.', mods:[], trigger:{label:'Overclock: -1 HP → +1 IP', effects:[{stat:'hp',delta:-1},{stat:'ip',delta:1}]} },
+      { lvl:'III', req:'Mind 22', effect:'No round limit, 1:1 ratio, but 1 HP/round passive drain while active. Immune to Control Hacks while active. At 0 HP during Overclock: Grit roll — success knocked out, failure knocked out + permanent -1 Will.', mods:[], trigger:{label:'Overclock: -1 HP → +1 IP', effects:[{stat:'hp',delta:-1},{stat:'ip',delta:1}]} },
     ]},
     { name: 'Ghost Protocol', levels: [
       { lvl:'I', req:'Mind 10', effect:'Hacks on Sonic-Shocked targets are untraceable', mods:[] },
@@ -8845,7 +9020,7 @@ const TALENT_CATALOG = {
     ]},
     { name: 'Deep Scan', levels: [
       { lvl:'I', req:'Mind 8', effect:'Ping reveals Firewall, HP and cyberware of every pinged target', mods:[] },
-      { lvl:'II', req:'Mind 16', effect:'1x/fight: full scan of a target — +4 PW on all hacks vs it for the fight', mods:[] },
+      { lvl:'II', req:'Mind 16', effect:'1x/fight: full scan of a target — +4 PW on all hacks vs it for the fight', mods:[{appliesTo:'pw',scope:'hacks',amount:4,conditional:true,label:'After full scan (1x/fight)'}], usesPerFight:1 },
     ]},
     { name: 'Daemon Upload', levels: [
       { lvl:'I', req:'Mind 20', effect:'1x/fight: deploy a Daemon for 4 IP — auto-uploads Cyberware Malfunction on a target every round', mods:[] },
@@ -8877,27 +9052,27 @@ const TALENT_CATALOG = {
       { lvl:'III', req:'Power 20', effect:'After kill: +4 PW + +5 Weapon Bonus. Stacks up to 3x/fight.', mods:[{appliesTo:'pw',scope:'melee',amount:4,conditional:true},{appliesTo:'wb',scope:'melee',amount:5,conditional:true}] },
     ]},
     { name: 'Kritische Masse', levels: [
-      { lvl:'I', req:'Power 12', effect:'Melee Crit Success: Bleed (2 dmg/round, 3 rounds) OR Stagger (target loses secondary action)', mods:[] },
-      { lvl:'II', req:'Power 22', effect:'Crit Success: both status effects at once. Target gets no reaction roll.', mods:[] },
+      { lvl:'I', req:'Power 12', effect:'Melee Crit Success: Bleed (2 dmg/round, 3 rounds) OR Stagger (target loses secondary action)', mods:[], statusGrantChoice:[{type:'bleed',name:'Bleed (Kritische Masse)',rounds:3},{type:'stagger',name:'Stagger (Kritische Masse)',rounds:1}] },
+      { lvl:'II', req:'Power 22', effect:'Crit Success: both status effects at once. Target gets no reaction roll.', mods:[], statusGrantChoice:[{type:'bleed',name:'Bleed (Kritische Masse)',rounds:3},{type:'stagger',name:'Stagger (Kritische Masse)',rounds:1}] },
     ]},
     { name: 'Eisenhaut', levels: [
-      { lvl:'I', req:'Power 8', effect:'+1 SP permanent', mods:[] },
-      { lvl:'II', req:'Power 12', effect:'+2 SP', mods:[] },
-      { lvl:'III', req:'Power 16', effect:'+3 SP', mods:[] },
-      { lvl:'IV', req:'Power 20', effect:'+4 SP. Seriously Wounded malus halved (-1 instead of -2).', mods:[] },
-      { lvl:'V', req:'Power 24', effect:'+5 SP. Seriously Wounded malus gone entirely.', mods:[] },
+      { lvl:'I', req:'Power 8', effect:'+1 SP permanent', mods:[], maxBonus:{stat:'armor', amount:1} },
+      { lvl:'II', req:'Power 12', effect:'+2 SP', mods:[], maxBonus:{stat:'armor', amount:2} },
+      { lvl:'III', req:'Power 16', effect:'+3 SP', mods:[], maxBonus:{stat:'armor', amount:3} },
+      { lvl:'IV', req:'Power 20', effect:'+4 SP. Seriously Wounded malus halved (-1 instead of -2).', mods:[], maxBonus:{stat:'armor', amount:4} },
+      { lvl:'V', req:'Power 24', effect:'+5 SP. Seriously Wounded malus gone entirely.', mods:[], maxBonus:{stat:'armor', amount:5} },
     ]},
     { name: 'Regenerationsgewebe', levels: [
-      { lvl:'I', req:'Power 10', effect:'Regenerates 1 HP/round in combat (passive, while > 0 HP). Full heal after 10 min outside combat.', mods:[] },
-      { lvl:'II', req:'Power 14', effect:'2 HP/round in combat. Bleed effects halved.', mods:[] },
-      { lvl:'III', req:'Power 18', effect:'3 HP/round. Immune to Bleed (wounds close instantly).', mods:[] },
-      { lvl:'IV', req:'Power 22', effect:'5 HP/round. 1x/fight below 25% HP: instant 2d6+6 HP (adrenaline surge).', mods:[] },
+      { lvl:'I', req:'Power 10', effect:'Regenerates 1 HP/round in combat (passive, while > 0 HP). Full heal after 10 min outside combat.', mods:[], regen_stat:'hp', regen_amount:1 },
+      { lvl:'II', req:'Power 14', effect:'2 HP/round in combat. Bleed effects halved.', mods:[], regen_stat:'hp', regen_amount:2 },
+      { lvl:'III', req:'Power 18', effect:'3 HP/round. Immune to Bleed (wounds close instantly).', mods:[], regen_stat:'hp', regen_amount:3 },
+      { lvl:'IV', req:'Power 22', effect:'5 HP/round. 1x/fight below 25% HP: instant 2d6+6 HP (adrenaline surge).', mods:[], regen_stat:'hp', regen_amount:5 },
     ]},
     { name: 'Kampfinstinkt', levels: [
-      { lvl:'I', req:'Mobility 8', effect:'+3 reaction-roll PW when attacked in melee', mods:[] },
-      { lvl:'II', req:'Mobility 12', effect:'+6 reaction-roll PW in melee', mods:[] },
-      { lvl:'III', req:'Mobility 16', effect:'+6 RW-PW. Second-attacker malus reduced to -3 (from -5).', mods:[] },
-      { lvl:'IV', req:'Mobility 20', effect:'+8 RW-PW. Additional-attacker malus removed entirely.', mods:[] },
+      { lvl:'I', req:'Mobility 8', effect:'+3 reaction-roll PW when attacked in melee', mods:[{appliesTo:'reaction',amount:3,conditional:true,label:'Attacked in melee'}] },
+      { lvl:'II', req:'Mobility 12', effect:'+6 reaction-roll PW in melee', mods:[{appliesTo:'reaction',amount:6,conditional:true,label:'Attacked in melee'}] },
+      { lvl:'III', req:'Mobility 16', effect:'+6 RW-PW. Second-attacker malus reduced to -3 (from -5).', mods:[{appliesTo:'reaction',amount:6,conditional:true,label:'Attacked in melee'}] },
+      { lvl:'IV', req:'Mobility 20', effect:'+8 RW-PW. Additional-attacker malus removed entirely.', mods:[{appliesTo:'reaction',amount:8,conditional:true,label:'Attacked in melee'}] },
     ]},
     { name: 'Standhaft', levels: [
       { lvl:'I', req:'Power 10', effect:'Range to shield an ally: +2m', mods:[] },
@@ -8915,11 +9090,11 @@ const TALENT_CATALOG = {
       { lvl:'III', req:'Power 22', effect:'At 0 HP: fights a full round before collapsing, no roll needed', mods:[] },
     ]},
     { name: 'Zweiter Atem', levels: [
-      { lvl:'I', req:'Mobility 10', effect:'Stamina regen in combat: 1/round', mods:[] },
-      { lvl:'II', req:'Mobility 12', effect:'2/round', mods:[] },
-      { lvl:'III', req:'Mobility 15', effect:'3/round', mods:[] },
-      { lvl:'IV', req:'Mobility 18', effect:'4/round', mods:[] },
-      { lvl:'V', req:'Mobility 22', effect:'5/round', mods:[] },
+      { lvl:'I', req:'Mobility 10', effect:'Stamina regen in combat: 1/round', mods:[], regen_stat:'stamina', regen_amount:1 },
+      { lvl:'II', req:'Mobility 12', effect:'2/round', mods:[], regen_stat:'stamina', regen_amount:2 },
+      { lvl:'III', req:'Mobility 15', effect:'3/round', mods:[], regen_stat:'stamina', regen_amount:3 },
+      { lvl:'IV', req:'Mobility 18', effect:'4/round', mods:[], regen_stat:'stamina', regen_amount:4 },
+      { lvl:'V', req:'Mobility 22', effect:'5/round', mods:[], regen_stat:'stamina', regen_amount:5 },
     ]},
     { name: 'Ruinous Charge', levels: [
       { lvl:'I', req:'Mobility 8', effect:'First 2m/round: no melee malus', mods:[] },
@@ -8938,8 +9113,8 @@ const TALENT_CATALOG = {
       { lvl:'III', req:'Mobility 18', effect:'Flank: +6 PW + no reaction roll + increased crit chance', mods:[{appliesTo:'pw',scope:'melee',amount:6,conditional:true}] },
     ]},
     { name: 'Wilder Ansturm', levels: [
-      { lvl:'I', req:'Mobility 15', effect:'1x/fight: move up to 8m and attack with no movement malus. 6m+ distance: +4 damage.', mods:[] },
-      { lvl:'II', req:'Mobility 20', effect:'2x/fight. Targets hit along the way take half attack value as damage.', mods:[] },
+      { lvl:'I', req:'Mobility 15', effect:'1x/fight: move up to 8m and attack with no movement malus. 6m+ distance: +4 damage.', mods:[], usesPerFight:1 },
+      { lvl:'II', req:'Mobility 20', effect:'2x/fight. Targets hit along the way take half attack value as damage.', mods:[], usesPerFight:2 },
     ]},
     { name: 'Entwaeffnen', levels: [
       { lvl:'I', req:'Power 12', effect:'Dex+Strength roll instead of damage: success drops the weapon (uses secondary action)', mods:[] },
@@ -8972,9 +9147,9 @@ const TALENT_CATALOG = {
       { lvl:'IV', req:'Mobility 20', effect:'First 8m without malus', mods:[] },
     ]},
     { name: 'Gezielte Schuesse', levels: [
-      { lvl:'I', req:'Mobility 10', effect:'Head: -4 PW, Stagger on hit', mods:[] },
-      { lvl:'II', req:'Mobility 14', effect:'Legs: -3 PW, Speed halved 2 rounds on hit', mods:[] },
-      { lvl:'III', req:'Mobility 18', effect:'Weapon: -5 PW, weapon drops. Headshot Crit Success = instant KO.', mods:[] },
+      { lvl:'I', req:'Mobility 10', effect:'Head: -4 PW, Stagger on hit', mods:[], statusGrantChoice:[{type:'stagger',name:'Stagger (Headshot)',rounds:1}] },
+      { lvl:'II', req:'Mobility 14', effect:'Legs: -3 PW, Speed halved 2 rounds on hit', mods:[], statusGrantChoice:[{type:'stagger',name:'Stagger (Headshot)',rounds:1},{type:'custom',name:'Speed halved (Legshot)',rounds:2}] },
+      { lvl:'III', req:'Mobility 18', effect:'Weapon: -5 PW, weapon drops. Headshot Crit Success = instant KO.', mods:[], statusGrantChoice:[{type:'stagger',name:'Stagger (Headshot)',rounds:1},{type:'custom',name:'Speed halved (Legshot)',rounds:2}] },
     ]},
     { name: 'Durchschlagende Kraft', levels: [
       { lvl:'I', req:'Power 10', effect:'Shots ignore light cover (wood, glass)', mods:[] },
@@ -8984,7 +9159,7 @@ const TALENT_CATALOG = {
     { name: 'Munitionseffizienz', levels: [
       { lvl:'I', req:'Mobility 8', effect:'Autofire uses 1.5x magazine instead of 2x', mods:[] },
       { lvl:'II', req:'Mobility 12', effect:'Autofire uses normal magazine consumption', mods:[] },
-      { lvl:'III', req:'Mobility 18', effect:'Suppressive Fire: normal consumption. 1x/fight a shot costs no tick.', mods:[] },
+      { lvl:'III', req:'Mobility 18', effect:'Suppressive Fire: normal consumption. 1x/fight a shot costs no tick.', mods:[], usesPerFight:1 },
     ]},
     { name: 'Hawk Eye', levels: [
       { lvl:'I', req:'Mind 8', effect:'+2 on Focus+Senses rolls (Sniper PW)', mods:[{appliesTo:'pw',scope:'ranged',amount:2,conditional:false}] },
@@ -9003,9 +9178,9 @@ const TALENT_CATALOG = {
       { lvl:'III', req:'Mobility 22', effect:'+8 PW. Crit Success: fight starts with an extra free AP.', mods:[{appliesTo:'pw',scope:'ranged',amount:8,conditional:true}] },
     ]},
     { name: 'Doppelschuss', levels: [
-      { lvl:'I', req:'Mobility 15', effect:'2x/fight: two shots as one main action. Second shot -4 PW.', mods:[] },
-      { lvl:'II', req:'Mobility 20', effect:'Second shot -2 PW. Can target different targets.', mods:[] },
-      { lvl:'III', req:'Mobility 25', effect:'Second shot no PW malus. 3x/fight.', mods:[] },
+      { lvl:'I', req:'Mobility 15', effect:'2x/fight: two shots as one main action. Second shot -4 PW.', mods:[], usesPerFight:2 },
+      { lvl:'II', req:'Mobility 20', effect:'Second shot -2 PW. Can target different targets.', mods:[], usesPerFight:2 },
+      { lvl:'III', req:'Mobility 25', effect:'Second shot no PW malus. 3x/fight.', mods:[], usesPerFight:3 },
     ]},
     { name: 'Snap Shot', levels: [
       { lvl:'I', req:'Mobility 15', effect:'1x/round, when a visible enemy uses Quick Peek or starts a visible attack: immediate reaction shot at half PW. No prior Feuerbereitschaft needed. Normal ammo/Stamina cost. Target still gets a normal defensive reaction unless another rule prevents it.', mods:[] },
@@ -9013,7 +9188,7 @@ const TALENT_CATALOG = {
     ]},
     { name: 'Ghost Shot', levels: [
       { lvl:'I', req:'Mobility 10', effect:'With Suppressor: stay in stealth after firing if stationary', mods:[] },
-      { lvl:'II', req:'Mobility 18', effect:'Also without Suppressor (1x/fight). With Suppressor: permanent stealth while stationary.', mods:[] },
+      { lvl:'II', req:'Mobility 18', effect:'Also without Suppressor (1x/fight). With Suppressor: permanent stealth while stationary.', mods:[], usesPerFight:1 },
     ]},
     { name: 'Suppression Spezialist', levels: [
       { lvl:'I', req:'Mobility 12', effect:'Suppressive Fire: Will-roll -3. Zone up to 6m wide.', mods:[] },
@@ -9069,9 +9244,9 @@ const TALENT_CATALOG = {
       { lvl:'V', req:'Mind 24', effect:'3d6+12 HP. 1x/fight: bring a 0-HP target straight to 10% Max HP.', mods:[] },
     ]},
     { name: 'Taktischer Ueberblick', levels: [
-      { lvl:'I', req:'Mind 10', effect:'Neutral main action: one ally gets +4 PW on their next action', mods:[] },
-      { lvl:'II', req:'Mind 15', effect:'Two allies. Buff lasts 2 rounds.', mods:[] },
-      { lvl:'III', req:'Mind 20', effect:'All allies in sight, +6 PW. Usable as secondary action.', mods:[] },
+      { lvl:'I', req:'Mind 10', effect:'Neutral main action: one ally gets +4 PW on their next action', mods:[], rallyBonus:{pw:4, rounds:1} },
+      { lvl:'II', req:'Mind 15', effect:'Two allies. Buff lasts 2 rounds.', mods:[], rallyBonus:{pw:4, rounds:2} },
+      { lvl:'III', req:'Mind 20', effect:'All allies in sight, +6 PW. Usable as secondary action.', mods:[], rallyBonus:{pw:6, rounds:2} },
     ]},
     { name: 'Kaltbluetig', levels: [
       { lvl:'I', req:'Mind 10', effect:'No Seriously Wounded malus on Mind rolls', mods:[] },
@@ -9091,7 +9266,7 @@ const TALENT_CATALOG = {
     { name: 'Schnelle Auffassung', levels: [
       { lvl:'I', req:'Mind 8', effect:'+3 on Initiative roll', mods:[{appliesTo:'initiative',amount:3,conditional:false}] },
       { lvl:'II', req:'Mind 12', effect:'+6 Initiative. Can no longer lose actions to surprise.', mods:[{appliesTo:'initiative',amount:6,conditional:false}] },
-      { lvl:'III', req:'Mind 18', effect:'+9 Initiative. 1x/fight: ignore turn order and act immediately.', mods:[{appliesTo:'initiative',amount:9,conditional:false}] },
+      { lvl:'III', req:'Mind 18', effect:'+9 Initiative. 1x/fight: ignore turn order and act immediately.', mods:[{appliesTo:'initiative',amount:9,conditional:false}], usesPerFight:1 },
     ]},
   ],
   General: [
@@ -9104,14 +9279,14 @@ const TALENT_CATALOG = {
       { lvl:'I', req:'Power 8', effect:'+1 on all attack rolls', mods:[{appliesTo:'pw',scope:'all',amount:1,conditional:false}] },
       { lvl:'II', req:'Power 12', effect:'+2 on all attack rolls', mods:[{appliesTo:'pw',scope:'all',amount:2,conditional:false}] },
       { lvl:'III', req:'Power 16', effect:'+3 on all attack rolls', mods:[{appliesTo:'pw',scope:'all',amount:3,conditional:false}] },
-      { lvl:'IV', req:'Power 20', effect:'+3 attack. +2 on all reaction rolls.', mods:[{appliesTo:'pw',scope:'all',amount:3,conditional:false}] },
-      { lvl:'V', req:'Power 24', effect:'+4 attack, +3 reaction. Crit Fail no longer triggers a catastrophic effect.', mods:[{appliesTo:'pw',scope:'all',amount:4,conditional:false}] },
+      { lvl:'IV', req:'Power 20', effect:'+3 attack. +2 on all reaction rolls.', mods:[{appliesTo:'pw',scope:'all',amount:3,conditional:false},{appliesTo:'reaction',amount:2,conditional:false}] },
+      { lvl:'V', req:'Power 24', effect:'+4 attack, +3 reaction. Crit Fail no longer triggers a catastrophic effect.', mods:[{appliesTo:'pw',scope:'all',amount:4,conditional:false},{appliesTo:'reaction',amount:3,conditional:false}] },
     ]},
     { name: 'Zaeher Ueberlebender', levels: [
-      { lvl:'I', req:'Power 8', effect:'+5 Max HP', mods:[] },
-      { lvl:'II', req:'Power 12', effect:'+10 Max HP', mods:[] },
-      { lvl:'III', req:'Power 16', effect:'+15 Max HP. Regenerates 1 HP/round outside combat.', mods:[] },
-      { lvl:'IV', req:'Power 20', effect:'+20 Max HP. Regenerates 2 HP/round outside combat.', mods:[] },
+      { lvl:'I', req:'Power 8', effect:'+5 Max HP', mods:[], maxBonus:{stat:'hp', amount:5} },
+      { lvl:'II', req:'Power 12', effect:'+10 Max HP', mods:[], maxBonus:{stat:'hp', amount:10} },
+      { lvl:'III', req:'Power 16', effect:'+15 Max HP. Regenerates 1 HP/round outside combat.', mods:[], maxBonus:{stat:'hp', amount:15} },
+      { lvl:'IV', req:'Power 20', effect:'+20 Max HP. Regenerates 2 HP/round outside combat.', mods:[], maxBonus:{stat:'hp', amount:20} },
     ]},
     { name: 'Erste Hilfe', levels: [
       { lvl:'I', req:'Mind 8', effect:'Outside combat: heal 2d6 HP with a med-kit (secondary action)', mods:[] },
@@ -9124,17 +9299,17 @@ const TALENT_CATALOG = {
       { lvl:'III', req:'Mind 18', effect:'+9. Immune to Cyberpsychosis triggers from outside manipulation.', mods:[] },
     ]},
     { name: 'Beschleunigt', levels: [
-      { lvl:'I', req:'Mobility 16', effect:'Flink usable 1x/fight', mods:[] },
-      { lvl:'II', req:'Mobility 22', effect:'2x/fight', mods:[] },
-      { lvl:'III', req:'Mobility 26', effect:'3x/fight. Second-Flink-attack RW malus on the enemy goes away.', mods:[] },
+      { lvl:'I', req:'Mobility 16', effect:'Flink usable 1x/fight', mods:[], usesPerFight:1 },
+      { lvl:'II', req:'Mobility 22', effect:'2x/fight', mods:[], usesPerFight:2 },
+      { lvl:'III', req:'Mobility 26', effect:'3x/fight. Second-Flink-attack RW malus on the enemy goes away.', mods:[], usesPerFight:3 },
     ]},
     { name: 'Flink-Meister', levels: [
       { lvl:'I', req:'Mobility 15', effect:'Defensive Flink announceable even after the result is known (true last-second block)', mods:[] },
       { lvl:'II', req:'Mobility 20', effect:'Offensive Flink announceable after the result roll (see if the first attack hits first)', mods:[] },
     ]},
     { name: 'Reflexkette', levels: [
-      { lvl:'I', req:'Mobility 12', effect:'Defensive Flink: +4 PW on the defense roll', mods:[] },
-      { lvl:'II', req:'Mobility 20', effect:'+6 PW. After a successful defensive Flink: free counter-attack at half PW.', mods:[] },
+      { lvl:'I', req:'Mobility 12', effect:'Defensive Flink: +4 PW on the defense roll', mods:[{appliesTo:'reaction',amount:4,conditional:true,label:'Defensive Flink (dodge)'}] },
+      { lvl:'II', req:'Mobility 20', effect:'+6 PW. After a successful defensive Flink: free counter-attack at half PW.', mods:[{appliesTo:'reaction',amount:6,conditional:true,label:'Defensive Flink (dodge)'}] },
     ]},
     { name: 'Fahrzeugfuehrer', levels: [
       { lvl:'I', req:'Mobility 8', effect:'Handle a vehicle under stress with no roll. Chases: +3.', mods:[] },
@@ -9155,46 +9330,46 @@ const TALENT_CATALOG = {
       { lvl:'III', req:'Pilot 10', effect:'+8 on all drone PW. Range 60m. Acts independently if operator is unconscious.', mods:[{appliesTo:'pw',scope:'all',amount:8,conditional:false}] },
     ]},
     { name: 'Medizin-Protokoll', levels: [
-      { lvl:'I', req:'GREMLIN I, Mind 8', effect:'Drone heals 2d6 HP on an ally in range (operator secondary action). 1 charge/fight.', mods:[] },
-      { lvl:'II', req:'GREMLIN II, Mind 12', effect:'3d6 HP, 2 charges/fight. Can stabilize Seriously Wounded automatically.', mods:[] },
-      { lvl:'III', req:'GREMLIN III, Mind 16', effect:'4d6 HP, 3 charges/fight. Can quick-fix Critical Injuries with no roll (1x/fight).', mods:[] },
+      { lvl:'I', req:'GREMLIN I, Mind 8', effect:'Drone heals 2d6 HP on an ally in range (operator secondary action). 1 charge/fight.', mods:[], usesPerFight:1 },
+      { lvl:'II', req:'GREMLIN II, Mind 12', effect:'3d6 HP, 2 charges/fight. Can stabilize Seriously Wounded automatically.', mods:[], usesPerFight:2 },
+      { lvl:'III', req:'GREMLIN III, Mind 16', effect:'4d6 HP, 3 charges/fight. Can quick-fix Critical Injuries with no roll (1x/fight).', mods:[], usesPerFight:3 },
     ]},
     { name: 'Revitalisierungs-Protokoll', levels: [
-      { lvl:'I', req:'Medizin-Protokoll I', effect:'Drone stabilizes a Mortally Wounded target in range (main action, 1x/fight), no roll needed', mods:[] },
-      { lvl:'II', req:'Medizin-Protokoll II', effect:'2x/fight. Target returns at 1 HP and is NOT unconscious.', mods:[] },
+      { lvl:'I', req:'Medizin-Protokoll I', effect:'Drone stabilizes a Mortally Wounded target in range (main action, 1x/fight), no roll needed', mods:[], usesPerFight:1 },
+      { lvl:'II', req:'Medizin-Protokoll II', effect:'2x/fight. Target returns at 1 HP and is NOT unconscious.', mods:[], usesPerFight:2 },
     ]},
     { name: 'Feld-Chirurg', levels: [
       { lvl:'I', req:'Medizin-Protokoll I', effect:'All healing actions (drone + manual) give +4 extra HP', mods:[] },
       { lvl:'II', req:'Medizin-Protokoll II', effect:'+8 extra HP. Healing auto-removes Bleed/Poison.', mods:[] },
     ]},
     { name: 'Kampf-Protokoll', levels: [
-      { lvl:'I', req:'GREMLIN I, Mind 8', effect:'Secondary action: drone deals +7 damage (ignores SP), +11 vs cyberware/machines. 2x/fight.', mods:[] },
-      { lvl:'II', req:'GREMLIN II, Mind 12', effect:'+11 damage (+18 vs machines). Target: Cyberware Malfunction. 3x/fight.', mods:[] },
+      { lvl:'I', req:'GREMLIN I, Mind 8', effect:'Secondary action: drone deals +7 damage (ignores SP), +11 vs cyberware/machines. 2x/fight.', mods:[], usesPerFight:2 },
+      { lvl:'II', req:'GREMLIN II, Mind 12', effect:'+11 damage (+18 vs machines). Target: Cyberware Malfunction. 3x/fight.', mods:[], usesPerFight:3 },
       { lvl:'III', req:'GREMLIN III, Mind 18', effect:'+18 damage (+25 vs machines). 2 cyberware items disabled for 2 rounds. No fight limit.', mods:[] },
     ]},
     { name: 'Kapazitaets-Entladung', levels: [
-      { lvl:'I', req:'Kampf-Protokoll I', effect:'Drone: +7 damage to all in 5m radius (+11 vs machines/cyberware). 1x/fight.', mods:[] },
-      { lvl:'II', req:'Kampf-Protokoll II', effect:'+11 damage in the area. Machines Stunned 1 round. 2x/fight.', mods:[] },
+      { lvl:'I', req:'Kampf-Protokoll I', effect:'Drone: +7 damage to all in 5m radius (+11 vs machines/cyberware). 1x/fight.', mods:[], usesPerFight:1 },
+      { lvl:'II', req:'Kampf-Protokoll II', effect:'+11 damage in the area. Machines Stunned 1 round. 2x/fight.', mods:[], usesPerFight:2 },
     ]},
     { name: 'Haywire-Protokoll', levels: [
-      { lvl:'I', req:'GREMLIN I, Mind 10', effect:'Drone hacks an enemy drone/turret in range: Int+Focus vs Firewall. Success: disabled 2 rounds. 1x/fight.', mods:[] },
-      { lvl:'II', req:'GREMLIN II, Mind 16', effect:'Full control on success for rest of fight — machine fights as an ally. 2x/fight.', mods:[] },
+      { lvl:'I', req:'GREMLIN I, Mind 10', effect:'Drone hacks an enemy drone/turret in range: Int+Focus vs Firewall. Success: disabled 2 rounds. 1x/fight.', mods:[], usesPerFight:1 },
+      { lvl:'II', req:'GREMLIN II, Mind 16', effect:'Full control on success for rest of fight — machine fights as an ally. 2x/fight.', mods:[], usesPerFight:2 },
     ]},
     { name: 'Vollstaendige Uebernahme', levels: [
       { lvl:'I', req:'Haywire-Protokoll II', effect:'1x/mission: drone attempts to permanently take over a machine. Int+Focus vs Firewall+6. Success: becomes a permanent NPC ally.', mods:[] },
     ]},
     { name: 'Hilfs-Protokoll', levels: [
-      { lvl:'I', req:'GREMLIN I', effect:'Drone escorts a target: +3 PW on their next attack (secondary action, 2x/fight)', mods:[] },
-      { lvl:'II', req:'GREMLIN II, Mind 12', effect:'+5 PW. Target also gets an automatic Covering Fire reaction shot.', mods:[] },
+      { lvl:'I', req:'GREMLIN I', effect:'Drone escorts a target: +3 PW on their next attack (secondary action, 2x/fight)', mods:[], usesPerFight:2 },
+      { lvl:'II', req:'GREMLIN II, Mind 12', effect:'+5 PW. Target also gets an automatic Covering Fire reaction shot.', mods:[], usesPerFight:2 },
       { lvl:'III', req:'GREMLIN III, Mind 16', effect:'Drone auto-follows a designated ally. Passive +2 PW on all their attacks.', mods:[] },
     ]},
     { name: 'Bedrohungsanalyse', levels: [
-      { lvl:'I', req:'Hilfs-Protokoll I', effect:'Main action: target gets Covering Fire on the first enemy who attacks them. 2x/fight.', mods:[] },
-      { lvl:'II', req:'Hilfs-Protokoll II', effect:'3x/fight. Target gets 2 reaction shots. Reaction shots can crit.', mods:[] },
+      { lvl:'I', req:'Hilfs-Protokoll I', effect:'Main action: target gets Covering Fire on the first enemy who attacks them. 2x/fight.', mods:[], usesPerFight:2 },
+      { lvl:'II', req:'Hilfs-Protokoll II', effect:'3x/fight. Target gets 2 reaction shots. Reaction shots can crit.', mods:[], usesPerFight:3 },
     ]},
     { name: 'Bereichs-Scanner', levels: [
-      { lvl:'I', req:'GREMLIN I', effect:'Drone scans 20m radius: hidden/invisible targets revealed for 1 round (even stealthed). 2x/fight.', mods:[] },
-      { lvl:'II', req:'GREMLIN II, Mind 14', effect:'40m radius, 2-round scan. Revealed enemies: -4 PW (drone panic). 3x/fight.', mods:[] },
+      { lvl:'I', req:'GREMLIN I', effect:'Drone scans 20m radius: hidden/invisible targets revealed for 1 round (even stealthed). 2x/fight.', mods:[], usesPerFight:2 },
+      { lvl:'II', req:'GREMLIN II, Mind 14', effect:'40m radius, 2-round scan. Revealed enemies: -4 PW (drone panic). 3x/fight.', mods:[], usesPerFight:3 },
     ]},
     { name: 'Sentinel', levels: [
       { lvl:'I', req:'Mind 10, Pilot 2', effect:'Reaction roll usable twice per round instead of once. Second: -4 PW.', mods:[] },
@@ -9224,14 +9399,14 @@ const TALENT_CATALOG = {
       { lvl:'II', req:'Gauntlet II, Napalm-X II', effect:'Cone +2m again in every direction. Firewall lingers 1 round, damages anyone entering.', mods:[] },
     ]},
     { name: 'Feuersturm', levels: [
-      { lvl:'I', req:'Incinerator I', effect:'1x/fight: 360-degree flamethrower hit on ALL targets in 5m. Full damage to all. Costs 2 charges. Immune to fire rest of fight.', mods:[] },
+      { lvl:'I', req:'Incinerator I', effect:'1x/fight: 360-degree flamethrower hit on ALL targets in 5m. Full damage to all. Costs 2 charges. Immune to fire rest of fight.', mods:[], usesPerFight:1 },
     ]},
     { name: 'Ausbrenneffekt', levels: [
-      { lvl:'I', req:'Gauntlet I', effect:'After each flamethrower use: 2m smoke screen around operator for 1 round (+4 PW on reaction rolls)', mods:[] },
-      { lvl:'II', req:'Gauntlet II', effect:'+6 PW from smoke. Lasts 2 rounds, expands to 4m.', mods:[] },
+      { lvl:'I', req:'Gauntlet I', effect:'After each flamethrower use: 2m smoke screen around operator for 1 round (+4 PW on reaction rolls)', mods:[{appliesTo:'reaction',amount:4,conditional:true,label:'In own smoke screen'}] },
+      { lvl:'II', req:'Gauntlet II', effect:'+6 PW from smoke. Lasts 2 rounds, expands to 4m.', mods:[{appliesTo:'reaction',amount:6,conditional:true,label:'In own smoke screen'}] },
     ]},
     { name: 'Schnellentladung', levels: [
-      { lvl:'I', req:'Gauntlet II, Ausbrenneffekt I', effect:'1x/fight: next flamethrower use costs a secondary action instead of main', mods:[] },
+      { lvl:'I', req:'Gauntlet II, Ausbrenneffekt I', effect:'1x/fight: next flamethrower use costs a secondary action instead of main', mods:[], usesPerFight:1 },
     ]},
     { name: 'Groesste Explosion', levels: [
       { lvl:'I', req:'Gauntlet I', effect:'50% chance: grenades/rockets deal +3 damage', mods:[] },
@@ -9242,7 +9417,7 @@ const TALENT_CATALOG = {
       { lvl:'II', req:'Gauntlet II', effect:'3+ targets: +6 extra. No damage falloff at blast edge.', mods:[] },
     ]},
     { name: 'Bunker-Brecher', levels: [
-      { lvl:'I', req:'Gauntlet II, Zielgenauigkeit I', effect:'1x/fight: rocket does x3 damage to cover (HP), destroys even Thick Steel. Only half explosive damage vs people.', mods:[] },
+      { lvl:'I', req:'Gauntlet II, Zielgenauigkeit I', effect:'1x/fight: rocket does x3 damage to cover (HP), destroys even Thick Steel. Only half explosive damage vs people.', mods:[], usesPerFight:1 },
     ]},
     { name: 'Phosphor-Munition', levels: [
       { lvl:'I', req:'Gauntlet I', effect:'Flamethrower can now damage machines/robots. Every hit also reduces target SP by 2.', mods:[] },
@@ -9258,8 +9433,8 @@ const TALENT_CATALOG = {
       { lvl:'III', req:'Mind 18', effect:'+5/enemy (max +15). First attack vs this character per fight auto-misses if 3+ enemies visible.', mods:[] },
     ]},
     { name: 'Unbeugsamkeit', levels: [
-      { lvl:'I', req:'Power 8', effect:'+5 Max HP. Explosion/grenade damage taken: -3 (min 1).', mods:[] },
-      { lvl:'II', req:'Power 14', effect:'+10 Max HP. Explosion damage -6. No knockback from explosions.', mods:[] },
+      { lvl:'I', req:'Power 8', effect:'+5 Max HP. Explosion/grenade damage taken: -3 (min 1).', mods:[], maxBonus:{stat:'hp', amount:5} },
+      { lvl:'II', req:'Power 14', effect:'+10 Max HP. Explosion damage -6. No knockback from explosions.', mods:[], maxBonus:{stat:'hp', amount:10} },
     ]},
     { name: 'Javelin-Raketen', levels: [
       { lvl:'I', req:'Gauntlet I, Zielgenauigkeit I', effect:'Rocket Launcher effective/max range both +50% — 150m/450m instead of the base 100m/300m (§6.4a). Can hit targets outside your own sightline if an ally has sight (Squadsight).', mods:[] },
@@ -9268,12 +9443,12 @@ const TALENT_CATALOG = {
   ],
   Tactician: [
     { name: 'Holo-Markierung', levels: [
-      { lvl:'I', req:'Mind 8', effect:'Secondary action: mark a visible target. All allies: +4 PW vs it for 2 rounds. 3x/fight.', mods:[] },
-      { lvl:'II', req:'Mind 12', effect:'+6 PW for allies. Also +2 Weapon Bonus on the first hit vs the marked target. 4x/fight.', mods:[] },
-      { lvl:'III', req:'Mind 16', effect:'+8 PW and +3 WB. Marking lasts 3 rounds. No fight limit anymore.', mods:[] },
+      { lvl:'I', req:'Mind 8', effect:'Secondary action: mark a visible target. All allies: +4 PW vs it for 2 rounds. 3x/fight.', mods:[], usesPerFight:3, markBonus:{pw:4, wb:0, rounds:2} },
+      { lvl:'II', req:'Mind 12', effect:'+6 PW for allies. Also +2 Weapon Bonus on the first hit vs the marked target. 4x/fight.', mods:[], usesPerFight:4, markBonus:{pw:6, wb:2, rounds:2} },
+      { lvl:'III', req:'Mind 16', effect:'+8 PW and +3 WB. Marking lasts 3 rounds. No fight limit anymore.', mods:[], markBonus:{pw:8, wb:3, rounds:3} },
     ]},
     { name: 'Multi-Markierung', levels: [
-      { lvl:'I', req:'Holo-Markierung II', effect:'Holo-Markierung hits up to 3 targets in a 5m radius at once (one action). 2x/fight.', mods:[] },
+      { lvl:'I', req:'Holo-Markierung II', effect:'Holo-Markierung hits up to 3 targets in a 5m radius at once (one action). 2x/fight.', mods:[], usesPerFight:2 },
       { lvl:'II', req:'Holo-Markierung III', effect:'Up to 5 targets in an 8m radius. No fight limit. All Holo-Markierung bonuses apply.', mods:[] },
     ]},
     { name: 'Deckungsfeuer', levels: [
@@ -9285,8 +9460,8 @@ const TALENT_CATALOG = {
       { lvl:'II', req:'Mobility 16', effect:'The first TWO reaction shots per round vs this character always miss', mods:[] },
     ]},
     { name: 'Rennen und Schiessen', levels: [
-      { lvl:'I', req:'Mobility 10', effect:'1x/fight: full movement + ranged attack as one main action, no movement malus', mods:[] },
-      { lvl:'II', req:'Mobility 16', effect:'3x/fight. Also works for melee.', mods:[] },
+      { lvl:'I', req:'Mobility 10', effect:'1x/fight: full movement + ranged attack as one main action, no movement malus', mods:[], usesPerFight:1 },
+      { lvl:'II', req:'Mobility 16', effect:'3x/fight. Also works for melee.', mods:[], usesPerFight:3 },
     ]},
     { name: 'Phantom', levels: [
       { lvl:'I', req:'Mobility 16, Schleichen II', effect:'If allies are spotted or a fight starts: this character auto-stays in stealth until they attack or move', mods:[] },
@@ -9305,24 +9480,24 @@ const TALENT_CATALOG = {
       { lvl:'II', req:'Mobility 16', effect:'2x/round. A Technique kill also returns movement.', mods:[] },
     ]},
     { name: 'Kettenreaktion', levels: [
-      { lvl:'I', req:'Mobility 15', effect:'1x/fight: a ranged kill returns a main action — attack again immediately', mods:[] },
-      { lvl:'II', req:'Mobility 20', effect:'2x/fight. Also works for melee kills.', mods:[] },
+      { lvl:'I', req:'Mobility 15', effect:'1x/fight: a ranged kill returns a main action — attack again immediately', mods:[], usesPerFight:1 },
+      { lvl:'II', req:'Mobility 20', effect:'2x/fight. Also works for melee kills.', mods:[], usesPerFight:2 },
     ]},
     { name: 'Tod von oben', levels: [
       { lvl:'I', req:'Mobility 12', effect:'Kill from an elevated position (2m+ higher): +4 Weapon Bonus', mods:[{appliesTo:'wb',scope:'all',amount:4,conditional:true}] },
       { lvl:'II', req:'Mobility 16', effect:'+7 WB from height. Kill also returns movement action. Height bonus now applies from 1m up.', mods:[{appliesTo:'wb',scope:'all',amount:7,conditional:true}] },
     ]},
     { name: 'Schnellfeuer', levels: [
-      { lvl:'I', req:'Mobility 15', effect:'1x/fight: two ranged attacks as one main action, both at -5 PW', mods:[] },
-      { lvl:'II', req:'Mobility 20', effect:'2x/fight. Second shot benefits from PW bonuses on the first (e.g. Holo-Markierung).', mods:[] },
+      { lvl:'I', req:'Mobility 15', effect:'1x/fight: two ranged attacks as one main action, both at -5 PW', mods:[], usesPerFight:1 },
+      { lvl:'II', req:'Mobility 20', effect:'2x/fight. Second shot benefits from PW bonuses on the first (e.g. Holo-Markierung).', mods:[], usesPerFight:2 },
     ]},
     { name: 'Beruehigungsfeuer', levels: [
       { lvl:'I', req:'Mind 10', effect:'Suppressive Fire zone 15m wide (instead of 10m). Suppressed targets: extra -3 PW.', mods:[] },
       { lvl:'II', req:'Mind 16', effect:'Zone 25m wide. Suppressed targets who move: +25% damage from reaction shot.', mods:[] },
     ]},
     { name: 'Killzone', levels: [
-      { lvl:'I', req:'Mind 14', effect:'1x/fight: main action, active until the start of your next turn. Any enemy moving through the chosen 90-degree cone triggers a reaction shot (no additional trigger roll needed — the target still gets its normal defensive reaction), resolved before the movement continues. Each enemy can only trigger it once during that duration.', mods:[] },
-      { lvl:'II', req:'Mind 20', effect:'2x/fight. 180-degree cone. Killzone reaction shots can crit.', mods:[] },
+      { lvl:'I', req:'Mind 14', effect:'1x/fight: main action, active until the start of your next turn. Any enemy moving through the chosen 90-degree cone triggers a reaction shot (no additional trigger roll needed — the target still gets its normal defensive reaction), resolved before the movement continues. Each enemy can only trigger it once during that duration.', mods:[], usesPerFight:1 },
+      { lvl:'II', req:'Mind 20', effect:'2x/fight. 180-degree cone. Killzone reaction shots can crit.', mods:[], usesPerFight:2 },
     ]},
     { name: 'Stabiler Schuss', levels: [
       { lvl:'I', req:'Mind 8', effect:'If this character hasn’t moved this round: +4 PW on the first attack', mods:[{appliesTo:'pw',scope:'ranged',amount:4,conditional:true}] },
@@ -9339,20 +9514,20 @@ const TALENT_CATALOG = {
   ],
   Sniper: [
     { name: 'Holo-Zielfernrohr', levels: [
-      { lvl:'I', req:'Mobility 8', effect:'Secondary action: mark a target in Sniper range. Team: +4 PW + +2 Weapon Bonus vs it for 2 rounds.', mods:[] },
-      { lvl:'II', req:'Mobility 12', effect:'+6 PW + +3 WB. Marking lasts 3 rounds. No cooldown every 3 rounds anymore.', mods:[] },
-      { lvl:'III', req:'Mobility 18', effect:'+8 PW + +4 WB. No cooldown at all. Passive: every visible target is always marked +2 PW for the team.', mods:[] },
+      { lvl:'I', req:'Mobility 8', effect:'Secondary action: mark a target in Sniper range. Team: +4 PW + +2 Weapon Bonus vs it for 2 rounds.', mods:[], markBonus:{pw:4, wb:2, rounds:2} },
+      { lvl:'II', req:'Mobility 12', effect:'+6 PW + +3 WB. Marking lasts 3 rounds. No cooldown every 3 rounds anymore.', mods:[], markBonus:{pw:6, wb:3, rounds:3} },
+      { lvl:'III', req:'Mobility 18', effect:'+8 PW + +4 WB. No cooldown at all. Passive: every visible target is always marked +2 PW for the team.', mods:[], markBonus:{pw:8, wb:4, rounds:-1} },
     ]},
     { name: 'Vitalpoint-Analyse', levels: [
       { lvl:'I', req:'Holo-Zielfernrohr I', effect:'After marking a target: next Aimed Shot on it has no PW malus + Crit threshold at 1-2', mods:[] },
       { lvl:'II', req:'Holo-Zielfernrohr II', effect:'Next 2 Aimed Shots, no malus + Crit 1-3. Also grants +3 Weapon Bonus.', mods:[] },
     ]},
     { name: 'Toedlicher Schuss', levels: [
-      { lvl:'I', req:'Holo-Zielfernrohr II, Mobility 16', effect:'1x/fight: Sniper Aimed Shot with a guaranteed Crit Success (no roll) if the target is marked', mods:[] },
-      { lvl:'II', req:'Mobility 22', effect:'2x/fight. Works even without a mark. Ignores target’s entire SP.', mods:[] },
+      { lvl:'I', req:'Holo-Zielfernrohr II, Mobility 16', effect:'1x/fight: Sniper Aimed Shot with a guaranteed Crit Success (no roll) if the target is marked', mods:[], usesPerFight:1 },
+      { lvl:'II', req:'Mobility 22', effect:'2x/fight. Works even without a mark. Ignores target’s entire SP.', mods:[], usesPerFight:2 },
     ]},
     { name: 'Serientoeter', levels: [
-      { lvl:'I', req:'Mobility 14', effect:'Sniper kill: next Sniper shot this round costs 0 Stamina. 2x/fight.', mods:[] },
+      { lvl:'I', req:'Mobility 14', effect:'Sniper kill: next Sniper shot this round costs 0 Stamina. 2x/fight.', mods:[], usesPerFight:2 },
       { lvl:'II', req:'Mobility 22', effect:'No limit — the chain can run forever as long as kills keep coming', mods:[] },
     ]},
     { name: 'Schnappschuss', levels: [
@@ -9460,8 +9635,8 @@ const TECHNIQUE_CATALOG = {
   MeleeGeneric: [
     { name: 'Vernichtender Schlag', stamina:3, pw:{mode:'same'}, effect:'PW for this attack doubled. Once per 12h.' },
     { name: 'Durchbruch', stamina:4, pw:{mode:'same'}, effect:"Ignores the target's ENTIRE SP (not just half, as normal)." },
-    { name: 'Staggering Strike', stamina:3, pw:{mode:'same'}, effect:'Hit: target loses their secondary action next round.' },
-    { name: 'Blutende Wunde', stamina:3, pw:{mode:'same'}, effect:'Hit: Bleed, 2 dmg/round until treated (First Aid DV 10).' },
+    { name: 'Staggering Strike', stamina:3, pw:{mode:'same'}, effect:'Hit: target loses their secondary action next round.', statusGrant:{type:'stagger', name:'Stagger (Staggering Strike)', rounds:1} },
+    { name: 'Blutende Wunde', stamina:3, pw:{mode:'same'}, effect:'Hit: Bleed, 2 dmg/round until treated (First Aid DV 10).', statusGrant:{type:'bleed', name:'Bleed (Blutende Wunde)', rounds:-1} },
     { name: 'Ausweich-Konter', stamina:4, pw:{mode:'none'}, effect:'Reaction roll. After a successful dodge: immediate free counter-attack at normal PW. Extra action.' },
     { name: 'Ansturm', stamina:2, pw:{mode:'same'}, effect:'Move up to 8m extra before the attack with no movement malus on it.' },
     { name: 'Entwaeffnungs-Schlag', stamina:2, pw:{mode:'delta', amount:-2}, effect:"No damage. Hit: target's weapon drops." },
@@ -9470,7 +9645,7 @@ const TECHNIQUE_CATALOG = {
     { name: 'Kampfhaltung', stamina:2, pw:{mode:'none'}, effect:'No attack this action. Next defensive main action: +6 PW on Block or Parry.' },
     { name: 'Vitalpunkt-Suche', stamina:4, pw:{mode:'delta', amount:-4}, effect:"Aimed Shot to the head without the normal Aimed-Shot malus — just this technique's -4 PW instead." },
     { name: 'Rueckstoss', stamina:3, pw:{mode:'override', stats:['strength','grit'], label:'Str+Grit'}, effect:'No normal damage. Hit: target knocked back 1d6+2m. Wall impact: +11 damage.' },
-    { name: 'Schildstoss', stamina:2, pw:{mode:'override', stats:['strength','grit'], label:'Str+Grit'}, effect:'No damage. Hit: target Staggered (loses secondary action) + pushed back 1m. Shield only.' },
+    { name: 'Schildstoss', stamina:2, pw:{mode:'override', stats:['strength','grit'], label:'Str+Grit'}, effect:'No damage. Hit: target Staggered (loses secondary action) + pushed back 1m. Shield only.', statusGrant:{type:'stagger', name:'Staggered (Schildstoss)', rounds:1} },
   ],
   MeleeHeavy: [
     { name: 'Erderschuetterung', stamina:5, pw:{mode:'override', stats:['strength','grit'], label:'Str+Grit'}, effect:'Ground slam: all targets in 3m radius take normal damage. No Speed roll (DV 10): Prone.' },
@@ -9491,12 +9666,12 @@ const TECHNIQUE_CATALOG = {
     { name: 'Mantis-Sturzflug', stamina:4, pw:{mode:'override', stats:['dexterity','agility'], label:'Dex+Agi'}, effect:'Leap up to 6m onto a target: +6 Weapon Bonus, target Prone. Mantis Blades only.' },
     { name: 'Ripper-Kaskade', stamina:5, pw:{mode:'override', stats:['dexterity','agility'], label:'Dex+Agi', amount:-2}, effect:'3 rapid hits on one target, each at full weapon bonus. Rippers only.' },
     { name: 'Gorilla-Ramme', stamina:4, pw:{mode:'override', stats:['strength','grit'], label:'Str+Grit'}, effect:'No weapon bonus — instead Strength x2 as damage. Ignores all SP. Gorilla Arm only.' },
-    { name: 'Cyber-Stun', stamina:3, pw:{mode:'override', stats:['dexterity','agility'], label:'Dex+Agi'}, effect:'Hit: target loses their next main action (electro-neural stun). Requires Shock Element mod.' },
+    { name: 'Cyber-Stun', stamina:3, pw:{mode:'override', stats:['dexterity','agility'], label:'Dex+Agi'}, effect:'Hit: target loses their next main action (electro-neural stun). Requires Shock Element mod.', statusGrant:{type:'custom', name:'Stunned (Cyber-Stun) — loses next main action', rounds:1} },
   ],
   Brawling: [
     { name: 'Haymaker', stamina:4, pw:{mode:'override', stats:['dexterity','strength'], label:'Dex+Str', amount:-6}, effect:'Everything into one punch: Brawling damage x2, but -6 PW.' },
     { name: 'Takedown', stamina:4, pw:{mode:'override', stats:['dexterity','strength'], label:'Dex+Str'}, effect:'Hit immediately starts a Grapple — no separate grab action needed. Extra action.' },
-    { name: 'Kopfstoss', stamina:2, pw:{mode:'override', stats:['dexterity','strength'], label:'Dex+Str', amount:4}, effect:'Surprise headbutt: +4 PW. Hit: target -2 on all actions next round.' },
+    { name: 'Kopfstoss', stamina:2, pw:{mode:'override', stats:['dexterity','strength'], label:'Dex+Str', amount:4}, effect:'Surprise headbutt: +4 PW. Hit: target -2 on all actions next round.', statusGrant:{type:'custom', name:'Kopfstoss — -2 all actions', rounds:1} },
     { name: 'Beinhaken', stamina:2, pw:{mode:'override', stats:['dexterity','agility'], label:'Dex+Agi'}, effect:'No damage. Target Speed-rolls DV 12 or goes Prone.' },
     { name: 'Wuergegriff', stamina:4, pw:{mode:'override', stats:['strength','grit'], label:'Str+Grit'}, effect:'Requires an active Grapple. Damage = Strength x2 (instead of Strength). Ignores armor.' },
   ],
@@ -9509,7 +9684,7 @@ const TECHNIQUE_CATALOG = {
     { name: 'Tarnschuss', stamina:3, pw:{mode:'same'}, effect:'Stealth holds after this shot, even without a Suppressor.' },
     { name: 'Berechneter Angriff', stamina:2, pw:{mode:'delta', amount:4}, effect:'Observe target as secondary action: +4 PW on the next attack vs it this round.' },
     { name: 'Durch die Deckung', stamina:3, pw:{mode:'delta', amount:-4}, effect:"Shot ignores the target's cover HP entirely." },
-    { name: 'Smartlink-Burst', stamina:5, pw:{mode:'delta', amount:4}, effect:'Neural Link + Smartgun only: +4 PW + simultaneous Cyberware Malfunction (no IP cost). Extra action.' },
+    { name: 'Smartlink-Burst', stamina:5, pw:{mode:'delta', amount:4}, effect:'Neural Link + Smartgun only: +4 PW + simultaneous Cyberware Malfunction (no IP cost). Extra action.', statusGrant:{type:'malfunction', name:'CW Malfunction (Smartlink-Burst)', rounds:3, stacks:1, maxStacks:3} },
   ],
   SMGAssault: [
     { name: 'Feuersturm', stamina:5, pw:{mode:'same'}, effect:'Autofire on 3 targets with no movement malus. Normal Autofire magazine cost.' },
@@ -9627,20 +9802,54 @@ const HACK_CATALOG = {
 
 function matchHackName(name) {
   const norm = String(name || '').trim().toLowerCase();
-  for (const list of Object.values(HACK_CATALOG)) {
+  for (const [category, list] of Object.entries(HACK_CATALOG)) {
     const found = list.find(h => h.name.toLowerCase() === norm);
-    if (found) return found;
+    if (found) return { ...found, category };
   }
   return null;
 }
-
+// Efficient Code (§10 Netrunner) discounts IP cost per hack category —
+// stored as a per-level {Category: amount} map rather than a flat number
+// since the talent's own text ("Control Hacks cost 1 less" at I, adding
+// Combat at II, Utility at III, then "ALL hacks... stacks with I-III" at
+// IV) makes the discount category-specific and level-dependent, not a
+// single stackable mod the existing appliesTo engine already handles.
+function getHackIpDiscount(c, category) {
+  let discount = 0;
+  (c?.talents || []).forEach(t => { if (t.hackIpDiscount?.[category]) discount += t.hackIpDiscount[category]; });
+  return discount;
+}
 function computeLiveHackStats(c, h) {
   const match = matchHackName(h.name);
   let pw = null, pwLabel = match?.pwLabel || '';
   if (match && c.stats) { const stats = getEffectiveStats(c); pw = stats[match.pwStats[0]] + stats[match.pwStats[1]]; }
   const pwMods = getActiveTalentMods(c, 'pw', 'hacks');
   if (pw !== null && pwMods.total) pw += pwMods.total;
-  return { pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, ip: h.ip ?? match?.ip ?? 0, effect: h.effect || match?.effect || '', talentNames: pwMods.names };
+  const hackNames = [...pwMods.names];
+  const rallied = getRalliedBonus(c);
+  if (pw !== null && rallied) { pw += rallied.amount; hackNames.push(rallied.name); }
+  let ip = h.ip ?? match?.ip ?? 0;
+  if (match?.category) ip = Math.max(1, ip - getHackIpDiscount(c, match.category));
+  return { pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, ip, effect: h.effect || match?.effect || '', talentNames: hackNames };
+}
+
+// Reaction rolls (§3.3, defensive dodge/block/parry) — Drive+Reflexes, same
+// live-computation treatment weapons/hacks/techniques already get instead
+// of being a number nobody ever actually saw. Was previously ONLY computed
+// for a generated enemy's own preview (ReactionValue) and never displayed
+// or rolled for a real character — several talents (Kampfinstinkt,
+// Reflexkette) boost "reaction roll PW" against a number that didn't
+// otherwise exist anywhere in the app.
+function computeLiveReactionStats(c) {
+  if (!c?.stats) return { pw: null, dice: null, talentNames: [] };
+  const stats = getEffectiveStats(c);
+  let pw = (stats.drive || 0) + (stats.reflexes || 0);
+  const mods = getActiveTalentMods(c, 'reaction');
+  pw += mods.total;
+  const names = [...mods.names];
+  const rallied = getRalliedBonus(c);
+  if (rallied) { pw += rallied.amount; names.push(rallied.name); }
+  return { pw, dice: pwDiceCount(pw), talentNames: names };
 }
 
 // A hack's "vs target" dropdown offers both characters AND placed security
@@ -9697,11 +9906,175 @@ function applyAutoStatusEffect(target, spec) {
   const idx = effects.findIndex(e => e.type === spec.type);
   if (idx >= 0) {
     const stacks = spec.maxStacks ? Math.min(spec.maxStacks, (effects[idx].stacks || 1) + 1) : (spec.stacks || effects[idx].stacks || 1);
-    effects[idx] = { ...effects[idx], name: spec.name, rounds: spec.rounds, stacks };
+    effects[idx] = { ...effects[idx], ...spec, stacks };
   } else {
-    effects.push({ type: spec.type, name: spec.name, rounds: spec.rounds, stacks: spec.stacks || 1 });
+    effects.push({ ...spec, stacks: spec.stacks || 1 });
   }
   return effects;
+}
+// On-hit talent/technique effects (Blutende Wunde, Staggering Strike,
+// Kritische Masse, etc.) that grant a status_effects entry when the GM
+// confirms the physical hit happened — same applyAutoStatusEffect engine
+// hacks already use, just triggered by a manual "yes that landed" click
+// instead of a roll-vs-Firewall check (there's no equivalent defense
+// number for a melee/ranged hit in this app; the attack roll itself
+// already happened at the table). statusGrant is a single fixed effect;
+// statusGrantChoice is for talents like Kritische Masse that offer the GM
+// a pick between two outcomes on the same crit.
+function computeStatusGrantSources(c) {
+  const sources = [];
+  (c?.talents || []).forEach(t => {
+    if (t.statusGrant) sources.push({ label: t.name, options: [t.statusGrant] });
+    else if (t.statusGrantChoice?.length) sources.push({ label: t.name, options: t.statusGrantChoice });
+  });
+  (c?.techniques || []).forEach(t => {
+    const match = matchTechniqueName(t.name);
+    if (match?.statusGrant) sources.push({ label: t.name, options: [match.statusGrant] });
+  });
+  return sources;
+}
+async function applyGrantedStatus(id, sourceIdx, optionIdx) {
+  const c = state.characters[id]; if (!c) return;
+  const targetKey = document.getElementById(`statusgrant-target-${id}`)?.value;
+  if (!targetKey) { showToast('Pick a target first.'); return; }
+  const target = state.characters[targetKey]; if (!target) return;
+  const spec = computeStatusGrantSources(c)[sourceIdx]?.options[optionIdx];
+  if (!spec) return;
+  await dbWrite('characters/' + targetKey + '/status_effects', applyAutoStatusEffect(target, spec));
+  showToast(`${target.name}: ${spec.name}`);
+}
+function renderStatusGrantSection(c, id) {
+  const sources = computeStatusGrantSources(c);
+  if (!sources.length) return '';
+  const { characters } = getHackTargetOptions(id);
+  if (!characters.length) return '';
+  return `<div class="detail-row" style="align-items:flex-start">
+    <span class="detail-label" style="margin-top:4px">ON HIT</span>
+    <div style="flex:1;display:flex;flex-direction:column;gap:5px">
+      <select id="statusgrant-target-${id}" style="font-size:10px;width:auto">
+        <option value="">vs target...</option>
+        ${characters.map(o => `<option value="${esc(o.key)}">${esc(o.name)}</option>`).join('')}
+      </select>
+      ${sources.map((s, si) => `<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:10px;color:var(--text2)">${esc(s.label)}:</span>
+        ${s.options.map((o, oi) => `<button class="btn btn-ghost btn-small" style="padding:1px 7px;font-size:10px" onclick="applyGrantedStatus('${id}',${si},${oi})">${esc(o.name)}</button>`).join('')}
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+// Marked Target (Holo-Markierung, Holo-Zielfernrohr) — a secondary-action
+// mark that gives EVERYONE attacking that target a team-wide PW/WB bonus,
+// not just the marker. Stored as a single 'marked' status_effects entry
+// (applyAutoStatusEffect already dedups by type, so re-marking just
+// refreshes duration/bonus rather than stacking two marks) and read back
+// by the damage calculator (onDmgCalcChange) for whichever attacker gets
+// selected there — same "shown as a hint, applied automatically to the
+// number the GM is about to use" treatment weapon/attachment talent mods
+// already get, just keyed off the DEFENDER instead of the attacker.
+function computeMarkGrantSources(c) {
+  const sources = [];
+  (c?.talents || []).forEach(t => { if (t.markBonus) sources.push({ name: t.name, markBonus: t.markBonus }); });
+  return sources;
+}
+function getMarkedBonus(target) {
+  const mark = (target?.status_effects || []).find(e => e.type === 'marked');
+  return mark ? { pw: mark.pwBonus || 0, wb: mark.wbBonus || 0, name: mark.name } : null;
+}
+// Taktischer Ueberblick (Tactician) — "rallied" is the self-buff mirror of
+// Marked: applied to an ALLY's own status_effects (not the target's), so
+// it folds into everything THAT character rolls (see computeLiveWeaponStats/
+// computeLiveHackStats/computeLiveTechniqueStats/computeLiveReactionStats)
+// rather than being read off a defender in one specific damage calc.
+function computeRallyGrantSources(c) {
+  const sources = [];
+  (c?.talents || []).forEach(t => { if (t.rallyBonus) sources.push({ name: t.name, rallyBonus: t.rallyBonus }); });
+  return sources;
+}
+function getRalliedBonus(c) {
+  const e = (c?.status_effects || []).find(e => e.type === 'rallied');
+  return e ? { amount: e.pwBonus || 0, name: e.name } : null;
+}
+async function applyRally(id, sourceIdx) {
+  const c = state.characters[id]; if (!c) return;
+  const targetKey = document.getElementById(`rally-target-${id}`)?.value;
+  if (!targetKey) { showToast('Pick an ally first.'); return; }
+  const target = state.characters[targetKey]; if (!target) return;
+  const source = computeRallyGrantSources(c)[sourceIdx];
+  if (!source) return;
+  const spec = { type: 'rallied', name: `Rallied (${source.name})`, rounds: source.rallyBonus.rounds, pwBonus: source.rallyBonus.pw };
+  await dbWrite('characters/' + targetKey + '/status_effects', applyAutoStatusEffect(target, spec));
+  showToast(`${target.name} rallied: +${source.rallyBonus.pw} PW`);
+}
+// One-click resource trades (RAM Recovery's on-kill IP, Overclock's HP→IP
+// trade) that don't need a target picker — just fire the stat deltas on
+// the owner via the same quickAdj clamp-to-max/min logic every other
+// manual adjustment already uses.
+function computeTalentTriggers(c) {
+  return (c?.talents || []).filter(t => t.trigger).map(t => ({ name: t.name, ...t.trigger }));
+}
+async function fireTalentTrigger(id, idx) {
+  const c = state.characters[id]; if (!c) return;
+  const trig = computeTalentTriggers(c)[idx]; if (!trig) return;
+  for (const eff of trig.effects) await quickAdj(id, eff.stat, eff.delta);
+  showToast(`${trig.name}: ${trig.label}`);
+}
+function renderTalentTriggerSection(c, id) {
+  const triggers = computeTalentTriggers(c);
+  if (!triggers.length) return '';
+  return `<div class="detail-row" style="align-items:flex-start">
+    <span class="detail-label" style="margin-top:4px">TRIGGERS</span>
+    <div style="flex:1;display:flex;gap:4px;flex-wrap:wrap">
+      ${triggers.map((t, i) => `<button class="btn btn-ghost btn-small" style="padding:1px 8px;font-size:10px" onclick="fireTalentTrigger('${id}',${i})" title="${esc(t.name)}">${esc(t.label)}</button>`).join('')}
+    </div>
+  </div>`;
+}
+function renderRallySection(c, id) {
+  const sources = computeRallyGrantSources(c);
+  if (!sources.length) return '';
+  const { characters } = getHackTargetOptions(id);
+  if (!characters.length) return '';
+  return `<div class="detail-row" style="align-items:flex-start">
+    <span class="detail-label" style="margin-top:4px">RALLY</span>
+    <div style="flex:1;display:flex;flex-direction:column;gap:5px">
+      <select id="rally-target-${id}" style="font-size:10px;width:auto">
+        <option value="">ally...</option>
+        ${characters.map(o => `<option value="${esc(o.key)}">${esc(o.name)}</option>`).join('')}
+      </select>
+      <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+        ${sources.map((s, si) => `<button class="btn btn-ghost btn-small" style="padding:1px 7px;font-size:10px" onclick="applyRally('${id}',${si})">${esc(s.name)} (+${s.rallyBonus.pw} PW)</button>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+async function applyMark(id, sourceIdx) {
+  const c = state.characters[id]; if (!c) return;
+  const targetKey = document.getElementById(`mark-target-${id}`)?.value;
+  if (!targetKey) { showToast('Pick a target first.'); return; }
+  const target = state.characters[targetKey]; if (!target) return;
+  const source = computeMarkGrantSources(c)[sourceIdx];
+  if (!source) return;
+  const spec = { type: 'marked', name: `Marked (${source.name})`, rounds: source.markBonus.rounds, pwBonus: source.markBonus.pw, wbBonus: source.markBonus.wb };
+  await dbWrite('characters/' + targetKey + '/status_effects', applyAutoStatusEffect(target, spec));
+  showToast(`${target.name} marked: +${source.markBonus.pw} PW / +${source.markBonus.wb} WB for the team`);
+}
+function renderMarkSection(c, id) {
+  const sources = computeMarkGrantSources(c);
+  if (!sources.length) return '';
+  const { characters } = getHackTargetOptions(id);
+  if (!characters.length) return '';
+  return `<div class="detail-row" style="align-items:flex-start">
+    <span class="detail-label" style="margin-top:4px">MARK</span>
+    <div style="flex:1;display:flex;flex-direction:column;gap:5px">
+      <select id="mark-target-${id}" style="font-size:10px;width:auto">
+        <option value="">vs target...</option>
+        ${characters.map(o => `<option value="${esc(o.key)}">${esc(o.name)}</option>`).join('')}
+      </select>
+      <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+        ${sources.map((s, si) => `<button class="btn btn-ghost btn-small" style="padding:1px 7px;font-size:10px" onclick="applyMark('${id}',${si})">${esc(s.name)} (+${s.markBonus.pw} PW${s.markBonus.wb?' / +'+s.markBonus.wb+' WB':''})</button>`).join('')}
+      </div>
+    </div>
+  </div>`;
 }
 
 // Firewall-boosting gear (§10.2) — scans the character's existing free-text
