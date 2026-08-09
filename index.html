@@ -489,6 +489,10 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
   background: transparent; cursor: pointer; white-space: nowrap;
 }
 .cond-mod-chip.on { border-color: var(--blue-bright); color: var(--blue-bright); background: rgba(68,136,255,0.12); box-shadow: 0 0 6px rgba(68,136,255,0.25); }
+/* Each weapon its own sub-card instead of a plain inline row — the mockup
+   pitched weapons as distinct bordered blocks, not text stacked directly
+   in the WEAPONS section body. */
+.weapon-card { background: var(--surface2); border: 1px solid var(--border); padding: 10px 12px; }
 /* ── COMBATANT CARD ── */
 .combatant-card {
   background: linear-gradient(180deg, var(--surface2), var(--surface));
@@ -501,7 +505,18 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
 .combatant-card.active-turn {
   border-color: var(--gold-bright);
   box-shadow: 0 0 0 1px rgba(0,0,0,0.3), 0 8px 24px -8px rgba(0,0,0,0.7), 0 0 24px -4px var(--gold-glow), inset 0 0 24px rgba(255,176,32,0.04);
+  /* Layered on top of the base surface gradient (not replacing it) — a
+     band of glow that slides down the card, naturally clipped by the
+     card's own overflow:hidden. Pure background-position animation, no
+     extra element needed. */
+  background-image: linear-gradient(180deg, var(--surface2), var(--surface)), linear-gradient(180deg, transparent, rgba(255,176,32,0.14), transparent);
+  background-size: 100% 100%, 100% 70px;
+  background-repeat: no-repeat, no-repeat;
+  background-position: 0 0, 0 -70px;
+  animation: card-sweep 5s ease-in-out infinite;
 }
+@keyframes card-sweep { 0% { background-position: 0 0, 0 -70px; } 100% { background-position: 0 0, 0 calc(100% + 70px); } }
+@media (prefers-reduced-motion: reduce) { .combatant-card.active-turn { animation: none; } }
 /* Signature motif: whoever's turn it is gets a targeting-reticle frame,
    not just a border-color tint — reserved for exactly this one moment so
    it stays a recognizable "this is the thing that matters right now"
@@ -543,6 +558,18 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
 .wound-badge.flatlining { background: var(--red-glow); color: var(--red-bright); border-color: var(--red-bright); animation: dying-pulse 1.4s ease-in-out infinite; }
 .combatant-top { padding: 16px 18px; display: flex; align-items: center; gap: 14px; cursor: pointer; }
 .combatant-name { font-family: var(--font-display); font-size: 17px; font-weight: 800; flex: 1; letter-spacing: 0.01em; }
+/* Identity avatar — notched-corner initials badge, same accent color as
+   the character's allegiance border/subtitle so all three read as one
+   consistent color-coded identity, not three separately-tinted bits. */
+.cc-avatar {
+  width: 40px; height: 40px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-weight: 800; font-size: 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+}
+.cc-subtitle { font-family: var(--font); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 2px; opacity: 0.85; }
 .hp-display { display: flex; flex-direction: column; align-items: flex-end; }
 .hp-numbers { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .hp-numbers.critical { color: var(--red-bright); text-shadow: 0 0 8px var(--red-glow); animation: critical-pulse 0.8s infinite; }
@@ -571,6 +598,20 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
 .hp-bar-fill.healthy { background: linear-gradient(90deg, var(--green-dim), var(--green-bright)); box-shadow: 0 0 10px var(--green-glow); }
 .hp-bar-fill.wounded { background: linear-gradient(90deg, var(--gold), var(--gold-bright)); box-shadow: 0 0 10px var(--gold-glow); }
 .hp-bar-fill.critical { background: linear-gradient(90deg, var(--red), var(--red-bright)); box-shadow: 0 0 12px var(--red-glow); }
+/* Generic resource bar — HP/Stamina/IP all get the same glowing-gauge
+   treatment in the expanded card now (the mockup's three-parallel-bars
+   composition), not just HP with Stamina/IP left as bare numbers. Reuses
+   the exact track/fill/texture recipe .hp-bar already established. */
+.stat-bar-block { display: flex; align-items: center; gap: 8px; flex: 1 1 140px; min-width: 120px; }
+.stat-bar { flex: 1; max-width: 160px; height: 9px; background: #060a15; border: 1px solid var(--border); box-shadow: inset 0 1px 3px rgba(0,0,0,0.5); overflow: hidden; position: relative; }
+.stat-bar-fill { height: 100%; position: relative; transition: width 0.5s cubic-bezier(.2,.8,.2,1); }
+.stat-bar-fill::after { content: ''; position: absolute; inset: 0; background-image: repeating-linear-gradient(115deg, rgba(255,255,255,0.16) 0 2px, transparent 2px 7px); mix-blend-mode: overlay; }
+.stat-bar-fill.healthy { background: linear-gradient(90deg, var(--green-dim), var(--green-bright)); box-shadow: 0 0 10px var(--green-glow); }
+.stat-bar-fill.wounded { background: linear-gradient(90deg, var(--gold), var(--gold-bright)); box-shadow: 0 0 10px var(--gold-glow); }
+.stat-bar-fill.critical { background: linear-gradient(90deg, var(--red), var(--red-bright)); box-shadow: 0 0 12px var(--red-glow); }
+.stat-bar-fill.sta { background: linear-gradient(90deg, var(--cyan-dim), var(--cyan)); box-shadow: 0 0 10px var(--cyan-glow); }
+.stat-bar-fill.ip { background: linear-gradient(90deg, var(--gold), var(--gold-bright)); box-shadow: 0 0 10px var(--gold-glow); }
+.stat-bar-num { font-size: 12px; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .flink-badge { font-size: 10px; padding: 2px 7px; letter-spacing: 0.12em; }
 .flink-available { background: var(--cyan-glow); color: var(--cyan); border: 1px solid var(--cyan); box-shadow: 0 0 6px var(--cyan-glow); }
 .flink-used { background: transparent; color: var(--text3); border: 1px solid var(--border); text-decoration: line-through; }
@@ -4598,7 +4639,7 @@ function renderWeaponsSection(c, id) {
         const techColor = TECH_BADGE_COLOR[w.tech] || '#888';
         const magCur = Math.min(w.magCurrent ?? live.magMax, live.magMax ?? Infinity);
         const condChips = renderConditionalModChips(statsSource, 'pw', live.slotType).concat(renderConditionalModChips(statsSource, 'wb', live.slotType), renderConditionalAttachmentChips(statsSource, w, 'pw'), renderConditionalAttachmentChips(statsSource, w, 'wb'));
-        return `<div style="font-size:11px">
+        return `<div class="weapon-card" style="font-size:11px">
           <div style="display:flex;gap:8px;align-items:center">
             <span style="flex:1;color:var(--text)">${esc(w.name)}</span>
             <span style="color:var(--gold-bright);font-weight:700">+${live.bonus}</span>
@@ -4890,10 +4931,18 @@ function renderCombatantCard(id, isActive) {
   const isDying = isDown && isPlayerCharacter(c);
   const downClass = isDown ? (isDying ? 'is-dying' : 'is-dead') : '';
   const downBadge = isDying ? '<span class="dying-badge">☠ DEATH SAVE</span>' : (isDown ? '<span class="dead-badge">☠ DEAD</span>' : '');
+  // Identity block (avatar + role subtitle) — the mockup's header
+  // composition, not just a bare name. Initials avatar reuses the same
+  // color/label the roster and init strip already classify this
+  // character by (charTypeMeta), so it can never disagree with them.
+  const typeMeta = charTypeMeta(c);
+  const initials = esc(c.name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
   return `<div class="combatant-card ${c.isDrone ? 'is-drone' : (c.isVehicle ? 'is-vehicle' : (c.isCompanion ? 'is-companion' : (c.isAlly ? 'is-ally' : (c.isNPC ? 'is-npc' : 'is-pc'))))} ${isActive ? 'active-turn' : ''} ${downClass}" id="cc-${id}">
     <div class="combatant-top" onclick="toggleDetail('${id}')">
-      <div>
+      <div class="cc-avatar" style="border-color:${typeMeta.color};color:${typeMeta.color}">${initials}</div>
+      <div style="flex:1;min-width:0">
         <div class="combatant-name">${esc(c.name)}${c.isVehicle ? ' 🚗' : ''}${hasAnyAbilities(c) ? ` <span title="View/use abilities" style="color:var(--purple-bright);cursor:pointer" onclick="event.stopPropagation(); openAbilitiesModal('${id}')">✦</span>` : ''}</div>
+        <div class="cc-subtitle" style="color:${typeMeta.color}">${esc(typeMeta.label)}</div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:3px">
           ${statusHtml || (getWoundState(c) ? '' : '<span style="font-size:10px;color:var(--text3)">No effects</span>')}
           ${renderWoundBadge(c)}
@@ -4928,6 +4977,7 @@ function renderCombatantCard(id, isActive) {
       </div>` : ''}
       <div class="detail-row">
         <span class="detail-label">${c.isVehicle ? 'SDP' : 'HP'}</span>
+        <div class="stat-bar-block"><div class="stat-bar"><div class="stat-bar-fill ${hpClass}" style="width:${hpPct}%"></div></div><span class="stat-bar-num">${hpCur}/${hpMax}</span></div>
         <div class="adj-group">
           <button class="adj-btn red" onclick="quickAdj('${id}','hp',-1)">−1</button>
           <button class="adj-btn red" onclick="openDmgModal('${id}')">DMG</button>
@@ -4937,9 +4987,9 @@ function renderCombatantCard(id, isActive) {
       </div>
       ${(!c.isVehicle && !c.isDrone) ? `<div class="detail-row">
         <span class="detail-label">STAMINA</span>
+        <div class="stat-bar-block"><div class="stat-bar"><div class="stat-bar-fill sta" style="width:${staMax ? Math.max(0,Math.min(100,staCur/staMax*100)) : 0}%"></div></div><span class="stat-bar-num">${staCur}/${staMax}</span></div>
         <div class="adj-group">
           <button class="adj-btn red" onclick="quickAdj('${id}','stamina',-1)">−1</button>
-          <span style="font-size:12px;padding:0 6px;min-width:40px;text-align:center">${staCur}/${staMax}</span>
           <button class="adj-btn green" onclick="quickAdj('${id}','stamina',1)">+1</button>
         </div>
       </div>` : ''}
@@ -4953,9 +5003,9 @@ function renderCombatantCard(id, isActive) {
       </div>` : ''}
       ${ipMax > 0 ? `<div class="detail-row">
         <span class="detail-label">IP</span>
+        <div class="stat-bar-block"><div class="stat-bar"><div class="stat-bar-fill ip" style="width:${ipMax ? Math.max(0,Math.min(100,ipCur/ipMax*100)) : 0}%"></div></div><span class="stat-bar-num">${ipCur}/${ipMax}</span></div>
         <div class="adj-group">
           <button class="adj-btn red" onclick="quickAdj('${id}','ip',-1)">−1</button>
-          <span style="font-size:12px;padding:0 6px;min-width:40px;text-align:center">${ipCur}/${ipMax}</span>
           <button class="adj-btn green" onclick="quickAdj('${id}','ip',1)">+1</button>
         </div>
       </div>` : ''}
