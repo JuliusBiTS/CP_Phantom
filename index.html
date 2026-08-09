@@ -251,11 +251,12 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
   background: linear-gradient(180deg, var(--surface2) 0%, var(--surface) 100%);
 }
 .round-display {
-  font-size: 28px;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 800;
   color: var(--gold-bright);
   min-width: 60px;
-  text-shadow: 0 0 16px var(--gold-glow);
+  text-shadow: 0 0 20px var(--gold-bright);
   font-variant-numeric: tabular-nums;
 }
 .round-label { font-size: 10px; color: var(--text2); letter-spacing: 0.3em; text-transform: uppercase; }
@@ -270,23 +271,27 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
 }
 .initiative-strip::-webkit-scrollbar { height: 2px; }
 .init-chip {
-  padding: 6px 10px;
+  padding: 8px 10px;
   border: 1px solid var(--border2);
-  background: var(--surface);
-  font-size: 10px;
+  background: linear-gradient(180deg, var(--surface2), var(--surface));
+  box-shadow: 0 3px 10px -6px rgba(0,0,0,0.7);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 10.5px;
   white-space: nowrap;
   cursor: pointer;
   transition: all 0.12s;
   flex-shrink: 0;
-  width: 76px;
+  width: 84px;
   text-align: center;
   letter-spacing: 0.06em;
 }
 .init-chip.active-turn {
   border-color: var(--gold-bright);
   color: var(--gold-bright);
-  background: var(--gold-glow);
-  box-shadow: 0 0 10px var(--gold-glow);
+  background: linear-gradient(180deg, rgba(255,176,32,0.16), rgba(255,176,32,0.06));
+  box-shadow: 0 0 16px -2px var(--gold-bright), inset 0 0 12px rgba(255,176,32,0.08);
+  transform: translateY(-2px);
 }
 .init-chip.npc { border-color: var(--red-bright); color: #ff6688; }
 .init-chip.ally { border-color: var(--green-bright); color: var(--green-bright); }
@@ -505,14 +510,18 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
 .combatant-card.active-turn::after {
   content: '';
   position: absolute;
-  width: 14px; height: 14px;
-  border: 2px solid var(--gold-bright);
-  filter: drop-shadow(0 0 4px var(--gold-glow));
+  width: 22px; height: 22px;
+  border: 3px solid var(--gold-bright);
+  filter: drop-shadow(0 0 6px var(--gold-bright));
   pointer-events: none;
   z-index: 2;
 }
-.combatant-card.active-turn::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
-.combatant-card.active-turn::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+/* .combatant-card has overflow:hidden (needed elsewhere), so these sit a
+   few px INSIDE the edge instead of flush/negative — a flush or negative
+   offset gets silently clipped by the parent and the whole motif
+   vanishes, which is exactly what happened the first time around. */
+.combatant-card.active-turn::before { top: 3px; left: 3px; border-right: none; border-bottom: none; }
+.combatant-card.active-turn::after { bottom: 3px; right: 3px; border-left: none; border-top: none; }
 .combatant-card.is-npc { border-left: 3px solid var(--red-bright); }
 .combatant-card.is-ally { border-left: 3px solid var(--green-bright); }
 .combatant-card.is-pc { border-left: 3px solid var(--cyan); }
@@ -528,28 +537,45 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
    (gold, -20% PW) and Critically Wounded (red, -40% PW) are plain status
    badges; Flatlining also pulses since it carries the no-secondary-action
    warning and shouldn't be missable at a glance. */
-.wound-badge { font-size: 10px; padding: 2px 7px; letter-spacing: 0.1em; border: 1px solid; }
+.wound-badge { font-family: var(--font-display); font-weight: 700; font-size: 10px; padding: 4px 9px; letter-spacing: 0.08em; border: 1px solid; }
 .wound-badge.serious { background: var(--gold-glow); color: var(--gold-bright); border-color: var(--gold-bright); }
 .wound-badge.critical { background: var(--red-glow); color: var(--red-bright); border-color: var(--red-bright); }
 .wound-badge.flatlining { background: var(--red-glow); color: var(--red-bright); border-color: var(--red-bright); animation: dying-pulse 1.4s ease-in-out infinite; }
-.combatant-top { padding: 10px 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
-.combatant-name { font-family: var(--font-display); font-size: 14px; font-weight: 800; flex: 1; letter-spacing: 0.01em; }
+.combatant-top { padding: 16px 18px; display: flex; align-items: center; gap: 14px; cursor: pointer; }
+.combatant-name { font-family: var(--font-display); font-size: 17px; font-weight: 800; flex: 1; letter-spacing: 0.01em; }
 .hp-display { display: flex; flex-direction: column; align-items: flex-end; }
-.hp-numbers { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hp-numbers { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .hp-numbers.critical { color: var(--red-bright); text-shadow: 0 0 8px var(--red-glow); animation: critical-pulse 0.8s infinite; }
 .hp-numbers.wounded { color: var(--gold-bright); }
 .hp-numbers.healthy { color: var(--green-bright); }
 @keyframes critical-pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
-.hp-bar { width: 80px; height: 3px; background: var(--border); margin-top: 4px; overflow: hidden; }
-.hp-bar-fill { height: 100%; transition: width 0.4s ease; }
-.hp-bar-fill.healthy { background: var(--green-bright); box-shadow: 0 0 4px var(--green-glow); }
-.hp-bar-fill.wounded { background: var(--gold-bright); box-shadow: 0 0 4px var(--gold-glow); }
-.hp-bar-fill.critical { background: var(--red-bright); box-shadow: 0 0 6px var(--red-glow); }
+.hp-bar {
+  width: 130px; height: 9px;
+  background: #060a15;
+  border: 1px solid var(--border);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+  margin-top: 6px;
+  overflow: hidden;
+  position: relative;
+}
+.hp-bar-fill { height: 100%; position: relative; transition: width 0.5s cubic-bezier(.2,.8,.2,1); }
+/* Diagonal texture on the fill — reads as a real gauge/readout instead
+   of a flat progress bar, same "one signature move, applied consistently"
+   principle as the corner brackets. */
+.hp-bar-fill::after {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: repeating-linear-gradient(115deg, rgba(255,255,255,0.16) 0 2px, transparent 2px 7px);
+  mix-blend-mode: overlay;
+}
+.hp-bar-fill.healthy { background: linear-gradient(90deg, var(--green-dim), var(--green-bright)); box-shadow: 0 0 10px var(--green-glow); }
+.hp-bar-fill.wounded { background: linear-gradient(90deg, var(--gold), var(--gold-bright)); box-shadow: 0 0 10px var(--gold-glow); }
+.hp-bar-fill.critical { background: linear-gradient(90deg, var(--red), var(--red-bright)); box-shadow: 0 0 12px var(--red-glow); }
 .flink-badge { font-size: 10px; padding: 2px 7px; letter-spacing: 0.12em; }
 .flink-available { background: var(--cyan-glow); color: var(--cyan); border: 1px solid var(--cyan); box-shadow: 0 0 6px var(--cyan-glow); }
 .flink-used { background: transparent; color: var(--text3); border: 1px solid var(--border); text-decoration: line-through; }
 .status-chips { display: flex; gap: 4px; flex-wrap: wrap; }
-.status-chip { font-size: 10px; padding: 2px 6px; letter-spacing: 0.08em; border: 1px solid; }
+.status-chip { font-family: var(--font-display); font-weight: 700; font-size: 10px; padding: 4px 8px; letter-spacing: 0.06em; border: 1px solid; box-shadow: 0 0 8px -2px currentColor; }
 .status-bleed { background: var(--red-glow); color: #ff8899; border-color: var(--red-bright); }
 .status-burn { background: rgba(255,100,0,0.1); color: #ffaa66; border-color: #ff6600; }
 .status-malfunction { background: rgba(136,0,204,0.15); color: var(--purple-bright); border-color: var(--purple); }
