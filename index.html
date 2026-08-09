@@ -468,6 +468,14 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 @keyframes dying-pulse { 0%,100% { box-shadow: 0 0 8px var(--red-glow); } 50% { box-shadow: 0 0 20px var(--red-glow); } }
 .dying-badge { font-size: 10px; padding: 2px 7px; letter-spacing: 0.1em; background: var(--red-glow); color: var(--red-bright); border: 1px solid var(--red-bright); animation: dying-pulse 1.4s ease-in-out infinite; }
 .dead-badge { font-size: 10px; padding: 2px 7px; letter-spacing: 0.1em; background: rgba(120,120,120,0.15); color: var(--text3); border: 1px solid var(--border2); }
+/* §14.1 Wound States, automated (see getWoundState) — Seriously Wounded
+   (gold, -20% PW) and Critically Wounded (red, -40% PW) are plain status
+   badges; Flatlining also pulses since it carries the no-secondary-action
+   warning and shouldn't be missable at a glance. */
+.wound-badge { font-size: 10px; padding: 2px 7px; letter-spacing: 0.1em; border: 1px solid; }
+.wound-badge.serious { background: var(--gold-glow); color: var(--gold-bright); border-color: var(--gold-bright); }
+.wound-badge.critical { background: var(--red-glow); color: var(--red-bright); border-color: var(--red-bright); }
+.wound-badge.flatlining { background: var(--red-glow); color: var(--red-bright); border-color: var(--red-bright); animation: dying-pulse 1.4s ease-in-out infinite; }
 .combatant-top { padding: 10px 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .combatant-name { font-size: 13px; font-weight: 700; flex: 1; letter-spacing: 0.04em; }
 .hp-display { display: flex; flex-direction: column; align-items: flex-end; }
@@ -3272,6 +3280,48 @@ function charTypeMeta(c) {
 // from the classification already used everywhere else in the app.
 function isPlayerCharacter(c) { return charTypeMeta(c).label === 'PC'; }
 
+// §14.1 Wound States, automated and made proportional. The book's flat
+// -2/-4 malus barely registers against this system's actual PW range
+// (10s-50s, summed across multiple d20s per §2) — a flat number that
+// matters at PW 12 is a rounding error at PW 45. Percentage-of-PW scales
+// with the character instead of decaying into irrelevance late-campaign.
+// Flatlining is a house-rule tier beyond the book (10% HP) that adds a
+// hard tactical cost — no secondary action — on top of the Critically
+// Wounded PW cut, since a pure number penalty doesn't change what a
+// player actually does at the table the way losing an action does.
+// Drones/vehicles/companions are excluded (their own damage-state rules
+// live elsewhere, not this HP-percentage system) and it defers entirely
+// once hp_current<=0 — that's the existing Death Save/Dying state, not this.
+function getWoundState(c) {
+  if (!c || c.isDrone || c.isVehicle || c.isCompanion) return null;
+  const hpMax = c.hp_max || 1;
+  const hpCur = c.hp_current ?? hpMax;
+  if (hpCur <= 0) return null;
+  const pct = hpCur / hpMax;
+  if (pct <= 0.10) return { key: 'flatlining', name: 'Flatlining', pwMult: 0.6, lockSecondary: true };
+  if (pct <= 0.25) return { key: 'critical', name: 'Critically Wounded', pwMult: 0.6, lockSecondary: false };
+  if (pct <= 0.50) return { key: 'serious', name: 'Seriously Wounded', pwMult: 0.8, lockSecondary: false };
+  return null;
+}
+// Shared badge markup for the wound state — used on the GM combat card,
+// the player's own view, and the roster list, so the three surfaces
+// never drift into describing the same state differently.
+function renderWoundBadge(c) {
+  const w = getWoundState(c);
+  if (!w) return '';
+  const pctCut = Math.round((1 - w.pwMult) * 100);
+  const lockNote = w.lockSecondary ? ' · NO SECONDARY ACTION' : '';
+  return `<span class="wound-badge ${w.key}" title="${esc(w.name)}: -${pctCut}% PW${w.lockSecondary ? ', secondary action locked' : ''}">${esc(w.name).toUpperCase()} −${pctCut}%${lockNote}</span>`;
+}
+// One-line "why did my PW just drop" explainer for weapon/hack/technique/
+// reaction rows — same spot the talent/attachment name hints already use,
+// so wound state reads as just another modifier source, not a mystery.
+function woundHint(live) {
+  if (!live?.woundState) return '';
+  const pctCut = Math.round((1 - live.woundState.pwMult) * 100);
+  return `<div style="font-size:10px;color:var(--red-bright);padding-left:2px;margin-top:2px">⚠ ${esc(live.woundState.name)} −${pctCut}% PW</div>`;
+}
+
 // Players never get exact numbers for a hostile NPC (same rule the map
 // token's health ring already enforces) — only alive/dead. Everyone else
 // (GM, or a player looking at their own PC/an ally/companion/drone/
@@ -4367,6 +4417,7 @@ function renderWeaponsSection(c, id) {
           ${condChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">${condChips.join('')}</div>` : ''}
           ${live.talentNames?.length ? `<div style="font-size:10px;color:var(--blue-bright);padding-left:2px;margin-top:2px">✦ ${live.talentNames.map(esc).join(', ')}</div>` : ''}
           ${live.attachmentNames?.length ? `<div style="font-size:10px;color:var(--blue-bright);padding-left:2px;margin-top:2px">⚙ ${live.attachmentNames.map(esc).join(', ')}</div>` : ''}
+          ${woundHint(live)}
           ${live.situational.length ? `<div style="font-size:10px;color:var(--text2);padding-left:2px;margin-top:2px">${live.situational.map(s=>esc(s)).join(' · ')}</div>` : ''}
           ${w.tags ? `<div style="font-size:10px;color:var(--text2);padding-left:2px;margin-top:2px">${esc(w.tags)}</div>` : ''}
           ${live.magMax != null ? `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:3px">
@@ -4400,6 +4451,7 @@ function renderReactionSection(c, id) {
       </div>
       ${condChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">${condChips.join('')}</div>` : ''}
       ${live.talentNames?.length ? `<div style="font-size:10px;color:var(--blue-bright);padding-left:2px;margin-top:2px">✦ ${live.talentNames.map(esc).join(', ')}</div>` : ''}
+      ${woundHint(live)}
     </div>
   </div>`;
 }
@@ -4447,6 +4499,7 @@ function renderTechniquesSection(c, id) {
             <span style="font-size:10px;color:var(--cyan)">${esc(live.pwLabel)}${live.pw!=null?' · '+live.pw:''}</span>
             ${live.dice ? `<span style="font-size:10px;color:var(--cyan)">→ ${live.dice}×d20</span>` : ''}
           </div>
+          ${woundHint(live)}
           ${live.effect ? `<div style="font-size:10px;color:var(--text2);padding-left:2px;margin-top:2px">${esc(live.effect)}</div>` : ''}
         </div>`;
       }).join('')}
@@ -4488,6 +4541,7 @@ function renderHacksSection(c, id) {
           </div>
           ${condChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">${condChips.join('')}</div>` : ''}
           ${live.talentNames?.length ? `<div style="font-size:10px;color:var(--blue-bright);padding-left:2px;margin-top:2px">✦ ${live.talentNames.map(esc).join(', ')}</div>` : ''}
+          ${woundHint(live)}
           ${live.effect ? `<div style="font-size:10px;color:var(--text2);padding-left:2px;margin-top:2px">${esc(live.effect)}</div>` : ''}
         </div>`;
       }).join('')}
@@ -4646,8 +4700,9 @@ function renderCombatantCard(id, isActive) {
     <div class="combatant-top" onclick="toggleDetail('${id}')">
       <div>
         <div class="combatant-name">${esc(c.name)}${c.isVehicle ? ' 🚗' : ''}${hasAnyAbilities(c) ? ` <span title="View/use abilities" style="color:var(--purple-bright);cursor:pointer" onclick="event.stopPropagation(); openAbilitiesModal('${id}')">✦</span>` : ''}</div>
-        <div style="display:flex;gap:6px;align-items:center;margin-top:3px">
-          ${statusHtml || '<span style="font-size:10px;color:var(--text3)">No effects</span>'}
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:3px">
+          ${statusHtml || (getWoundState(c) ? '' : '<span style="font-size:10px;color:var(--text3)">No effects</span>')}
+          ${renderWoundBadge(c)}
         </div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
@@ -4904,12 +4959,18 @@ function renderPlayerView() {
   document.getElementById('player-hp-max').textContent = hpMax;
   document.getElementById('player-hp-bar').style.width = pct + '%';
   document.getElementById('player-hp-bar').className = 'hp-bar-fill ' + cls;
-  const wound = hpPct => hpPct > 60 ? '● HEALTHY' : hpPct > 25 ? '⚠ SERIOUSLY WOUNDED (−2 all)' : '☠ MORTALLY WOUNDED';
-  // At 0 HP a PC isn't just "mortally wounded" — they need a Death Save
-  // (rolled by the player themselves, same as every other roll in this
-  // app) before the grit floor below actually kills them.
-  document.getElementById('player-wound-state').textContent = hpCur <= 0 ? '☠ DYING — ROLL A DEATH SAVE' : wound(pct);
-  document.getElementById('player-wound-state').style.color = hpCur <= 0 ? 'var(--red-bright)' : (pct > 60 ? 'var(--green-bright)' : pct > 25 ? 'var(--gold-bright)' : 'var(--red-bright)');
+  // §14.1 Wound States (see getWoundState) — this used to be a purely
+  // cosmetic 60%/25% label with no mechanical effect; now it reflects the
+  // exact same state that's actually cutting the player's PW everywhere
+  // else (weapons/hacks/techniques/reaction), so the text and the number
+  // can never disagree with each other.
+  const ws = getWoundState(c);
+  const woundLabel = ws ? `⚠ ${ws.name.toUpperCase()} (−${Math.round((1 - ws.pwMult) * 100)}% PW${ws.lockSecondary ? ', NO SECONDARY ACTION' : ''})` : '● HEALTHY';
+  // At 0 HP a PC isn't just wounded — they need a Death Save (rolled by
+  // the player themselves, same as every other roll in this app) before
+  // the grit floor below actually kills them.
+  document.getElementById('player-wound-state').textContent = hpCur <= 0 ? '☠ DYING — ROLL A DEATH SAVE' : woundLabel;
+  document.getElementById('player-wound-state').style.color = hpCur <= 0 ? 'var(--red-bright)' : (!ws ? 'var(--green-bright)' : ws.key === 'serious' ? 'var(--gold-bright)' : 'var(--red-bright)');
   const staCur = c.stamina_current ?? c.stamina_max ?? 0;
   const staMax = c.stamina_max ?? 0;
   document.getElementById('player-sta-val').textContent = staCur;
@@ -5002,6 +5063,7 @@ function renderPlayerView() {
       ${condChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${condChips.join('')}</div>` : ''}
       ${talentHint}
       ${attachHint}
+      ${woundHint(live)}
       ${attachList}
     </div>`;
   }).join('') : '<div style="color:var(--text3);font-size:11px">No weapons.</div>';
@@ -5028,6 +5090,7 @@ function renderPlayerView() {
           <span style="font-size:10px;color:var(--cyan)">${esc(live.pwLabel)}${live.pw!=null?' · '+live.pw:''}</span>
           ${live.dice ? `<span style="font-size:10px;color:var(--cyan)">→ ${live.dice}×d20</span>` : ''}
         </div>
+        ${woundHint(live)}
         ${live.effect ? `<div style="font-size:10px;color:var(--text2);margin-top:4px">${esc(live.effect)}</div>` : ''}
       </div>`;
     }).join('');
@@ -5075,6 +5138,7 @@ function renderPlayerView() {
         </div>
         ${condChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${condChips.join('')}</div>` : ''}
         ${live.talentNames?.length ? `<div style="font-size:10px;color:var(--blue-bright);margin-top:4px">✦ ${live.talentNames.map(esc).join(', ')}</div>` : ''}
+        ${woundHint(live)}
         ${live.effect ? `<div style="font-size:10px;color:var(--text2);margin-top:4px">${esc(live.effect)}</div>` : ''}
       </div>`;
     }).join('') : '<div style="color:var(--text3);font-size:11px">No hacks known yet.</div>';
@@ -8438,7 +8502,12 @@ function computeLiveWeaponStats(c, w) {
   // action" wording rather than being scoped to one weapon.
   const rallied = getRalliedBonus(c);
   if (pw !== null && rallied) { pw += rallied.amount; talentNames.push(rallied.name); }
-  return { bonus, pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, situational, magMax, talentNames, attachmentNames, slotType };
+  // Wound state (§14.1, house-ruled proportional) — applied last, after
+  // every additive bonus, so the percentage cut lands on the character's
+  // actual fully-modified PW rather than some earlier intermediate value.
+  const woundState = getWoundState(c);
+  if (pw !== null && woundState) pw = Math.floor(pw * woundState.pwMult);
+  return { bonus, pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, situational, magMax, talentNames, attachmentNames, slotType, woundState };
 }
 
 // §6.4a/§7.7 — real measured distance (via the map's calibrated scale)
@@ -9748,8 +9817,13 @@ function computeLiveTechniqueStats(c, weapon, t) {
     const stats = getEffectiveStats(c);
     pw = stats[pwRule.stats[0]] + stats[pwRule.stats[1]] + (pwRule.amount || 0);
     pwLabel = pwRule.label + (pwRule.amount ? ` ${pwRule.amount >= 0 ? '+' : ''}${pwRule.amount}` : '');
+    // 'same'/'delta' already inherit the wound cut via weaponLive.pw —
+    // 'override' computes its own PW from scratch, so it needs the same
+    // treatment applied explicitly.
+    const woundState = getWoundState(c);
+    if (pw !== null && woundState) pw = Math.floor(pw * woundState.pwMult);
   }
-  return { pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, stamina: t.stamina ?? match?.stamina ?? 0, effect: t.effect || match?.effect || '' };
+  return { pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, stamina: t.stamina ?? match?.stamina ?? 0, effect: t.effect || match?.effect || '', woundState: weaponLive?.woundState || getWoundState(c) };
 }
 
 // stacks, combos, and the Duel/Trace mechanic are too varied to
@@ -9828,9 +9902,11 @@ function computeLiveHackStats(c, h) {
   const hackNames = [...pwMods.names];
   const rallied = getRalliedBonus(c);
   if (pw !== null && rallied) { pw += rallied.amount; hackNames.push(rallied.name); }
+  const woundState = getWoundState(c);
+  if (pw !== null && woundState) pw = Math.floor(pw * woundState.pwMult);
   let ip = h.ip ?? match?.ip ?? 0;
   if (match?.category) ip = Math.max(1, ip - getHackIpDiscount(c, match.category));
-  return { pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, ip, effect: h.effect || match?.effect || '', talentNames: hackNames };
+  return { pw, pwLabel, dice: pw != null ? pwDiceCount(pw) : null, ip, effect: h.effect || match?.effect || '', talentNames: hackNames, woundState };
 }
 
 // Reaction rolls (§3.3, defensive dodge/block/parry) — Drive+Reflexes, same
@@ -9849,7 +9925,9 @@ function computeLiveReactionStats(c) {
   const names = [...mods.names];
   const rallied = getRalliedBonus(c);
   if (rallied) { pw += rallied.amount; names.push(rallied.name); }
-  return { pw, dice: pwDiceCount(pw), talentNames: names };
+  const woundState = getWoundState(c);
+  if (woundState) pw = Math.floor(pw * woundState.pwMult);
+  return { pw, dice: pwDiceCount(pw), talentNames: names, woundState };
 }
 
 // A hack's "vs target" dropdown offers both characters AND placed security
