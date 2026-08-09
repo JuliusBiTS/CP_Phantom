@@ -2434,6 +2434,13 @@ function ensurePortraitListener(id) {
       portraitsFull[id] = null;
     }
     renderCharList();
+    // The combat card avatar reads this same portraits[id] map, but
+    // Firebase resolves it async — a card that already rendered (the
+    // common case: you're mid-fight when a portrait finishes loading, or
+    // it just loads after the card did) never picked up the update
+    // without this, staying stuck on the initials fallback even though
+    // portraits[id] now has the real image.
+    if (state.combat?.active) renderCombat();
     if (combatViewMode === 'map') renderMapView();
     if (editingCharId === id) updatePortraitPreview(id);
     if (session.role === 'player') {
