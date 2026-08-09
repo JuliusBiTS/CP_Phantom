@@ -6,32 +6,42 @@
 <title>Cyberpunk Phantom // Tracker</title>
 <style>
 :root {
-  --bg: #03040a;
-  --surface: #080c14;
-  --surface2: #0d1220;
-  --surface3: #111827;
-  --border: #1a2240;
-  --border2: #243060;
-  --text: #c8d8f0;
-  --text2: #7d94b8;
-  --text3: #526488;
-  --cyan: #00d4ff;
-  --cyan-dim: #006080;
-  --cyan-glow: rgba(0,212,255,0.15);
-  --red: #8b0020;
-  --red-bright: #ff0040;
-  --red-glow: rgba(255,0,64,0.15);
-  --gold: #cc8800;
-  --gold-bright: #ffaa00;
-  --gold-glow: rgba(255,170,0,0.15);
-  --green-bright: #00ff88;
-  --green-dim: #004428;
-  --green-glow: rgba(0,255,136,0.12);
+  /* Redesign pass: every value below was retuned for depth/saturation —
+     the NAMES are unchanged, so every existing var() reference across the
+     app retints automatically with zero markup risk. --radius stays 1px
+     on purpose: sharp/angular corners are the HUD identity, depth comes
+     from glow/shadow (added below), not from rounding. */
+  --bg: #04060c;
+  --surface: #0a0f1e;
+  --surface2: #0d1424;
+  --surface3: #0f1729;
+  --border: #1c2540;
+  --border2: #2a3868;
+  --text: #e2eaf9;
+  --text2: #93a4cc;
+  --text3: #56638a;
+  --cyan: #22e0ff;
+  --cyan-dim: #0a8bb0;
+  --cyan-glow: rgba(34,224,255,0.22);
+  --red: #7a1428;
+  --red-bright: #ff3b5c;
+  --red-glow: rgba(255,59,92,0.25);
+  --gold: #7a5410;
+  --gold-bright: #ffb020;
+  --gold-glow: rgba(255,176,32,0.2);
+  --green-bright: #29ffa8;
+  --green-dim: #0d6b46;
+  --green-glow: rgba(41,255,168,0.18);
   --purple: #8800cc;
   --purple-bright: #cc44ff;
   --blue: #2255cc;
   --blue-bright: #4488ff;
-  --font: 'Courier New', monospace;
+  /* Two fonts doing two jobs: mono for anything numeric (HP, PW, dice,
+     IP — the terminal-readout feel, correctly), a condensed heavy display
+     face for headers/labels/names. Bahnschrift ships with Windows 10/11
+     by default, so this needs no @font-face/CDN embedding at all. */
+  --font: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+  --font-display: 'Bahnschrift', 'Segoe UI Semibold', 'Arial Narrow', sans-serif;
   --radius: 1px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -42,10 +52,15 @@ body {
   font-size: 13px;
   min-height: 100vh;
   overflow-x: hidden;
+  /* Vignette + grid — the page reads as content floating on a HUD rather
+     than printed on a flat rectangle. Grid opacity is intentionally
+     faint; it's texture, not a pattern anyone should consciously notice. */
   background-image:
-    linear-gradient(rgba(0,212,255,0.015) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,212,255,0.015) 1px, transparent 1px);
-  background-size: 40px 40px;
+    radial-gradient(ellipse 900px 500px at 50% -10%, rgba(34,224,255,0.05), transparent 60%),
+    linear-gradient(rgba(34,224,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34,224,255,0.02) 1px, transparent 1px);
+  background-size: auto, 40px 40px, 40px 40px;
+  background-attachment: fixed, scroll, scroll;
 }
 /* Scanline overlay */
 body::after {
@@ -56,8 +71,8 @@ body::after {
   z-index: 9999;
   background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px);
 }
-button { font-family: var(--font); cursor: pointer; border: none; border-radius: var(--radius); transition: all 0.12s; }
-button:active { transform: scale(0.96); }
+button { font-family: var(--font-display); font-weight: 700; cursor: pointer; border: none; border-radius: var(--radius); transition: transform 0.08s, box-shadow 0.15s, border-color 0.15s, background 0.15s; }
+button:active { transform: scale(0.96) translateY(1px); }
 input, textarea, select {
   font-family: var(--font);
   background: var(--surface2);
@@ -68,13 +83,15 @@ input, textarea, select {
   width: 100%;
   font-size: 13px;
   outline: none;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 input:focus, textarea:focus, select:focus {
   border-color: var(--cyan);
-  box-shadow: 0 0 0 1px var(--cyan-dim), 0 0 8px var(--cyan-glow);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.3), 0 0 0 1px var(--cyan-dim), 0 0 10px var(--cyan-glow);
 }
-label { font-size: 10px; color: var(--text2); letter-spacing: 0.18em; text-transform: uppercase; display: block; margin-bottom: 4px; }
-h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform: uppercase; margin-bottom: 12px; }
+label { font-family: var(--font-display); font-weight: 700; font-size: 10px; color: var(--text2); letter-spacing: 0.18em; text-transform: uppercase; display: block; margin-bottom: 4px; }
+h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform: uppercase; margin-bottom: 12px; }
 .screen { display: none; min-height: 100vh; }
 .screen.active { display: flex; flex-direction: column; }
 /* ── SCROLLBAR ── */
@@ -84,19 +101,21 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 /* ── SETUP + LOGIN ── */
 .center-screen { align-items: center; justify-content: center; padding: 24px; }
 .card {
-  background: var(--surface);
-  border: 1px solid var(--border2);
+  background: linear-gradient(180deg, var(--surface3), var(--surface));
+  border: 1px solid var(--border);
   border-top: 2px solid var(--cyan);
   padding: 28px 24px;
   width: 100%;
   max-width: 420px;
-  box-shadow: 0 0 40px rgba(0,212,255,0.06), inset 0 1px 0 rgba(0,212,255,0.1);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 30px 70px -25px rgba(0,0,0,0.85), 0 0 60px -15px var(--cyan-glow), inset 0 1px 0 rgba(255,255,255,0.03);
 }
-.brand { font-size: 10px; letter-spacing: 0.4em; color: var(--text3); margin-bottom: 8px; text-transform: uppercase; }
-.title-large { font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: 0.06em; margin-bottom: 4px; text-shadow: 0 0 20px rgba(0,212,255,0.3); }
+.brand { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter-spacing: 0.4em; color: var(--text3); margin-bottom: 8px; text-transform: uppercase; }
+.title-large { font-family: var(--font-display); font-size: 24px; font-weight: 800; font-stretch: condensed; color: var(--text); letter-spacing: 0.01em; text-transform: uppercase; margin-bottom: 4px; text-shadow: 0 0 20px var(--cyan-glow); }
 .subtitle { font-size: 11px; color: var(--text2); margin-bottom: 24px; }
 .field { margin-bottom: 14px; }
-.btn { padding: 11px 20px; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; }
+.btn { padding: 11px 20px; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; }
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(0) scale(0.97); }
 .btn-primary {
   background: linear-gradient(135deg, #003d50, #005870);
   color: var(--cyan);
@@ -104,28 +123,30 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   width: 100%;
   box-shadow: 0 0 12px var(--cyan-glow);
 }
-.btn-primary:hover { background: linear-gradient(135deg, #004d64, #007090); box-shadow: 0 0 20px rgba(0,212,255,0.3); }
+.btn-primary:hover { background: linear-gradient(135deg, #004d64, #007090); box-shadow: 0 4px 24px -6px var(--cyan-glow), 0 0 20px var(--cyan-glow); }
 .btn-danger {
   background: linear-gradient(135deg, #3a000d, #600018);
   color: #ff6688;
   border: 1px solid var(--red-bright);
   box-shadow: 0 0 8px var(--red-glow);
 }
-.btn-danger:hover { background: linear-gradient(135deg, #500018, #800022); }
+.btn-danger:hover { background: linear-gradient(135deg, #500018, #800022); box-shadow: 0 4px 20px -6px var(--red-glow), 0 0 16px var(--red-glow); }
 .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border2); }
-.btn-ghost:hover { border-color: var(--cyan-dim); color: var(--text); }
+.btn-ghost:hover { border-color: var(--cyan-dim); color: var(--text); background: rgba(34,224,255,0.05); }
 .btn-gold {
   background: linear-gradient(135deg, #2a1800, #402800);
   color: var(--gold-bright);
   border: 1px solid var(--gold);
   box-shadow: 0 0 8px var(--gold-glow);
 }
+.btn-gold:hover { background: linear-gradient(135deg, #3a2400, #503400); box-shadow: 0 4px 20px -6px var(--gold-glow), 0 0 16px var(--gold-glow); }
 .btn-purple {
   background: linear-gradient(135deg, #1e0030, #2e0048);
   color: var(--purple-bright);
   border: 1px solid var(--purple);
   box-shadow: 0 0 8px rgba(136,0,204,0.2);
 }
+.btn-purple:hover { background: linear-gradient(135deg, #2a0044, #3e0060); box-shadow: 0 4px 20px -6px rgba(136,0,204,0.3), 0 0 16px rgba(136,0,204,0.3); }
 .btn-small { padding: 5px 10px; font-size: 10px; }
 .btn-icon { padding: 6px 10px; font-size: 14px; line-height: 1; }
 .note { font-size: 10px; color: var(--text3); margin-top: 12px; line-height: 1.7; }
@@ -164,7 +185,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   background: linear-gradient(90deg, transparent, var(--cyan-dim), transparent);
 }
 .topbar-brand { font-size: 10px; letter-spacing: 0.4em; color: var(--text3); white-space: nowrap; }
-.topbar-title { font-size: 13px; font-weight: 700; color: var(--text); flex: 1; letter-spacing: 0.06em; }
+.topbar-title { font-family: var(--font-display); font-size: 14px; font-weight: 800; color: var(--text); flex: 1; letter-spacing: 0.04em; text-transform: uppercase; }
 .topbar-avatar {
   width: 32px; height: 32px;
   border-radius: 50%;
@@ -180,7 +201,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .badge-gm { background: var(--red-glow); color: #ff6688; border: 1px solid var(--red-bright); }
 .badge-player { background: var(--cyan-glow); color: var(--cyan); border: 1px solid var(--cyan); }
 .badge-combat { background: var(--red-glow); color: #ff6688; border: 1px solid var(--red-bright); animation: pulse 1.2s infinite; }
-@keyframes pulse { 0%,100%{opacity:1;box-shadow:0 0 6px var(--red-glow)} 50%{opacity:0.7;box-shadow:0 0 12px rgba(255,0,64,0.4)} }
+@keyframes pulse { 0%,100%{opacity:1;box-shadow:0 0 6px var(--red-glow)} 50%{opacity:0.7;box-shadow:0 0 12px var(--red-glow)} }
 .topbar-round { font-size: 12px; font-weight: 700; color: var(--gold-bright); white-space: nowrap; text-shadow: 0 0 8px var(--gold-glow); }
 /* ── TABS ── */
 .tabs {
@@ -211,7 +232,8 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   border: none;
   border-bottom: 2px solid transparent;
   cursor: pointer;
-  font-family: var(--font);
+  font-family: var(--font-display);
+  font-weight: 700;
   transition: all 0.15s;
   white-space: nowrap;
 }
@@ -273,6 +295,22 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .init-chip.dying { border-color: var(--red-bright); color: var(--red-bright); animation: dying-pulse 1.4s ease-in-out infinite; }
 .combatants { padding: 8px 12px; display: flex; flex-direction: column; gap: 5px; }
 /* ── COMBAT MAP ── */
+/* Same corner-bracket motif as the active-turn combat card, cyan instead
+   of gold (info/navigation context, not "act now") — ties the map screen
+   back into the same visual system as everything else. #map-container
+   and #player-map-container already carry position:relative inline. */
+#map-container::before, #map-container::after,
+#player-map-container::before, #player-map-container::after {
+  content: '';
+  position: absolute;
+  width: 18px; height: 18px;
+  border: 2px solid var(--cyan);
+  filter: drop-shadow(0 0 5px var(--cyan-glow));
+  pointer-events: none;
+  z-index: 6;
+}
+#map-container::before, #player-map-container::before { top: 4px; left: 4px; border-right: none; border-bottom: none; }
+#map-container::after, #player-map-container::after { bottom: 4px; right: 4px; border-left: none; border-top: none; }
 .map-token {
   position: absolute;
   /* % of the map container's width (not a fixed px size) so a token takes
@@ -448,15 +486,33 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .cond-mod-chip.on { border-color: var(--blue-bright); color: var(--blue-bright); background: rgba(68,136,255,0.12); box-shadow: 0 0 6px rgba(68,136,255,0.25); }
 /* ── COMBATANT CARD ── */
 .combatant-card {
-  background: var(--surface);
+  background: linear-gradient(180deg, var(--surface2), var(--surface));
   border: 1px solid var(--border);
+  box-shadow: 0 6px 20px -10px rgba(0,0,0,0.6);
   overflow: hidden;
+  position: relative;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .combatant-card.active-turn {
   border-color: var(--gold-bright);
-  box-shadow: 0 0 16px var(--gold-glow), inset 0 0 20px rgba(255,170,0,0.03);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.3), 0 8px 24px -8px rgba(0,0,0,0.7), 0 0 24px -4px var(--gold-glow), inset 0 0 24px rgba(255,176,32,0.04);
 }
+/* Signature motif: whoever's turn it is gets a targeting-reticle frame,
+   not just a border-color tint — reserved for exactly this one moment so
+   it stays a recognizable "this is the thing that matters right now"
+   signal instead of decorative noise. */
+.combatant-card.active-turn::before,
+.combatant-card.active-turn::after {
+  content: '';
+  position: absolute;
+  width: 14px; height: 14px;
+  border: 2px solid var(--gold-bright);
+  filter: drop-shadow(0 0 4px var(--gold-glow));
+  pointer-events: none;
+  z-index: 2;
+}
+.combatant-card.active-turn::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+.combatant-card.active-turn::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
 .combatant-card.is-npc { border-left: 3px solid var(--red-bright); }
 .combatant-card.is-ally { border-left: 3px solid var(--green-bright); }
 .combatant-card.is-pc { border-left: 3px solid var(--cyan); }
@@ -477,7 +533,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .wound-badge.critical { background: var(--red-glow); color: var(--red-bright); border-color: var(--red-bright); }
 .wound-badge.flatlining { background: var(--red-glow); color: var(--red-bright); border-color: var(--red-bright); animation: dying-pulse 1.4s ease-in-out infinite; }
 .combatant-top { padding: 10px 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
-.combatant-name { font-size: 13px; font-weight: 700; flex: 1; letter-spacing: 0.04em; }
+.combatant-name { font-family: var(--font-display); font-size: 14px; font-weight: 800; flex: 1; letter-spacing: 0.01em; }
 .hp-display { display: flex; flex-direction: column; align-items: flex-end; }
 .hp-numbers { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .hp-numbers.critical { color: var(--red-bright); text-shadow: 0 0 8px var(--red-glow); animation: critical-pulse 0.8s infinite; }
@@ -506,7 +562,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 .combatant-detail { display: none; border-top: 1px solid var(--border2); padding: 12px; background: var(--surface2); }
 .combatant-detail.open { display: block; }
 .detail-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
-.detail-label { font-size: 10px; color: var(--text2); letter-spacing: 0.18em; min-width: 52px; text-transform: uppercase; }
+.detail-label { font-family: var(--font-display); font-weight: 700; font-size: 10px; color: var(--text2); letter-spacing: 0.16em; min-width: 52px; text-transform: uppercase; }
 .adj-group { display: flex; gap: 4px; align-items: center; }
 .adj-btn {
   width: 34px; height: 34px; font-size: 16px; font-weight: 700;
@@ -533,20 +589,24 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 /* ── CHARACTERS TAB ── */
 .char-list { padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; }
 .char-item {
-  background: var(--surface);
+  background: linear-gradient(180deg, var(--surface2), var(--surface));
   border: 1px solid var(--border);
   border-left: 3px solid var(--border2);
-  padding: 12px 14px;
+  padding: 10px 14px;
   display: flex;
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  transition: border-color 0.12s;
+  transition: border-color 0.12s, box-shadow 0.15s;
 }
-.char-item:hover { border-color: var(--border2); border-left-color: var(--cyan-dim); }
-.char-item-name { flex: 1; font-size: 14px; font-weight: 700; }
-.char-item-sub { font-size: 10px; color: var(--text2); }
-.char-item-hp { font-size: 12px; color: var(--green-bright); }
+.char-item:hover { border-color: var(--border2); box-shadow: 0 0 0 1px var(--border2), 0 4px 16px -8px rgba(0,0,0,0.6); }
+/* HP <=25% pulses the whole row, same threshold Critically Wounded uses,
+   so a dying character is unmissable while scrolling the roster instead
+   of only being visible once their card is opened. */
+.char-item.critical-row { animation: dying-pulse 1.6s ease-in-out infinite; }
+.char-item-name { flex: 1; font-family: var(--font-display); font-size: 14px; font-weight: 700; }
+.char-item-sub { font-family: var(--font); font-size: 10px; color: var(--text2); }
+.char-item-hp { font-size: 13px; font-weight: 700; }
 .mission-group-header {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 10px;
@@ -585,20 +645,21 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
 /* ── MODAL ── */
 .modal-overlay {
   position: fixed; inset: 0;
-  background: rgba(0,4,12,0.92);
+  background: rgba(2,4,10,0.86);
+  backdrop-filter: blur(3px);
   z-index: 200; display: none;
   align-items: flex-start; justify-content: center;
   padding: 16px; overflow-y: auto;
 }
 .modal-overlay.open { display: flex; }
 .modal {
-  background: var(--surface);
-  border: 1px solid var(--border2);
+  background: linear-gradient(180deg, var(--surface3), var(--surface));
+  border: 1px solid var(--border);
   border-top: 2px solid var(--cyan);
   width: 100%;
   max-width: 560px;
   margin: auto;
-  box-shadow: 0 0 40px rgba(0,212,255,0.08);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 30px 70px -25px rgba(0,0,0,0.85), 0 0 50px -10px var(--cyan-glow), inset 0 1px 0 rgba(255,255,255,0.03);
 }
 /* On phones the modal fills the screen anyway (max-width just caps it);
    on a laptop/desktop viewport there's room to breathe, so long values in
@@ -613,7 +674,7 @@ h2 { font-size: 10px; letter-spacing: 0.3em; color: var(--text2); text-transform
   background: var(--surface2);
   gap: 10px;
 }
-.modal-title { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
+.modal-title { font-family: var(--font-display); font-weight: 800; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--cyan); }
 .hdr-actions { display: flex; align-items: center; gap: 10px; }
 .icon-btn-danger { background: transparent; color: var(--text3); border: 1px solid var(--border2); font-size: 13px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: var(--radius); }
 .icon-btn-danger:hover { color: #ff6688; border-color: var(--red-bright); background: var(--red-glow); }
@@ -4847,14 +4908,21 @@ function charItemRow(id, c) {
   const avatar = portrait
     ? `<div style="width:32px;height:32px;border-radius:50%;background-image:url('${portrait}');background-size:cover;background-position:center;border:2px solid ${color};flex-shrink:0"></div>`
     : `<div style="width:8px;height:8px;border-radius:50%;background:${color}"></div>`;
+  // HP-percentage coloring so a badly wounded roster entry reads at a
+  // glance down the whole list, not just when its card is open — the
+  // roster used to hardcode this green regardless of actual HP.
+  const hpMax = c.hp_max || 1;
+  const hpCur = c.hp_current ?? hpMax;
+  const hpPct = Math.max(0, Math.min(100, hpCur / hpMax * 100));
+  const hpClass = hpPct > 60 ? 'healthy' : hpPct > 25 ? 'wounded' : 'critical';
   return `
-  <div class="char-item" onclick="openCharModal('${id}')">
+  <div class="char-item ${hpPct <= 25 ? 'critical-row' : ''}" style="border-left-color:${color}" onclick="openCharModal('${id}')">
     ${avatar}
     <div style="flex:1">
       <div class="char-item-name">${esc(c.name)}</div>
       <div class="char-item-sub">${c.isDrone ? 'DRN' : (c.isVehicle ? 'VEH' : (c.isCompanion ? 'COM' : (c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC'))))}${c.pin ? ' · PIN set' : ''} · INI ${c.initiative ?? 0}</div>
     </div>
-    <div class="char-item-hp">${c.hp_current ?? c.hp_max}/${c.hp_max}</div>
+    <div class="char-item-hp hp-numbers ${hpClass}">${hpCur}/${hpMax}</div>
     ${combatToggleButtonHtml(id)}
     ${hasAnyAbilities(c) ? `<button class="btn btn-purple btn-small" style="white-space:nowrap" onclick="event.stopPropagation(); openAbilitiesModal('${id}')" title="View/use abilities">✦ ABILITIES</button>` : ''}
     <button class="btn btn-gold btn-small" style="white-space:nowrap" onclick="event.stopPropagation(); openLootModal('${id}')" title="Give away inventory or loot">🎒 ITEMS</button>
