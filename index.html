@@ -674,6 +674,15 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
 .char-item-name { flex: 1; font-family: var(--font-display); font-size: 14px; font-weight: 700; }
 .char-item-sub { font-family: var(--font); font-size: 10px; color: var(--text2); }
 .char-item-hp { font-size: 13px; font-weight: 700; }
+.roster-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.roster-filter-chip {
+  font-family: var(--font-display); font-weight: 800; font-size: 9.5px; letter-spacing: 0.1em;
+  text-transform: uppercase; padding: 6px 11px; border: 1px solid var(--border2); color: var(--text3);
+  background: var(--surface2); cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.roster-filter-chip:hover { color: var(--text2); border-color: var(--cyan-dim); }
+.roster-filter-chip.active { color: var(--bg); background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 14px -3px var(--cyan-glow); }
+.roster-search { flex: 1; min-width: 120px; width: auto; }
 .mission-group-header {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 10px;
@@ -1179,6 +1188,7 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
         </div>
         <button class="btn btn-ghost btn-small" style="height:36px" onclick="openPortraitGallery()">🖼 PORTRAITS</button>
       </div>
+      <div class="roster-toolbar" id="roster-toolbar"></div>
     </div>
     <div class="char-list" id="char-list"></div>
     <button class="add-char-btn" onclick="openCharModal(null)">+ ADD CHARACTER / NPC</button>
@@ -3548,6 +3558,19 @@ function renderWoundBadge(c) {
   const lockNote = w.lockSecondary ? ' · NO SECONDARY ACTION' : '';
   return `<span class="wound-badge ${w.key}" title="${esc(w.name)}: -${pctCut}% PW${w.lockSecondary ? ', secondary action locked' : ''}">${esc(w.name).toUpperCase()} −${pctCut}%${lockNote}</span>`;
 }
+// Shared identity avatar — the actual character portrait (already loaded
+// via ensurePortraitListener into the global `portraits` map) when one's
+// set, falling back to the notched-square initials badge otherwise. Used
+// by both the combat card and the roster list so the same character
+// looks like the same character on both screens, not two different
+// placeholder treatments.
+function renderAvatar(id, name, color, sizePx) {
+  const portrait = portraits[id];
+  const base = `class="cc-avatar" style="width:${sizePx}px;height:${sizePx}px;border-color:${color};color:${color}`;
+  if (portrait) return `<div ${base};background-image:url('${portrait}');background-size:cover;background-position:center"></div>`;
+  const initials = String(name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  return `<div ${base}">${esc(initials)}</div>`;
+}
 // One-line "why did my PW just drop" explainer for weapon/hack/technique/
 // reaction rows — same spot the talent/attachment name hints already use,
 // so wound state reads as just another modifier source, not a mystery.
@@ -4936,10 +4959,10 @@ function renderCombatantCard(id, isActive) {
   // color/label the roster and init strip already classify this
   // character by (charTypeMeta), so it can never disagree with them.
   const typeMeta = charTypeMeta(c);
-  const initials = esc(c.name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  ensurePortraitListener(id);
   return `<div class="combatant-card ${c.isDrone ? 'is-drone' : (c.isVehicle ? 'is-vehicle' : (c.isCompanion ? 'is-companion' : (c.isAlly ? 'is-ally' : (c.isNPC ? 'is-npc' : 'is-pc'))))} ${isActive ? 'active-turn' : ''} ${downClass}" id="cc-${id}">
     <div class="combatant-top" onclick="toggleDetail('${id}')">
-      <div class="cc-avatar" style="border-color:${typeMeta.color};color:${typeMeta.color}">${initials}</div>
+      ${renderAvatar(id, c.name, typeMeta.color, 40)}
       <div style="flex:1;min-width:0">
         <div class="combatant-name">${esc(c.name)}${c.isVehicle ? ' 🚗' : ''}${hasAnyAbilities(c) ? ` <span title="View/use abilities" style="color:var(--purple-bright);cursor:pointer" onclick="event.stopPropagation(); openAbilitiesModal('${id}')">✦</span>` : ''}</div>
         <div class="cc-subtitle" style="color:${typeMeta.color}">${esc(typeMeta.label)}</div>
@@ -5087,10 +5110,7 @@ let expandedMissionGroups = new Set();
 
 function charItemRow(id, c) {
   const color = c.isVehicle ? 'var(--gold-bright)' : (c.isCompanion ? 'var(--blue)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red-bright)' : 'var(--cyan)')));
-  const portrait = portraits[id];
-  const avatar = portrait
-    ? `<div style="width:32px;height:32px;border-radius:50%;background-image:url('${portrait}');background-size:cover;background-position:center;border:2px solid ${color};flex-shrink:0"></div>`
-    : `<div style="width:8px;height:8px;border-radius:50%;background:${color}"></div>`;
+  const avatar = renderAvatar(id, c.name, color, 36);
   // HP-percentage coloring so a badly wounded roster entry reads at a
   // glance down the whole list, not just when its card is open — the
   // roster used to hardcode this green regardless of actual HP.
@@ -5162,19 +5182,54 @@ async function onCurrentMissionChange(value) {
   await dbWrite('currentMission', tag || null);
 }
 
+// Roster filter/search — client-side only, doesn't touch state.characters
+// or trigger any write; purely narrows what renderCharList shows. Filter
+// values match charTypeMeta's own label (lowercased) so a chip can never
+// disagree with what the row's own subtitle says about it.
+let charListFilter = 'all';
+let charListSearch = '';
+function setCharListFilter(f) { charListFilter = f; renderCharList(); }
+function onCharListSearch(v) { charListSearch = v; renderCharList(); }
+function matchesCharListFilter(c) {
+  if (charListFilter !== 'all' && charTypeMeta(c).label.toLowerCase() !== charListFilter) return false;
+  if (charListSearch && !c.name?.toLowerCase().includes(charListSearch.toLowerCase())) return false;
+  return true;
+}
+function renderRosterToolbar(totalCount) {
+  const el = document.getElementById('roster-toolbar');
+  if (!el) return;
+  const chips = [
+    ['all', `All · ${totalCount}`], ['pc', 'PCs'], ['npc', 'NPCs'], ['ally', 'Allies'], ['companion', 'Companions'],
+  ];
+  el.innerHTML = `
+    ${chips.map(([key, label]) => `<span class="roster-filter-chip ${charListFilter === key ? 'active' : ''}" onclick="setCharListFilter('${key}')">${esc(label)}</span>`).join('')}
+    <input type="text" class="roster-search" placeholder="Search roster…" value="${esc(charListSearch)}" oninput="onCharListSearch(this.value)">
+  `;
+  // Re-typing into the search box re-renders the whole toolbar on every
+  // keystroke (renderCharList calls this) — preserve focus/caret so
+  // typing doesn't get interrupted.
+  const input = el.querySelector('.roster-search');
+  if (input && document.activeElement?.classList.contains('roster-search')) {
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+}
 function renderCharList() {
   const missionInput = document.getElementById('current-mission-input');
   if (document.activeElement !== missionInput) missionInput.value = state.currentMission || '';
   const el = document.getElementById('char-list');
-  const chars = Object.entries(state.characters);
-  if (!chars.length) { el.innerHTML = '<div style="padding:16px;color:var(--text3);font-size:11px">No characters yet.</div>'; return; }
-  chars.forEach(([id]) => ensurePortraitListener(id));
+  const allChars = Object.entries(state.characters);
+  renderRosterToolbar(allChars.length);
+  if (!allChars.length) { el.innerHTML = '<div style="padding:16px;color:var(--text3);font-size:11px">No characters yet.</div>'; return; }
+  const chars = allChars.filter(([, c]) => matchesCharListFilter(c));
+  allChars.forEach(([id]) => ensurePortraitListener(id));
+  if (!chars.length) { el.innerHTML = '<div style="padding:16px;color:var(--text3);font-size:11px">No characters match this filter.</div>'; return; }
 
   el.innerHTML = renderMissionGroupedHtml(chars, ([id, c]) => charItemRow(id, c));
 
   const datalist = document.getElementById('mission-tags-datalist');
   if (datalist) {
-    const allTags = [...new Set(chars.map(([, c]) => c.mission).filter(Boolean))];
+    const allTags = [...new Set(allChars.map(([, c]) => c.mission).filter(Boolean))];
     datalist.innerHTML = allTags.map(t => `<option value="${esc(t)}">`).join('');
   }
 }
