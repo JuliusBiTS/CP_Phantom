@@ -525,6 +525,13 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
   will-change: transform;
 }
 @keyframes card-sweep { 0% { transform: translateY(0); } 100% { transform: translateY(80vh); } }
+/* Frozen (not removed) while the page is actively scrolling — see the
+   scroll listener in the JS. An infinite animation keeps the compositor
+   producing a frame every tick even when nothing else changes, and on a
+   tall expanded active card that competes directly with the scroll. The
+   band simply holds its position for the ~150ms after a scroll ends,
+   then carries on from exactly where it stopped. */
+html.is-scrolling .cc-sweep { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) { .cc-sweep { animation: none; display: none; } }
 /* Signature motif: whoever's turn it is gets a targeting-reticle frame,
    not just a border-color tint — reserved for exactly this one moment so
@@ -2127,6 +2134,20 @@ let statusTargetId = null;
 let expandedCombatants = new Set();
 let pollTimer = null;
 let lastStateHash = '';
+
+// Freeze the looping card sweep while scrolling (CSS: html.is-scrolling).
+// Capture + passive so it sees scrolls of any inner container without
+// ever blocking the scroll itself; the class is only touched on the
+// first event and again when scrolling settles, not per event.
+(function () {
+  let scrolling = false, timer = 0;
+  const root = document.documentElement;
+  window.addEventListener('scroll', () => {
+    if (!scrolling) { scrolling = true; root.classList.add('is-scrolling'); }
+    clearTimeout(timer);
+    timer = setTimeout(() => { scrolling = false; root.classList.remove('is-scrolling'); }, 150);
+  }, { capture: true, passive: true });
+})();
 
 // ═══════════════════════════════════════════════════════════════
 // PERFORMANCE HELPERS
