@@ -939,6 +939,48 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
   text-shadow: 0 0 12px var(--cyan-glow);
   font-variant-numeric: tabular-nums;
 }
+/* ── v13 additions: quick HP entry, bulk select, reminders, turn banner, connection banner, log, presets ── */
+.qhp-input { width: 78px; font-size: 11px; padding: 4px 6px; text-align: center; }
+.combatant-card.bulk-selected { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan); }
+.bulk-check { width: 20px; height: 20px; border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: var(--bg); flex-shrink: 0; }
+.combatant-card.bulk-selected .bulk-check { background: var(--cyan); border-color: var(--cyan); }
+.bulk-bar { padding: 8px 16px; border-bottom: 1px solid var(--border2); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; background: var(--surface); }
+.bulk-bar input { width: 66px; font-size: 12px; padding: 5px 6px; }
+.turn-reminders { padding: 8px 16px; display: none; gap: 6px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid var(--border2); background: var(--surface); }
+.rem-name { font-size: 10px; letter-spacing: 0.15em; color: var(--gold-bright); font-weight: 700; text-transform: uppercase; }
+.rem-chip { font-size: 10px; padding: 3px 8px; border: 1px solid var(--border2); color: var(--text2); }
+.rem-chip.danger { border-color: var(--red-bright); color: var(--red-bright); }
+.rem-chip.warn { border-color: var(--gold-bright); color: var(--gold-bright); }
+.rem-chip.info { border-color: var(--blue-bright); color: var(--blue-bright); }
+.turn-banner { display: none; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 16px; background: var(--gold-glow); border-bottom: 1px solid var(--gold-bright); position: sticky; top: 48px; z-index: 90; }
+.turn-banner .tb-main { font-size: 12px; font-weight: 700; letter-spacing: 0.15em; color: var(--gold-bright); }
+.turn-banner.flash { animation: turn-flash 1.2s ease-out 1; }
+@keyframes turn-flash { 0% { opacity: 0.2; } 30% { opacity: 1; } 45% { opacity: 0.35; } 70% { opacity: 1; } 100% { opacity: 1; } }
+.roll-btn { padding: 2px 8px; }
+.conn-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 900; text-align: center; font-size: 11px; letter-spacing: 0.06em; padding: 7px 12px; transform: translateY(-110%); transition: transform 0.25s; pointer-events: none; }
+.conn-banner.show { transform: translateY(0); }
+.conn-banner.off { background: #3a0f18; color: #ffb3c0; border-bottom: 1px solid var(--red-bright); }
+.conn-banner.ok { background: #0c2a1f; color: var(--green-bright); border-bottom: 1px solid var(--green-bright); }
+.log-row { display: flex; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 11px; line-height: 1.45; }
+.log-time { color: var(--text3); min-width: 38px; font-variant-numeric: tabular-nums; }
+.log-round { color: var(--gold-bright); min-width: 24px; }
+.log-text { flex: 1; color: var(--text); word-break: break-word; }
+.preset-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); }
+/* Performance mode (see toggleLite): looping decoration off, layout/behavior untouched.
+   One-shot animations (map pings, reveal) are deliberately left alone — they end
+   hidden via fill-mode, so killing them would leave their rings stuck on screen. */
+html.perf-lite .badge-combat, html.perf-lite .init-chip.dying, html.perf-lite .map-token.spotted,
+html.perf-lite .net-ping-line, html.perf-lite .security-token.net-linked, html.perf-lite .map-token.net-linked,
+html.perf-lite .combatant-card.is-dying, html.perf-lite .dying-badge, html.perf-lite .wound-badge.flatlining,
+html.perf-lite .hp-numbers.critical, html.perf-lite .char-item.critical-row, html.perf-lite .turn-indicator,
+html.perf-lite .boot-skip.show { animation: none !important; }
+html.perf-lite * { transition: none !important; }
+html.perf-lite .combatant-card, html.perf-lite .player-card, html.perf-lite .topbar, html.perf-lite .modal,
+html.perf-lite .toast, html.perf-lite .turn-indicator, html.perf-lite .map-tool-btn.active,
+html.perf-lite .cond-mod-chip.on, html.perf-lite .security-token, html.perf-lite .map-token { box-shadow: none !important; }
+html.perf-lite .map-token, html.perf-lite .security-token,
+html.perf-lite .combatant-card.active-turn::before, html.perf-lite .combatant-card.active-turn::after { filter: none !important; }
+html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: none !important; }
 /* ── TOAST ── */
 .toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -953,7 +995,7 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
   opacity: 0;
   transition: opacity 0.3s;
   pointer-events: none;
-  white-space: nowrap;
+  white-space: normal; text-align: center; max-width: 92vw;
   box-shadow: 0 0 20px var(--cyan-glow);
 }
 .toast.show { opacity: 1; }
@@ -1135,7 +1177,8 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
     <span class="topbar-title" id="gm-campaign-title">CAMPAIGN</span>
     <span id="gm-combat-badge" class="topbar-badge badge-combat" style="display:none">● COMBAT</span>
     <span id="gm-round-display" class="topbar-round" style="display:none"></span>
-    <button id="undo-btn" class="btn btn-ghost btn-small" style="opacity:0.4" onclick="undoLast()" disabled title="Undo last action">↺ UNDO</button>
+    <button id="log-btn" class="btn btn-ghost btn-small" onclick="openLogModal()" title="Combat log &amp; session recap">LOG</button>
+    <button id="undo-btn" class="btn btn-ghost btn-small" style="opacity:0.4" onclick="undoLast()" disabled title="Nothing to undo">↺ UNDO</button>
     <span class="topbar-badge badge-gm">GM</span>
   </div>
   <div class="tabs">
@@ -1157,7 +1200,10 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-primary" style="max-width:240px" onclick="startCombat()">START COMBAT</button>
         <button class="btn btn-ghost btn-small" onclick="clearEncounter()">CLEAR QUEUE</button>
+        <button class="btn btn-ghost btn-small" onclick="saveEncounterPreset()" title="Save this queue (and the current scene) to reuse later">💾 SAVE AS PRESET</button>
       </div>
+      <div style="color:var(--text3);font-size:11px;letter-spacing:0.15em;margin:22px 0 10px">ENCOUNTER PRESETS</div>
+      <div id="encounter-presets" style="display:flex;flex-direction:column;gap:6px"></div>
     </div>
     <div id="combat-active" style="display:none">
       <div class="combat-header">
@@ -1166,12 +1212,15 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
           <div class="round-display" id="round-num">1</div>
         </div>
         <div style="display:flex;gap:8px;flex:1;justify-content:flex-end;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-small" id="bulk-toggle-btn" onclick="toggleBulkMode()" title="Select several combatants to damage / heal / add a status in one go">☑ SELECT</button>
           <button class="btn btn-ghost btn-small" onclick="nextTurn()">▶ NEXT TURN</button>
           <button class="btn btn-ghost btn-small" onclick="nextRound()">↻ NEXT ROUND</button>
           <button class="btn btn-danger btn-small" onclick="endCombat()">END COMBAT</button>
         </div>
       </div>
       <div class="initiative-strip" id="initiative-strip"></div>
+      <div class="turn-reminders" id="turn-reminders"></div>
+      <div class="bulk-bar" id="bulk-bar" style="display:none"></div>
       <div style="display:flex;gap:0;border-bottom:1px solid var(--border2)">
         <button id="combat-view-list-btn" style="flex:1;background:var(--surface2);color:var(--cyan);border:none;padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setCombatView('list')">LIST</button>
         <button id="combat-view-map-btn" style="flex:1;background:transparent;color:var(--text3);border:none;border-left:1px solid var(--border2);padding:8px;font-size:10px;letter-spacing:0.15em;cursor:pointer;font-family:var(--font)" onclick="setCombatView('map')">MAP</button>
@@ -1224,6 +1273,10 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
       <button class="btn btn-ghost btn-small" style="margin-bottom:10px" onclick="copyPlayerLink()">⎘ COPY PLAYER LINK</button>
       <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Share this link with players — it includes the database URL so they connect automatically.</div>
       <div id="player-pins-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      <hr class="divider">
+      <div class="section-heading">Performance</div>
+      <div style="color:var(--text2);font-size:11px;margin-bottom:8px;line-height:1.6">If the tool stutters on a weak device, performance mode turns off the looping glows, pulses and shadows (the layout and all functions stay). Remembered on this device only — players have their own ⚡ button in their top bar.</div>
+      <button class="btn btn-ghost btn-small" style="margin-bottom:6px" onclick="toggleLite()">⚡ PERFORMANCE MODE: <span class="lite-state">OFF</span></button>
       <hr class="divider">
       <div class="section-heading">Backups</div>
       <div style="color:var(--text2);font-size:11px;margin-bottom:8px;line-height:1.6">Auto-backs up twice per day (AM/PM), kept forever — nothing is ever deleted automatically. "Backup Now" snapshots into Firebase on demand; "Download" saves a file to your computer (survives even if Firebase itself is lost). Restoring overwrites everything currently live — it always asks first.</div>
@@ -1354,6 +1407,7 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
     <span class="topbar-brand">CP //</span>
     <div id="player-avatar" class="topbar-avatar"></div>
     <span class="topbar-title" id="player-char-name">CHARACTER</span>
+    <button id="lite-btn-player" class="btn btn-ghost btn-small" onclick="toggleLite()" title="Performance mode — turns off glows &amp; looping animations">⚡</button>
     <span class="topbar-badge badge-player">PLAYER</span>
   </div>
   <div class="tabs">
@@ -1367,6 +1421,7 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
     <button class="tab" onclick="switchPlayerTab('notes')">Notes</button>
     <button class="tab" onclick="switchPlayerTab('map')">Map</button>
   </div>
+  <div id="player-turn-banner" class="turn-banner"></div>
 
   <div id="player-tab-status" class="tab-content active main-scroll">
     <div class="player-view">
@@ -1558,6 +1613,7 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
       <span class="modal-title" id="char-modal-title">ADD CHARACTER</span>
       <div class="hdr-actions">
         <button class="icon-btn" id="cm-duplicate-btn" style="display:none" onclick="duplicateCharacter(editingCharId)" title="Duplicate character">⎘</button>
+        <button class="icon-btn" id="cm-clone-btn" style="display:none;font-size:11px;font-weight:700" onclick="const cid=editingCharId;closeModal('char-modal');cloneCharacterN(cid)" title="Add N numbered copies and queue them for combat (e.g. 4 more gangers)">×N</button>
         <button class="icon-btn-danger" id="cm-delete-btn" style="display:none" onclick="deleteCharacter()" title="Delete character">🗑</button>
         <button class="modal-close" onclick="closeModal('char-modal')">✕</button>
       </div>
@@ -1855,6 +1911,71 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
   </div>
 </div>
 
+<!-- Combat Log Modal -->
+<div class="modal-overlay" id="log-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <span class="modal-title">COMBAT LOG <span id="log-count" style="color:var(--text3);font-weight:400"></span></span>
+      <button class="modal-close" onclick="closeModal('log-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="log-filters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
+      <input type="text" id="log-search" placeholder="Search the log…" oninput="onLogSearch(this.value)" style="width:100%;margin-bottom:8px">
+      <div id="log-list" style="max-height:52vh;overflow-y:auto"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-small" onclick="openRecapModal()">📜 SESSION RECAP</button>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost btn-small" onclick="closeModal('log-modal')">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- Session Recap Modal -->
+<div class="modal-overlay" id="recap-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <span class="modal-title">SESSION RECAP</span>
+      <button class="modal-close" onclick="closeModal('recap-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>Cover</label>
+        <select id="recap-range" onchange="refreshRecap()">
+          <option value="3">Last 3 hours</option>
+          <option value="6">Last 6 hours</option>
+          <option value="12" selected>Last 12 hours</option>
+          <option value="24">Last 24 hours</option>
+          <option value="168">Last 7 days</option>
+          <option value="all">Everything logged</option>
+        </select>
+      </div>
+      <textarea id="recap-text" rows="16" style="width:100%;resize:vertical;font-size:12px;line-height:1.5"></textarea>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px">Built from the combat log — edit it freely before copying.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-small" onclick="downloadRecap()">⬇ .TXT</button>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost btn-small" onclick="closeModal('recap-modal')">CLOSE</button>
+      <button class="btn btn-primary btn-small" onclick="copyRecap()">COPY</button>
+    </div>
+  </div>
+</div>
+
+<!-- Restore Preview Modal -->
+<div class="modal-overlay" id="restore-preview-modal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <span class="modal-title" id="restore-preview-title">RESTORE PREVIEW</span>
+      <button class="modal-close" onclick="closeModal('restore-preview-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="restore-preview-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-small" onclick="closeModal('restore-preview-modal')">CANCEL</button>
+      <button class="btn btn-danger btn-small" onclick="confirmRestore()">RESTORE NOW</button>
+    </div>
+  </div>
+</div>
+
 <!-- Status Effect Modal -->
 <div class="modal-overlay" id="status-modal">
   <div class="modal" style="max-width:320px">
@@ -2070,6 +2191,7 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
 <button class="map-fullscreen-close-btn" id="map-fullscreen-close-btn" onclick="closeFullscreenMap()" title="Exit fullscreen">✕</button>
 
 <!-- Toast -->
+<div class="conn-banner" id="conn-banner"></div>
 <div class="toast" id="toast"></div>
 
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
@@ -2080,7 +2202,7 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
 // ═══════════════════════════════════════════════════════════════
 let db = null;
 let session = { role: null, charId: null, gmPin: null };
-let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} }, securityObjects: {}, alarmLevel: 0, portraitReveal: null, mapPing: null, mapDrawings: [], netPing: null, scenes: {}, activeSceneId: null, mapScaleMetersWidth: null, mapImageAspect: null, fogShapes: [], fogEnabled: false, fogAutoReveal: false, fogVisionRadius: 15 };
+let state = { characters: {}, combat: { active: false, round: 1, currentTurn: 0, order: [] }, campaignName: 'Campaign', encounterQueue: [], map: { tokens: {} }, securityObjects: {}, alarmLevel: 0, portraitReveal: null, mapPing: null, mapDrawings: [], netPing: null, scenes: {}, activeSceneId: null, mapScaleMetersWidth: null, mapImageAspect: null, fogShapes: [], fogEnabled: false, fogAutoReveal: false, fogVisionRadius: 15, combatLog: {}, encounterPresets: {} };
 let combatViewMode = 'list';
 let mapImage = null;       // fetched from a Firebase path OUTSIDE 'campaign' — kept separate from `state`
 // { charId: dataUrl } — the CROPPED square used for tokens/thumbnails everywhere.
@@ -2183,7 +2305,23 @@ function patchKeyedList(container, items) {
     if (prev.htmls[i] === it.html) return;
     tpl.innerHTML = it.html;
     const fresh = tpl.content.firstElementChild;
-    if (fresh) container.children[i].replaceWith(fresh);
+    if (fresh) {
+      const old = container.children[i];
+      // A card replaced while someone is typing in one of its fields (the
+      // quick HP box, a hack's roll box) must not eat their focus or text.
+      const ae = document.activeElement;
+      const keep = (ae && ae.id && old.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))
+        ? { id: ae.id, value: ae.value, s: ae.selectionStart, e: ae.selectionEnd } : null;
+      old.replaceWith(fresh);
+      if (keep) {
+        const el = document.getElementById(keep.id);
+        if (el) {
+          el.value = keep.value;
+          el.focus();
+          try { if (keep.s != null) el.setSelectionRange(keep.s, keep.e); } catch (e) { /* number/select inputs have no selection */ }
+        }
+      }
+    }
     prev.htmls[i] = it.html;
   });
 }
@@ -2310,9 +2448,7 @@ function handleBackupFileUpload(event) {
     try { parsed = JSON.parse(reader.result); } catch (e) { showToast('Invalid backup file.'); return; }
     const data = parsed?.data && typeof parsed.data === 'object' ? parsed.data : parsed;
     if (!data || typeof data !== 'object') { showToast('Invalid backup file.'); return; }
-    if (!confirm('Restore campaign from this file? This overwrites everything currently live. (You can Undo right after if needed.)')) return;
-    await applyCampaignSnapshot(data);
-    showToast('Campaign restored from file.');
+    openRestorePreview({ title: 'RESTORE FROM FILE', sub: file.name + (parsed.exportedAt ? ' · exported ' + new Date(parsed.exportedAt).toLocaleString() : '') }, data);
   };
   reader.readAsText(file);
 }
@@ -2328,6 +2464,7 @@ async function applyCampaignSnapshot(data) {
     encounterQueue: data.encounterQueue || [],
     map: data.map || { tokens: {} },
   };
+  logTo(updates, 'Campaign restored from a backup');
   await dbUpdate(updates);
 }
 
@@ -2335,23 +2472,7 @@ async function restoreBackup(key) {
   const snap = await db.ref('campaignBackups/' + key).get();
   if (!snap.exists()) { showToast('Backup not found.'); return; }
   const backup = snap.val();
-  if (!confirm(`Restore campaign to the backup from ${new Date(backup.timestamp).toLocaleString()}? This overwrites everything currently live. (You can Undo right after if needed.)`)) return;
-  await applyCampaignSnapshot(backup.data);
-  showToast('Campaign restored.');
-}
-
-async function renderBackupList() {
-  const el = document.getElementById('backup-list');
-  if (!el) return;
-  el.innerHTML = '<div style="color:var(--text3);font-size:11px">Loading backups...</div>';
-  const snap = await db.ref('campaignBackups').get();
-  if (!snap.exists()) { el.innerHTML = '<div style="color:var(--text3);font-size:11px">No backups yet.</div>'; return; }
-  const entries = Object.entries(snap.val()).sort((a, b) => b[1].timestamp - a[1].timestamp);
-  el.innerHTML = entries.map(([key, b]) => `
-    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface);border:1px solid var(--border)">
-      <div style="flex:1;font-size:11px">${new Date(b.timestamp).toLocaleString()} <span style="color:var(--text3);font-size:10px">(${esc(b.label || '')})</span></div>
-      <button class="btn btn-ghost btn-small" onclick="restoreBackup('${key}')">RESTORE</button>
-    </div>`).join('');
+  openRestorePreview({ title: 'RESTORE PREVIEW', sub: new Date(backup.timestamp).toLocaleString() + (backup.label ? ' · ' + backup.label : '') }, backup.data || {});
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2373,12 +2494,23 @@ function getStateAtPath(path) {
   return obj === undefined ? null : JSON.parse(JSON.stringify(obj));
 }
 
-function pushUndo(paths) {
+function pushUndo(paths, label, prevOverrides) {
   const prevMap = {};
-  for (const k of paths) prevMap[k] = getStateAtPath(k);
-  undoStack.push(prevMap);
+  // prevOverrides: for callers that already mutated local `state` before
+  // writing — they pass the real "before" values, since reading state now
+  // would snapshot the already-changed data and make Undo a no-op.
+  for (const k of paths) prevMap[k] = (prevOverrides && k in prevOverrides) ? prevOverrides[k] : getStateAtPath(k);
+  undoStack.push({ prevMap, label: label || '' });
   if (undoStack.length > MAX_UNDO) undoStack.shift();
   updateUndoButtonState();
+}
+
+// An undo step's name — taken from the combat-log line written in the same
+// update (see logTo), so every logged action is automatically a *named*
+// undo ("Rook -8 HP -> 12/30") with no per-call-site bookkeeping.
+function undoLabelFor(updates) {
+  for (const k of Object.keys(updates)) if (k.startsWith('combatLog/')) return updates[k]?.text || '';
+  return '';
 }
 
 function updateUndoButtonState() {
@@ -2386,11 +2518,13 @@ function updateUndoButtonState() {
   if (!btn) return;
   btn.disabled = undoStack.length === 0;
   btn.style.opacity = undoStack.length === 0 ? '0.4' : '1';
+  const top = undoStack[undoStack.length - 1];
+  btn.title = top ? 'Undo: ' + (top.label || 'last action') + '  (Ctrl+Z)' : 'Nothing to undo';
 }
 
 async function undoLast() {
   if (!undoStack.length) return;
-  const prevMap = undoStack.pop();
+  const { prevMap, label } = undoStack.pop();
   updateUndoButtonState();
   const prefixed = {};
   for (const [k, v] of Object.entries(prevMap)) prefixed[dbPath() + '/' + k] = v;
@@ -2401,7 +2535,7 @@ async function undoLast() {
   // live-update from `state`. Without this, an undone stat/XP change is
   // invisible in the still-open modal and looks like "undo did nothing."
   if (editingCharId) refreshOpenCharModalFields(editingCharId);
-  showToast('Last action undone.');
+  showToast(label ? 'Undone: ' + label : 'Last action undone.');
 }
 
 function refreshOpenCharModalFields(id) {
@@ -2415,13 +2549,51 @@ function refreshOpenCharModalFields(id) {
   renderProgressionSection(id);
 }
 
-async function dbWrite(path, val) {
-  pushUndo([path]);
+// ═══════════════════════════════════════════════════════════════
+// COMBAT LOG — one line per meaningful action, stored as
+// campaign/combatLog/{sortable-key}. Lines are written INSIDE the same
+// multi-path update as the action itself (logTo), so the log can never
+// disagree with what actually happened, and Undo removes the line along
+// with the change. Capped at LOG_MAX (oldest pruned shortly after GM login).
+// ═══════════════════════════════════════════════════════════════
+const LOG_MAX = 400;
+let _logSeq = 0;
+function newLogKey() {
+  return String(Date.now()).padStart(14, '0') + '_' + (++_logSeq % 1296).toString(36).padStart(2, '0') + Math.random().toString(36).slice(2, 4);
+}
+function logTo(updates, text, roundOverride) {
+  updates['combatLog/' + newLogKey()] = {
+    ts: Date.now(),
+    round: roundOverride !== undefined ? roundOverride : (state.combat?.active ? (state.combat.round || 1) : null),
+    text: String(text).slice(0, 300),
+  };
+  return updates;
+}
+function getLogEntries() {
+  return Object.entries(state.combatLog || {})
+    .filter(([, e]) => e && typeof e.text === 'string')
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([key, e]) => ({ key, ...e }));
+}
+async function pruneCombatLog() {
+  try {
+    const keys = Object.keys(state.combatLog || {}).sort();
+    if (keys.length <= LOG_MAX) return;
+    const upd = {};
+    keys.slice(0, keys.length - LOG_MAX).forEach(k => { upd[dbPath() + '/combatLog/' + k] = null; });
+    await db.ref('/').update(upd);
+  } catch (e) { console.error('Log prune failed', e); }
+}
+// Signed HP delta for log lines: "-8" / "+5" using a real minus sign.
+function fmtSigned(n) { return (n < 0 ? '−' : '+') + Math.abs(n); }
+
+async function dbWrite(path, val, label) {
+  pushUndo([path], label);
   await db.ref(dbPath() + '/' + path).set(val);
 }
 
-async function dbUpdate(updates) {
-  pushUndo(Object.keys(updates));
+async function dbUpdate(updates, label, prevOverrides) {
+  pushUndo(Object.keys(updates), label || undoLabelFor(updates), prevOverrides);
   const prefixed = {};
   for (const [k, v] of Object.entries(updates)) prefixed[dbPath() + '/' + k] = v;
   await db.ref('/').update(prefixed);
@@ -2429,6 +2601,7 @@ async function dbUpdate(updates) {
 
 function startSync() {
   if (pollTimer) clearInterval(pollTimer);
+  startConnectionWatch();
   db.ref(dbPath()).on('value', snap => {
     if (!snap.exists()) return;
     const data = snap.val();
@@ -2438,12 +2611,16 @@ function startSync() {
     // just to learn that a number changed. Everything except the scene
     // images is stringified normally; each scene image is represented by
     // its length + tail, which still catches any real change.
-    const { scenes: _scenes, ...restData } = data;
+    const { scenes: _scenes, combatLog: _log, ...restData } = data;
     const sceneSig = Object.entries(_scenes || {}).map(([sid, sc]) => {
       const { mapImageData, ...scRest } = sc || {};
       return sid + ':' + JSON.stringify(scRest) + ':' + (mapImageData ? mapImageData.length + mapImageData.slice(-32) : '');
     }).join('|');
-    const hash = JSON.stringify(restData) + '#' + sceneSig;
+    // The log is append-mostly and up to ~400 lines — represented by its
+    // size + newest key rather than re-stringified on every sync.
+    const logKeys = Object.keys(_log || {});
+    const logSig = logKeys.length + ':' + (logKeys.length ? logKeys.reduce((a, b) => (a > b ? a : b)) : '');
+    const hash = JSON.stringify(restData) + '#' + sceneSig + '#' + logSig;
     if (hash === lastStateHash) return;
     lastStateHash = hash;
     state.characters = data.characters || {};
@@ -2451,6 +2628,8 @@ function startSync() {
     state.campaignName = data.campaignName || 'Campaign';
     state.currentMission = data.currentMission || '';
     state.encounterQueue = data.encounterQueue || [];
+    state.combatLog = data.combatLog || {};
+    state.encounterPresets = data.encounterPresets || {};
     state.map = data.map || { tokens: {} };
     state.securityObjects = data.securityObjects || {};
     state.scenes = data.scenes || {};
@@ -2629,6 +2808,7 @@ async function doLogin() {
       // first seconds after login compete for the same connection — push
       // it out of the way; it's a background safety net, not urgent.
       setTimeout(maybeAutoBackup, 30000);
+      setTimeout(pruneCombatLog, 20000);
       return;
     }
     // Check player pins
@@ -2686,7 +2866,7 @@ function showPlayer() {
   showScreen('screen-player');
 }
 
-function logout() { session = { role: null, charId: null }; if (db) { db.ref(dbPath()).off(); } showLogin(); }
+function logout() { session = { role: null, charId: null }; stopConnectionWatch(); if (db) { db.ref(dbPath()).off(); } showLogin(); }
 
 // ═══════════════════════════════════════════════════════════════
 // TABS
@@ -2727,9 +2907,10 @@ function renderAll() {
     // needed since there's no list. During combat, the existing toggle
     // still governs it.
     document.getElementById('combat-map-view').style.display = (!combatActive || combatViewMode === 'map') ? 'block' : 'none';
-    if (combatActive) renderCombat(); else { renderPreCombat(); renderMapView(); }
+    if (combatActive) renderCombat(); else { renderPreCombat(); renderPresets(); renderMapView(); }
     renderCharList();
     renderAlarmWidget();
+    if (document.getElementById('log-modal')?.classList.contains('open')) renderLogModal();
   } else if (session.role === 'player') {
     renderPlayerView();
   }
@@ -2801,6 +2982,8 @@ function renderCombat() {
   // replaced (see patchKeyedList). Cards that no longer exist (character
   // deleted mid-combat) render '' and are filtered out so every item is
   // exactly one root element.
+  renderTurnReminders(order, current);
+  renderBulkBar();
   patchKeyedList(document.getElementById('combatants-list'),
     order.map((id, i) => ({ key: id, html: renderCombatantCard(id, i === current) })).filter(it => it.html));
   if (combatViewMode === 'map') renderMapView();
@@ -4469,7 +4652,7 @@ async function switchScene(newId) {
     // top-level path the rest of the app renders from — still written
     // here so renderMapView/the mapImage listener keep working unchanged.
     await db.ref('mapImage').set(targetImage);
-    await dbUpdate({
+    await dbUpdate(logTo({
       securityObjects: target.securityObjects || {},
       'map/tokens': target.tokens || {},
       mapDrawings: target.mapDrawings || [],
@@ -4480,7 +4663,7 @@ async function switchScene(newId) {
       fogEnabled: target.fogEnabled || false,
       fogAutoReveal: target.fogAutoReveal || false,
       fogVisionRadius: target.fogVisionRadius ?? 15,
-    });
+    }, 'Scene → ' + (target.name || 'scene')));
     state.securityObjects = target.securityObjects || {};
     state.map = { ...state.map, tokens: target.tokens || {} };
     state.mapDrawings = target.mapDrawings || [];
@@ -5122,8 +5305,9 @@ function renderCombatantCard(id, isActive) {
   // character by (charTypeMeta), so it can never disagree with them.
   const typeMeta = charTypeMeta(c);
   ensurePortraitListener(id);
-  return `<div class="combatant-card ${c.isDrone ? 'is-drone' : (c.isVehicle ? 'is-vehicle' : (c.isCompanion ? 'is-companion' : (c.isAlly ? 'is-ally' : (c.isNPC ? 'is-npc' : 'is-pc'))))} ${isActive ? 'active-turn' : ''} ${downClass}" id="cc-${id}">
-    <div class="combatant-top" onclick="toggleDetail('${id}')">
+  return `<div class="combatant-card ${c.isDrone ? 'is-drone' : (c.isVehicle ? 'is-vehicle' : (c.isCompanion ? 'is-companion' : (c.isAlly ? 'is-ally' : (c.isNPC ? 'is-npc' : 'is-pc'))))} ${isActive ? 'active-turn' : ''} ${downClass} ${bulkMode && bulkSel.has(id) ? 'bulk-selected' : ''}" id="cc-${id}">
+    <div class="combatant-top" onclick="onCardTopClick('${id}')">
+      ${bulkMode ? `<div class="bulk-check">${bulkSel.has(id) ? '✓' : ''}</div>` : ''}
       ${renderAvatar(id, c.name, typeMeta.color, 40)}
       <div style="flex:1;min-width:0">
         <div class="combatant-name">${esc(c.name)}${c.isVehicle ? ' 🚗' : ''}${hasAnyAbilities(c) ? ` <span title="View/use abilities" style="color:var(--purple-bright);cursor:pointer" onclick="event.stopPropagation(); openAbilitiesModal('${id}')">✦</span>` : ''}</div>
@@ -5168,6 +5352,10 @@ function renderCombatantCard(id, isActive) {
           <button class="adj-btn red" onclick="openDmgModal('${id}')">DMG</button>
           <button class="adj-btn green" onclick="openDmgModal('${id}','heal')">HEAL</button>
           <button class="adj-btn green" onclick="quickAdj('${id}','hp',1)">+1</button>
+        </div>
+        <div class="adj-group" title="Type -12 to damage or +5 to heal, then Enter">
+          <input type="text" id="qhp-${id}" class="qhp-input" placeholder="-12 / +5" autocomplete="off" autocapitalize="off" enterkeyhint="go" onkeydown="if(event.key==='Enter'){event.preventDefault();quickHpEntry('${id}',this.value,this)}">
+          <button class="adj-btn" onclick="const i=document.getElementById('qhp-${id}');quickHpEntry('${id}',i.value,i)">↵</button>
         </div>
       </div>
       ${(!c.isVehicle && !c.isDrone) ? `<div class="detail-row">
@@ -5243,6 +5431,7 @@ function renderCombatantCard(id, isActive) {
       ${renderLootAndItems(c, id)}
       <div class="detail-row" style="justify-content:flex-end">
         <button class="btn btn-ghost btn-small" onclick="openCharModal('${id}')">EDIT</button>
+        ${c.isNPC ? `<button class="btn btn-ghost btn-small" onclick="cloneCharacterN('${id}')" title="Add copies of this NPC (e.g. 4 more gangers)">⎘ ×N</button>` : ''}
         ${(c.isNPC || c.isCompanion) ? `<button class="btn btn-danger btn-small" onclick="removeFromCombat('${id}')">REMOVE</button>` : ''}
       </div>
     </div>
@@ -5484,7 +5673,9 @@ function renderPlayerView() {
   const order = state.combat?.order || [];
   const current = state.combat?.currentTurn ?? 0;
   const isMyCurrent = order[current] === id;
-  document.getElementById('player-turn-indicator').style.display = (state.combat?.active && isMyCurrent) ? 'block' : 'none';
+  // The old Status-tab-only box is superseded by the sticky banner below.
+  document.getElementById('player-turn-indicator').style.display = 'none';
+  updatePlayerTurnBanner(c, !!(state.combat?.active && isMyCurrent));
   const initList = document.getElementById('player-initiative-list');
   if (!state.combat?.active || !order.length) { setHTML(initList, '<div style="color:var(--text3);font-size:11px">No active combat</div>'); }
   else {
@@ -5532,6 +5723,7 @@ function renderPlayerView() {
         <div style="font-size:10px;color:var(--cyan)">${esc(live.pwLabel||'')}${live.pw!=null?' · '+live.pw:''}${live.dice?' · '+live.dice+'×d20':''}</div>
         ${w.tags ? `<div style="font-size:10px;color:var(--text3)">${esc(w.tags)}</div>` : ''}
         ${techBadge}
+        ${Number.isFinite(live.pw) ? `<button class="btn btn-ghost btn-small roll-btn" onclick="rollPlayerPool('weapon',${wi})" title="Digital roll: PW ${live.pw} (wound penalty already included). Or roll your own dice.">🎲</button>` : ''}
       </div>
       ${condChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${condChips.join('')}</div>` : ''}
       ${talentHint}
@@ -5557,6 +5749,7 @@ function renderPlayerView() {
             ${weapons.map((w, wi) => `<option value="${wi}" ${wi===weaponIdx?'selected':''}>${esc(w.name)}</option>`).join('')}
           </select>` : ''}
           <span style="font-size:11px;color:var(--gold-bright);font-weight:700">${live.stamina} STA</span>
+          ${Number.isFinite(live.pw) ? `<button class="btn btn-ghost btn-small roll-btn" onclick="rollPlayerPool('technique',${ti})" title="Digital roll (wound penalty included)">🎲</button>` : ''}
           <button class="btn ${canAfford ? 'btn-primary' : 'btn-ghost'} btn-small" style="padding:2px 10px;font-size:10px" onclick="usePlayerTechnique(${ti})" ${canAfford ? '' : 'disabled'}>USE</button>
         </div>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
@@ -5607,6 +5800,7 @@ function renderPlayerView() {
             ${hackDevices.length ? `<optgroup label="Devices">${hackDevices.map(o => `<option value="${o.key}">${esc(o.name)}</option>`).join('')}</optgroup>` : ''}
           </select>
           <input type="number" id="player-hack-roll-${hi}" placeholder="roll" style="width:44px;font-size:10px" title="Your total dice roll for this hack">
+          ${Number.isFinite(live.pw) ? `<button class="btn btn-ghost btn-small roll-btn" onclick="rollPlayerPool('hack',${hi})" title="Digital roll — fills the roll box (wound penalty included)">🎲</button>` : ''}
           <span id="player-hack-vs-${hi}" style="font-size:10px;color:var(--text2)"></span>` : ''}
         </div>
         ${condChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${condChips.join('')}</div>` : ''}
@@ -5928,6 +6122,7 @@ async function startCombat() {
       updates['characters/' + id + '/ip_current'] = c.ip_max;
     }
   });
+  logTo(updates, '⚔ Combat started — ' + order.map(oid => state.characters[oid]?.name).filter(Boolean).join(', '), 1);
   await dbUpdate(updates);
   showToast('Combat started! Initiative rolled.');
 }
@@ -5945,6 +6140,7 @@ async function endCombat() {
       if (c.armor_head) updates['characters/' + id + '/armor_head/sp_temp'] = c.armor_head.sp_base;
     }
   }
+  logTo(updates, '⚔ Combat ended after round ' + (state.combat.round || 1));
   await dbUpdate(updates);
   showToast('Combat ended. PCs reset.');
 }
@@ -5953,7 +6149,7 @@ async function nextTurn() {
   const order = state.combat.order || [];
   if (!order.length) return;
   let next = ((state.combat.currentTurn || 0) + 1) % order.length;
-  await dbUpdate({ 'combat/currentTurn': next });
+  await dbUpdate(logTo({ 'combat/currentTurn': next }, 'Turn → ' + (state.characters[order[next]]?.name || '?')));
 }
 
 async function nextRound() {
@@ -5961,12 +6157,14 @@ async function nextRound() {
   const round = (state.combat.round || 1) + 1;
   // Tick status effects for all chars
   const updates = { 'combat/round': round, 'combat/currentTurn': 0 };
+  const roundNotes = []; // what the round change actually did, for the log + toast
   for (const id of order) {
     const c = state.characters[id]; if (!c) continue;
     const effects = (c.status_effects || [])
       .map(e => ({ ...e, rounds: e.rounds > 0 ? e.rounds - 1 : e.rounds }))
       .filter(e => e.rounds !== 0);
     updates['characters/' + id + '/status_effects'] = effects;
+    (c.status_effects || []).filter(e => e.rounds === 1).forEach(e => roundNotes.push(`${e.name} on ${c.name} ends`));
     // Apply DoT damage
     let dmg = 0;
     for (const e of c.status_effects || []) {
@@ -5988,6 +6186,8 @@ async function nextRound() {
       const hpMax = c.hp_max || 1;
       const newHp = Math.min(hpMax, Math.max(-(c.stats?.grit || 0), (c.hp_current ?? hpMax) - dmg + regenHp));
       updates['characters/' + id + '/hp_current'] = newHp;
+      const hpBefore = c.hp_current ?? hpMax;
+      if (dmg > 0 && newHp !== hpBefore) roundNotes.push(`${c.name} ${fmtSigned(newHp - hpBefore)} (DoT)${newHp <= 0 && hpBefore > 0 ? ' DOWN' : ''}`);
     }
     if (regenSta > 0) {
       const staMax = c.stamina_max || 0;
@@ -6006,15 +6206,17 @@ async function nextRound() {
     const roundsLeft = state.netPing.roundsLeft - 1;
     updates['netPing'] = roundsLeft > 0 ? { ...state.netPing, roundsLeft } : null;
   }
+  logTo(updates, `Round ${round} begins` + (roundNotes.length ? ' — ' + roundNotes.join('; ') : ''), round);
   await dbUpdate(updates);
-  showToast('Round ' + round);
+  showToast('Round ' + round + (roundNotes.length ? ' — ' + roundNotes.join('; ') : ''), roundNotes.length ? 4500 : 2200);
 }
 
 async function quickAdj(id, stat, delta) {
   const c = state.characters[id]; if (!c) return;
   if (stat === 'hp') {
-    const val = Math.min(c.hp_max, Math.max(-(c.stats?.grit || 0), (c.hp_current ?? c.hp_max) + delta));
-    await dbWrite('characters/' + id + '/hp_current', val);
+    const r = buildHpChange(id, delta);
+    if (!r || r.newHp === r.cur) return;
+    await dbUpdate(logTo(r.updates, r.text));
   } else if (stat === 'stamina') {
     const val = Math.min(c.stamina_max || 0, Math.max(0, (c.stamina_current ?? c.stamina_max ?? 0) + delta));
     await dbWrite('characters/' + id + '/stamina_current', val);
@@ -6100,6 +6302,7 @@ async function useHack(id, hi) {
       }
     }
   }
+  logTo(updates, `${c.name} used ${hack.name} (−${live.ip} IP)${resultMsg}`);
   await dbUpdate(updates);
   showToast(`${hack.name}: -${live.ip} IP${resultMsg}`);
 }
@@ -6132,6 +6335,14 @@ async function removeFromCombat(id) {
 async function toggleCombatQueue(id) {
   if (state.combat?.active) {
     let order = [...(state.combat.order || [])];
+    // True pre-change values for Undo (this branch edits local state before
+    // the write, see pushUndo's prevOverrides).
+    const prevForUndo = {
+      'combat/order': [...order],
+      'combat/currentTurn': state.combat.currentTurn || 0,
+      'combat/initRolls': JSON.parse(JSON.stringify(state.combat.initRolls || {})),
+      ['map/tokens/' + id + '/hidden']: state.map?.tokens?.[id]?.hidden ?? null,
+    };
     const currentId = order[state.combat.currentTurn || 0];
     const idx = order.indexOf(id);
     const initRolls = { ...(state.combat.initRolls || {}) };
@@ -6167,7 +6378,7 @@ async function toggleCombatQueue(id) {
     state.combat.order = order;
     state.combat.currentTurn = newTurn;
     state.combat.initRolls = initRolls;
-    await dbUpdate({ 'combat/order': order, 'combat/currentTurn': newTurn, 'combat/initRolls': initRolls, ...updates });
+    await dbUpdate(logTo({ 'combat/order': order, 'combat/currentTurn': newTurn, 'combat/initRolls': initRolls, ...updates }, `${state.characters[id]?.name || 'Someone'} ${idx >= 0 ? 'leaves' : 'joins'} the fight`), undefined, prevForUndo);
     renderCombat();
     if (Object.keys(updates).length) renderMapView();
   } else {
@@ -6515,6 +6726,9 @@ async function applyDmg(sign) {
       magMsg = ` · ${attacker.name}'s ${weapon.name} mag -1 → ${newMag}/${live.magMax}`;
     }
   }
+  const curHp = c.hp_current ?? c.hp_max;
+  const who = (attacker && sign < 0) ? `${attacker.name} → ${c.name}${weapon ? ' (' + weapon.name + ')' : ''}` : c.name;
+  logTo(updates, `${who}: ${fmtSigned(newHp - curHp)} HP → ${newHp}/${c.hp_max}${ablationMsg}${newHp <= 0 && curHp > 0 ? ' — DOWN' + (isPlayerCharacter(c) ? ' (death save)' : '') : ''}`);
   await dbUpdate(updates);
   closeModal('dmg-modal');
   showToast(`${c.name}: ${delta > 0 ? '+' : ''}${delta} HP → ${newHp}${ablationMsg}${magMsg}`);
@@ -6523,8 +6737,11 @@ async function applyDmg(sign) {
 // ═══════════════════════════════════════════════════════════════
 // STATUS EFFECTS
 // ═══════════════════════════════════════════════════════════════
+let statusBulk = false; // true while the status modal is applying to the bulk selection
 function openStatusModal(id) {
   statusTargetId = id;
+  statusBulk = false;
+  document.querySelector('#status-modal .modal-title').textContent = 'ADD STATUS EFFECT';
   document.getElementById('status-type').value = 'bleed';
   document.getElementById('status-custom-field').style.display = 'none';
   document.getElementById('status-rounds').value = 3;
@@ -6541,16 +6758,23 @@ async function addStatusEffect() {
   const stacks = parseInt(document.getElementById('status-stacks').value) || 1;
   const names = { bleed: 'Bleed', burn: 'Burn', poison: 'Poison', malfunction: 'CW Malfunction', stagger: 'Stagger', blind: 'Blind' };
   const name = type === 'custom' ? (document.getElementById('status-custom-name').value || 'Effect') : names[type];
-  const c = state.characters[statusTargetId]; if (!c) return;
-  const effects = [...(c.status_effects || []), { type, name, rounds, stacks }];
-  await dbWrite('characters/' + statusTargetId + '/status_effects', effects);
+  const targets = (statusBulk ? [...bulkSel] : [statusTargetId]).filter(tid => state.characters[tid]);
+  if (!targets.length) return;
+  const updates = {};
+  targets.forEach(tid => {
+    updates['characters/' + tid + '/status_effects'] = [...(state.characters[tid].status_effects || []), { type, name, rounds, stacks }];
+  });
+  logTo(updates, `${targets.map(tid => state.characters[tid].name).join(', ')} gain${targets.length === 1 ? 's' : ''} ${name} (${rounds}r)`);
+  await dbUpdate(updates);
   closeModal('status-modal');
+  statusBulk = false;
 }
 
 async function removeEffect(charId, idx) {
   const c = state.characters[charId]; if (!c) return;
+  const removed = (c.status_effects || [])[idx];
   const effects = (c.status_effects || []).filter((_, i) => i !== idx);
-  await dbWrite('characters/' + charId + '/status_effects', effects);
+  await dbUpdate(logTo({ ['characters/' + charId + '/status_effects']: effects }, `${c.name} loses ${removed?.name || 'an effect'}`));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -7120,6 +7344,7 @@ function openCharModal(id) {
   document.getElementById('char-modal-title').textContent = isNew ? 'ADD CHARACTER' : 'EDIT CHARACTER';
   document.getElementById('cm-delete-btn').style.display = isNew ? 'none' : 'flex';
   document.getElementById('cm-duplicate-btn').style.display = isNew ? 'none' : 'flex';
+  document.getElementById('cm-clone-btn').style.display = (isNew || !(state.characters[id]?.isNPC)) ? 'none' : 'flex';
   document.getElementById('cm-items-btn').style.display = isNew ? 'none' : 'inline-block';
   document.getElementById('cm-build-btn').style.display = isNew ? 'none' : 'inline-block';
   document.getElementById('cm-netrunning-btn').style.display = isNew ? 'none' : 'inline-block';
@@ -7937,6 +8162,7 @@ async function usePlayerHack(hi) {
       }
     }
   }
+  logTo(updates, `${c.name} used ${hack.name} (−${live.ip} IP)${resultMsg}`);
   await dbUpdate(updates);
   showToast(`${hack.name}: -${live.ip} IP${resultMsg}`);
 }
@@ -8022,6 +8248,611 @@ async function resetAllHP() {
   }
   await dbUpdate(updates);
   showToast('All PCs reset to full HP.');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PERFORMANCE MODE — one switch that turns off the decorative looping
+// animations, glows and shadows (see html.perf-lite in the CSS). The look
+// is the default; this is for a phone that's struggling at the table.
+// Remembered per device.
+// ═══════════════════════════════════════════════════════════════
+function updateLiteUi() {
+  const on = document.documentElement.classList.contains('perf-lite');
+  document.querySelectorAll('.lite-state').forEach(el => { el.textContent = on ? 'ON' : 'OFF'; });
+  const pb = document.getElementById('lite-btn-player');
+  if (pb) pb.style.color = on ? 'var(--gold-bright)' : '';
+}
+function toggleLite() {
+  const on = !document.documentElement.classList.contains('perf-lite');
+  document.documentElement.classList.toggle('perf-lite', on);
+  try { localStorage.setItem('cp_lite', on ? '1' : '0'); } catch (e) { /* private mode: just not remembered */ }
+  updateLiteUi();
+  showToast(on ? 'Performance mode ON — glows & looping animations off' : 'Performance mode OFF');
+}
+try { if (localStorage.getItem('cp_lite') === '1') document.documentElement.classList.add('perf-lite'); } catch (e) { /* ignore */ }
+
+// Ctrl/Cmd+Z = undo for the GM (never while typing in a field or with a
+// dialog open, so it can't fight the browser's own text undo).
+document.addEventListener('keydown', ev => {
+  if (!(ev.ctrlKey || ev.metaKey) || ev.shiftKey || ev.altKey || String(ev.key).toLowerCase() !== 'z') return;
+  if (session.role !== 'gm') return;
+  const t = ev.target;
+  if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+  if (document.querySelector('.modal-overlay.open')) return;
+  ev.preventDefault();
+  undoLast();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// HP CHANGES — one builder shared by the +1/−1 buttons, the type-in box
+// on each card and the bulk actions, so they all clamp, ablate and log
+// identically. Returns the update paths + log line without writing, so
+// bulk can merge many characters into ONE update (= one Undo step).
+// ═══════════════════════════════════════════════════════════════
+function buildHpChange(id, delta, opts) {
+  const c = state.characters[id]; if (!c) return null;
+  const hpMax = c.hp_max || 1;
+  const cur = c.hp_current ?? hpMax;
+  const newHp = Math.min(hpMax, Math.max(-(c.stats?.grit || 0), cur + delta));
+  const updates = { ['characters/' + id + '/hp_current']: newHp };
+  let armorNote = '';
+  // Same rule as the DMG dialog: a damaging hit ablates 1 Temporary SP.
+  if (delta < 0 && opts?.ablate && c.armor_body?.sp_temp > 0) {
+    const sp = Math.max(0, c.armor_body.sp_temp - 1);
+    updates['characters/' + id + '/armor_body/sp_temp'] = sp;
+    armorNote = ` · armor SP ${sp}`;
+  }
+  const down = newHp <= 0 && cur > 0;
+  const text = `${c.name} ${fmtSigned(newHp - cur)} HP → ${newHp}/${hpMax}${armorNote}${down ? ' — DOWN' + (isPlayerCharacter(c) ? ' (death save)' : '') : ''}`;
+  return { updates, text, newHp, cur, name: c.name, down };
+}
+
+// Type-in box on the card: "-12" damages, "+5" heals ("d12"/"h5" also work).
+// A bare number is rejected on purpose — damage vs heal is too important
+// to guess.
+async function quickHpEntry(id, raw, inputEl) {
+  const m = String(raw || '').trim().toLowerCase().replace(/[−–—]/g, '-').match(/^([+\-dh])\s*(\d{1,4})$/);
+  if (!m) { showToast('Type -12 to damage or +5 to heal'); return; }
+  const amt = parseInt(m[2], 10);
+  if (!amt) return;
+  const sign = (m[1] === '-' || m[1] === 'd') ? -1 : 1;
+  const r = buildHpChange(id, sign * amt, { ablate: true });
+  if (!r) return;
+  if (inputEl) inputEl.value = '';
+  if (r.newHp === r.cur) { showToast(`${r.name}: no change`); return; }
+  await dbUpdate(logTo(r.updates, r.text));
+  showToast(r.text);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BULK ACTIONS — SELECT mode on the combat list: tap cards (or the
+// ALL ENEMIES / ALL FRIENDS shortcuts), then damage / heal / add a
+// status to everyone selected in one go (one Undo step for the lot).
+// ═══════════════════════════════════════════════════════════════
+let bulkMode = false;
+const bulkSel = new Set();
+function toggleBulkMode() {
+  bulkMode = !bulkMode;
+  if (!bulkMode) bulkSel.clear();
+  const btn = document.getElementById('bulk-toggle-btn');
+  if (btn) { btn.style.borderColor = bulkMode ? 'var(--cyan)' : ''; btn.style.color = bulkMode ? 'var(--cyan)' : ''; }
+  if (state.combat?.active) renderCombat();
+}
+function onCardTopClick(id) { if (bulkMode) toggleBulkSel(id); else toggleDetail(id); }
+function toggleBulkSel(id) {
+  if (bulkSel.has(id)) bulkSel.delete(id); else bulkSel.add(id);
+  renderCombat();
+}
+function bulkSelect(kind) {
+  bulkSel.clear();
+  (state.combat?.order || []).forEach(id => {
+    const c = state.characters[id]; if (!c) return;
+    const friendly = !c.isNPC || c.isAlly || c.isCompanion;
+    if (kind === 'all' || (kind === 'enemies' && !friendly) || (kind === 'friends' && friendly)) bulkSel.add(id);
+  });
+  renderCombat();
+}
+function renderBulkBar() {
+  const el = document.getElementById('bulk-bar'); if (!el) return;
+  if (!bulkMode) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  // Static markup on purpose (the count is patched in separately) so the
+  // amount box keeps its value/focus while selections change.
+  setHTML(el, `
+    <button class="btn btn-ghost btn-small" onclick="bulkSelect('enemies')">ALL ENEMIES</button>
+    <button class="btn btn-ghost btn-small" onclick="bulkSelect('friends')">ALL FRIENDS</button>
+    <button class="btn btn-ghost btn-small" onclick="bulkSelect('none')">NONE</button>
+    <span id="bulk-count" style="font-size:10px;color:var(--text2);letter-spacing:0.1em"></span>
+    <span style="flex:1"></span>
+    <input type="number" id="bulk-amount" min="1" max="999" placeholder="amt" inputmode="numeric">
+    <button class="btn btn-danger btn-small" onclick="bulkHp(-1)">− DMG</button>
+    <button class="btn btn-primary btn-small" style="width:auto" onclick="bulkHp(1)">+ HEAL</button>
+    <button class="btn btn-ghost btn-small" onclick="openBulkStatus()">+ STATUS</button>
+    <button class="btn btn-ghost btn-small" onclick="toggleBulkMode()">DONE</button>`);
+  const n = bulkSel.size;
+  const cnt = document.getElementById('bulk-count');
+  if (cnt) cnt.textContent = n ? `${n} SELECTED` : 'TAP CARDS TO SELECT';
+}
+async function bulkHp(sign) {
+  const ids = [...bulkSel].filter(id => state.characters[id]);
+  if (!ids.length) { showToast('Select combatants first — tap their cards'); return; }
+  const amt = parseInt(document.getElementById('bulk-amount')?.value, 10) || 0;
+  if (!amt) { showToast('Enter an amount first'); return; }
+  const updates = {};
+  const parts = [];
+  ids.forEach(id => {
+    const r = buildHpChange(id, sign * amt, { ablate: true });
+    if (!r) return;
+    Object.assign(updates, r.updates);
+    parts.push(`${r.name} ${r.newHp}/${state.characters[id].hp_max}${r.down ? ' DOWN' : ''}`);
+  });
+  logTo(updates, `${sign < 0 ? 'Area damage' : 'Group heal'} ${amt} → ${parts.join(', ')}`);
+  await dbUpdate(updates);
+  showToast(`${sign < 0 ? '−' : '+'}${amt} HP to ${ids.length} combatant${ids.length === 1 ? '' : 's'}`);
+}
+function openBulkStatus() {
+  if (!bulkSel.size) { showToast('Select combatants first — tap their cards'); return; }
+  openStatusModal(null);
+  statusBulk = true;
+  document.querySelector('#status-modal .modal-title').textContent = `ADD STATUS TO ${bulkSel.size} COMBATANT${bulkSel.size === 1 ? '' : 'S'}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TURN REMINDERS — what the active character has hanging over them,
+// so nobody has to remember that Bleed ticks at round end or that a
+// downed PC owes a Death Save. Mirrors nextRound's actual rules.
+// ═══════════════════════════════════════════════════════════════
+function getTurnReminders(c) {
+  const out = [];
+  if (!c) return out;
+  const hp = c.hp_current ?? c.hp_max ?? 1;
+  if (hp <= 0) out.push({ cls: 'danger', text: isPlayerCharacter(c) ? '☠ Death Save due — roll it now' : '☠ Down' });
+  const ws = getWoundState(c);
+  if (ws) out.push({ cls: ws.lockSecondary ? 'danger' : 'warn', text: `${ws.name}: −${Math.round((1 - ws.pwMult) * 100)}% PW${ws.lockSecondary ? ' · no secondary action' : ''}` });
+  (c.status_effects || []).forEach(e => {
+    const dot = e.type === 'bleed' ? 2 : e.type === 'burn' ? (e.stacks >= 2 ? 4 : 2) : e.type === 'poison' ? 3 : 0;
+    let t = e.name || 'Effect';
+    if (dot) t += `: ${dot} dmg when the round ends`;
+    if (e.rounds === 1) t += dot ? ' — then it expires' : ' — expires when the round ends';
+    else if (e.rounds > 1) t += ` · ${e.rounds} rounds left`;
+    out.push({ cls: dot ? 'danger' : 'info', text: '● ' + t });
+  });
+  return out;
+}
+function renderTurnReminders(order, current) {
+  const el = document.getElementById('turn-reminders'); if (!el) return;
+  const cur = state.characters[order[current]];
+  const rems = cur ? getTurnReminders(cur) : [];
+  if (!rems.length) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  setHTML(el, `<span class="rem-name">▶ ${esc(cur.name)}</span>` + rems.map(r => `<span class="rem-chip ${r.cls}">${esc(r.text)}</span>`).join(''));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PLAYER: "YOUR TURN" — a banner visible from every tab (the old
+// indicator only existed on the Status tab), the tab title, a haptic
+// buzz where the device supports it, and the same reminders the GM sees.
+// The very first render after loading never buzzes — only a turn that
+// actually arrives while the page is open does.
+// ═══════════════════════════════════════════════════════════════
+let _titleBase = null;
+let _alertKey = null;
+let _alertReady = false;
+function updatePlayerTurnBanner(c, isMine) {
+  const el = document.getElementById('player-turn-banner'); if (!el) return;
+  if (_titleBase === null) _titleBase = document.title;
+  const key = state.combat?.active ? (state.combat.round || 1) + ':' + (state.combat.currentTurn || 0) : null;
+  if (!isMine) {
+    if (el.style.display !== 'none') el.style.display = 'none';
+    if (document.title !== _titleBase) document.title = _titleBase;
+    _alertKey = null;
+    _alertReady = true;
+    return;
+  }
+  el.style.display = 'flex';
+  setHTML(el, `<span class="tb-main">⚡ YOUR TURN</span>` + getTurnReminders(c).map(r => `<span class="rem-chip ${r.cls}">${esc(r.text)}</span>`).join(''));
+  document.title = '⚡ YOUR TURN — ' + _titleBase;
+  if (_alertReady && key !== _alertKey) {
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+    try { if (navigator.vibrate) navigator.vibrate([180, 90, 180]); } catch (e) { /* unsupported */ }
+  }
+  _alertKey = key;
+  _alertReady = true;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONNECTION WATCH — Firebase keeps an offline write queue for as long
+// as the page stays open and replays it on reconnect; this just makes
+// that visible instead of leaving people guessing why nothing updates.
+// (Closing the page while offline loses anything still queued — said so
+// in the banner.) A 3s grace period avoids flashing it on every
+// reconnect blip and during initial connect.
+// ═══════════════════════════════════════════════════════════════
+let _connRef = null, _connTimer = 0, _wasOffline = false;
+function startConnectionWatch() {
+  stopConnectionWatch();
+  try {
+    _connRef = db.ref('.info/connected');
+    _connRef.on('value', snap => setConnState(snap.val() === true));
+  } catch (e) { _connRef = null; }
+}
+function stopConnectionWatch() {
+  try { if (_connRef) _connRef.off(); } catch (e) { /* ignore */ }
+  _connRef = null;
+  clearTimeout(_connTimer);
+  _wasOffline = false;
+  document.getElementById('conn-banner')?.classList.remove('show');
+}
+function setConnState(online) {
+  const el = document.getElementById('conn-banner'); if (!el) return;
+  clearTimeout(_connTimer);
+  if (online) {
+    if (_wasOffline) {
+      _wasOffline = false;
+      el.className = 'conn-banner ok show';
+      el.textContent = '✓ BACK ONLINE — changes synced';
+      _connTimer = setTimeout(() => el.classList.remove('show'), 2500);
+    } else el.classList.remove('show');
+  } else {
+    _connTimer = setTimeout(() => {
+      _wasOffline = true;
+      el.className = 'conn-banner off show';
+      el.textContent = '⚠ OFFLINE — your changes are kept and will sync when you reconnect. Keep this page open.';
+    }, 3000);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PLAYER DIGITAL ROLL — optional. Rolls the character's exact PW pool
+// with the same dice rules as initiative (§2.1-2.2: first-die crits,
+// per-die caps, 1/20 cancel) using the LIVE PW, i.e. wound penalties
+// already included. Rolling your own physical dice still works exactly
+// as before — this is just a button. Logged for the GM.
+// ═══════════════════════════════════════════════════════════════
+function logDirect(text) {
+  try {
+    Promise.resolve(db.ref(dbPath() + '/combatLog/' + newLogKey()).set({
+      ts: Date.now(),
+      round: state.combat?.active ? (state.combat.round || 1) : null,
+      text: String(text).slice(0, 300),
+    })).catch(() => { /* log is best-effort — never block a roll */ });
+  } catch (e) { /* ignore */ }
+}
+function rollPlayerPool(kind, idx) {
+  const id = session.charId;
+  const c = state.characters[id]; if (!c) return;
+  let name, live;
+  if (kind === 'weapon') {
+    const w = c.weapons?.[idx]; if (!w) return;
+    name = w.name; live = computeLiveWeaponStats(c, w);
+  } else if (kind === 'hack') {
+    const h = c.hacks?.[idx]; if (!h) return;
+    name = h.name; live = computeLiveHackStats(c, h);
+  } else {
+    const t = c.techniques?.[idx]; if (!t) return;
+    const wi = techniqueWeaponSelection[`${id}:${idx}`] ?? 0;
+    name = t.name; live = computeLiveTechniqueStats(c, c.weapons?.[wi], t);
+  }
+  if (!Number.isFinite(live?.pw)) { showToast('No PW set for this — roll your own dice'); return; }
+  const res = rollInitiative(live.pw);
+  const label = res.category === 0 ? 'CRIT SUCCESS' : res.category === 3 ? 'CRIT FAIL' : res.category === 1 ? `result ${res.total}` : 'miss';
+  const wound = live.woundState ? ` · ${live.woundState.name} −${Math.round((1 - live.woundState.pwMult) * 100)}% PW` : '';
+  showToast(`🎲 ${name} (PW ${live.pw}): ${res.rolls.join(' + ')} → ${label}${wound}`, 7000);
+  if (kind === 'hack') {
+    const inp = document.getElementById(`player-hack-roll-${idx}`);
+    if (inp) inp.value = res.category === 1 ? res.total : '';
+  }
+  logDirect(`${c.name} rolled ${name} (PW ${live.pw}): ${res.rolls.join(' + ')} → ${label}`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CLONE ×N — "add 4 more gangers": deep copies of an NPC (fresh HP,
+// no status, numbered names), created in ONE update (one Undo removes the
+// whole batch of clones) and queued/joined to the fight right away. When a
+// fight is live, each clone's join is its own undo step (own initiative roll).
+// ═══════════════════════════════════════════════════════════════
+async function cloneCharacterN(id) {
+  const src = state.characters[id]; if (!src) return;
+  const raw = prompt(`How many copies of "${src.name}"?`, '3');
+  if (raw === null) return;
+  const n = Math.max(1, Math.min(12, parseInt(raw, 10) || 0));
+  if (!parseInt(raw, 10)) { showToast('Enter a number from 1 to 12'); return; }
+  const base = src.name.replace(/\s*\(Copy\)$/, '').replace(/\s+\d+$/, '');
+  const used = new Set(Object.values(state.characters).map(ch => ch.name));
+  const updates = {};
+  const newIds = [];
+  const names = [];
+  let k = 1;
+  for (let i = 0; i < n; i++) {
+    let name;
+    do { k++; name = `${base} ${k}`; } while (used.has(name));
+    used.add(name);
+    const clone = JSON.parse(JSON.stringify(src));
+    clone.name = name;
+    clone.pin = null;
+    clone.status_effects = [];
+    clone.flink_used = false;
+    clone.hp_current = clone.hp_max;
+    if (clone.stamina_max) clone.stamina_current = clone.stamina_max;
+    if (clone.ip_max) clone.ip_current = clone.ip_max;
+    if (clone.humanity_max) clone.humanity_current = clone.humanity_max;
+    if (clone.armor_body) clone.armor_body.sp_temp = clone.armor_body.sp_base;
+    if (clone.armor_head) clone.armor_head.sp_temp = clone.armor_head.sp_base;
+    (clone.weapons || []).forEach(w => { delete w.magCurrent; });
+    const newId = 'char_' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2, 5);
+    updates['characters/' + newId] = clone;
+    newIds.push(newId);
+    names.push(name);
+  }
+  const live = !!state.combat?.active;
+  if (!live) updates['encounterQueue'] = [...(state.encounterQueue || []), ...newIds];
+  logTo(updates, `Cloned ${src.name} ×${n}: ${names.join(', ')}`);
+  // NOT added to local state beforehand: dbUpdate snapshots the pre-write
+  // value of each path for Undo, and a clone that already exists locally
+  // would be remembered as "what was there before" — Undo would then
+  // restore the clones instead of removing them.
+  await dbUpdate(updates);
+  newIds.forEach(nid => { if (!state.characters[nid]) state.characters[nid] = updates['characters/' + nid]; }); // in case the sync echo hasn't landed yet
+  try {
+    const ps = await db.ref('portraits/' + id).get();
+    if (ps.exists()) {
+      const upd = {};
+      newIds.forEach(nid => { upd['portraits/' + nid] = ps.val(); });
+      await db.ref('/').update(upd);
+    }
+  } catch (e) { console.error('Clone portrait copy failed', e); }
+  if (live) for (const nid of newIds) await toggleCombatQueue(nid);
+  renderCharList();
+  showToast(`Added ${n} × ${base} ${live ? 'to the fight' : 'to the queue'}`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COMBAT LOG VIEWER + SESSION RECAP
+// ═══════════════════════════════════════════════════════════════
+let logFilter = 'all';
+let logSearch = '';
+function openLogModal() { renderLogModal(); openModal('log-modal'); }
+function setLogFilter(f) { logFilter = f; renderLogModal(); }
+function onLogSearch(v) { logSearch = String(v || '').toLowerCase(); renderLogList(); }
+function logKind(text) {
+  if (/^(Turn →|Round \d+ begins)/.test(text)) return 'turns';
+  if (/ HP /.test(text) || /^(Area damage|Group heal)/.test(text)) return 'damage';
+  if (/ gains? | loses | ends/.test(text)) return 'status';
+  return 'other';
+}
+function renderLogModal() {
+  const chips = [['all', 'ALL'], ['damage', 'DAMAGE'], ['status', 'STATUS'], ['turns', 'TURNS'], ['other', 'OTHER']];
+  setHTML(document.getElementById('log-filters'), chips.map(([k, label]) =>
+    `<span class="roster-filter-chip ${logFilter === k ? 'active' : ''}" onclick="setLogFilter('${k}')">${label}</span>`).join(''));
+  renderLogList();
+}
+function renderLogList() {
+  const el = document.getElementById('log-list'); if (!el) return;
+  const all = getLogEntries();
+  const rows = all.slice().reverse()
+    .filter(e => logFilter === 'all' || logKind(e.text) === logFilter)
+    .filter(e => !logSearch || e.text.toLowerCase().includes(logSearch));
+  const cnt = document.getElementById('log-count'); if (cnt) cnt.textContent = `(${all.length})`;
+  setHTML(el, rows.length ? rows.map(e => {
+    const d = new Date(e.ts);
+    const time = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    return `<div class="log-row"><span class="log-time">${time}</span><span class="log-round">${e.round ? 'R' + e.round : '·'}</span><span class="log-text">${esc(e.text)}</span></div>`;
+  }).join('') : '<div style="color:var(--text3);font-size:11px;padding:12px 0">Nothing logged yet — damage, healing, status effects, turns, rounds and scene changes show up here as you play.</div>');
+}
+
+function buildRecapText(since) {
+  const entries = getLogEntries().filter(e => e.ts >= since);
+  const out = [];
+  out.push(`PREVIOUSLY ON ${(state.campaignName || 'THE CAMPAIGN').toUpperCase()}`);
+  out.push(new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }));
+  if (!entries.length) {
+    out.push('', 'Nothing was logged in this period.');
+  } else {
+    let combatNo = 0;
+    entries.forEach(e => {
+      const t = e.text;
+      if (/^Turn →/.test(t)) return; // noise in a recap
+      if (t.startsWith('⚔ Combat started')) { combatNo++; out.push('', `⚔ COMBAT ${combatNo}`, t.replace('⚔ Combat started — ', 'Initiative: ')); return; }
+      if (t.startsWith('⚔ Combat ended')) { out.push(t.replace('⚔ ', '')); return; }
+      if (/^Round \d+ begins/.test(t)) { out.push('', '— ' + t.replace(' begins', '') + ' —'); return; }
+      if (t.startsWith('Scene →')) { out.push('', '📍 ' + t.replace('Scene →', 'Scene:')); return; }
+      out.push('• ' + t);
+    });
+  }
+  const pcs = Object.values(state.characters || {}).filter(isPlayerCharacter);
+  if (pcs.length) {
+    out.push('', 'WHERE THEY STAND');
+    pcs.forEach(p => {
+      const ws = getWoundState(p);
+      out.push(`${p.name}: ${p.hp_current ?? p.hp_max}/${p.hp_max} HP${ws ? ' (' + ws.name + ')' : ''}`);
+    });
+  }
+  return out.join('\n');
+}
+function refreshRecap() {
+  const v = document.getElementById('recap-range').value;
+  const since = v === 'all' ? 0 : Date.now() - parseFloat(v) * 3600 * 1000;
+  document.getElementById('recap-text').value = buildRecapText(since);
+}
+function openRecapModal() {
+  closeModal('log-modal');
+  document.getElementById('recap-range').value = '12';
+  refreshRecap();
+  openModal('recap-modal');
+}
+async function copyRecap() {
+  const ta = document.getElementById('recap-text');
+  try { await navigator.clipboard.writeText(ta.value); showToast('Recap copied — paste it into Discord'); }
+  catch (e) { ta.focus(); ta.select(); showToast('Selected — press Ctrl+C to copy'); }
+}
+function downloadRecap() {
+  const blob = new Blob([document.getElementById('recap-text').value], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `recap-${(state.campaignName || 'campaign').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.txt`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ENCOUNTER PRESETS — the queue (who's fighting) + the scene it happens
+// in, saved under a name and reloaded in one tap. Saving also snapshots
+// the live scene's token positions / fog / drawings / devices into that
+// scene (not its image — that's already stored), so loading the preset
+// later puts the board back the way it was when you saved.
+// ═══════════════════════════════════════════════════════════════
+function renderPresets() {
+  const el = document.getElementById('encounter-presets'); if (!el) return;
+  const presets = Object.entries(state.encounterPresets || {}).filter(([, p]) => p && p.name).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+  setHTML(el, presets.length ? presets.map(([pid, p]) => {
+    const ids = p.charIds || [];
+    const have = ids.filter(cid => state.characters[cid]).length;
+    const scene = p.sceneId && state.scenes?.[p.sceneId]?.name;
+    return `<div class="preset-row">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
+        <div style="font-size:10px;color:var(--text2)">${have}${have !== ids.length ? '/' + ids.length : ''} fighter${ids.length === 1 ? '' : 's'}${scene ? ' · 🗺 ' + esc(scene) : ''}${have !== ids.length ? ' · ' + (ids.length - have) + ' no longer in roster' : ''}</div>
+      </div>
+      <button class="btn btn-primary btn-small" style="width:auto" onclick="loadEncounterPreset('${pid}')">LOAD</button>
+      <button class="btn btn-danger btn-small btn-icon" onclick="deleteEncounterPreset('${pid}')" title="Delete preset">✕</button>
+    </div>`;
+  }).join('') : '<div style="color:var(--text3);font-size:11px;line-height:1.6">No presets yet — queue a fight above, then save it here to reuse it later.</div>');
+}
+async function saveEncounterPreset() {
+  const ids = (state.encounterQueue || []).filter(id => state.characters[id]);
+  if (!ids.length) { showToast('Queue some characters first'); return; }
+  const n = Object.keys(state.encounterPresets || {}).length + 1;
+  const name = (prompt('Name this encounter preset:', 'Encounter ' + n) || '').trim();
+  if (!name) return;
+  const sid = state.activeSceneId && state.scenes?.[state.activeSceneId] ? state.activeSceneId : null;
+  const updates = {
+    ['encounterPresets/enc_' + Date.now().toString(36)]: { name: name.slice(0, 60), charIds: ids, sceneId: sid, ts: Date.now() },
+  };
+  if (sid) {
+    Object.assign(updates, {
+      ['scenes/' + sid + '/securityObjects']: state.securityObjects || {},
+      ['scenes/' + sid + '/tokens']: state.map?.tokens || {},
+      ['scenes/' + sid + '/mapDrawings']: state.mapDrawings || [],
+      ['scenes/' + sid + '/fogShapes']: state.fogShapes || [],
+      ['scenes/' + sid + '/fogEnabled']: state.fogEnabled || false,
+      ['scenes/' + sid + '/fogAutoReveal']: state.fogAutoReveal || false,
+      ['scenes/' + sid + '/fogVisionRadius']: state.fogVisionRadius ?? 15,
+    });
+  }
+  logTo(updates, `Saved encounter preset "${name.slice(0, 60)}"`);
+  await dbUpdate(updates);
+  showToast(`Preset "${name}" saved`);
+}
+async function loadEncounterPreset(pid) {
+  const p = state.encounterPresets?.[pid]; if (!p) return;
+  if (state.combat?.active) { showToast('End the current combat first'); return; }
+  const ids = (p.charIds || []).filter(id => state.characters[id]);
+  if (!ids.length) { showToast('None of this preset\'s characters exist any more'); return; }
+  await dbUpdate(logTo({ encounterQueue: ids }, `Loaded encounter preset "${p.name}"`));
+  if (p.sceneId && state.scenes?.[p.sceneId] && p.sceneId !== state.activeSceneId) await switchScene(p.sceneId);
+  renderPreCombat();
+  renderCharList();
+  const missing = (p.charIds || []).length - ids.length;
+  showToast(`Loaded "${p.name}"${missing ? ` — ${missing} character${missing === 1 ? '' : 's'} missing` : ''}`);
+}
+async function deleteEncounterPreset(pid) {
+  const p = state.encounterPresets?.[pid]; if (!p) return;
+  if (!confirm(`Delete preset "${p.name}"? (The characters and scene are not touched.)`)) return;
+  await dbUpdate(logTo({ ['encounterPresets/' + pid]: null }, `Deleted encounter preset "${p.name}"`));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BACKUP LIST + RESTORE PREVIEW
+// The list used to download EVERY backup in full (each carries the whole
+// campaign incl. scene images) just to print a date — now it asks
+// Firebase for the key names only (REST ?shallow=true) and fetches a
+// backup's contents only when you open its preview. Falls back to the
+// old full download if the shallow request isn't possible.
+// ═══════════════════════════════════════════════════════════════
+async function listBackupKeys() {
+  try {
+    const root = db.ref().toString().replace(/\/$/, '');
+    const res = await fetch(root + '/campaignBackups.json?shallow=true');
+    if (!res.ok) return null;
+    const obj = await res.json();
+    if (obj === null) return [];
+    return (obj && typeof obj === 'object') ? Object.keys(obj) : null;
+  } catch (e) { return null; }
+}
+function backupKeyToTs(key) {
+  const m = String(key).match(/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/);
+  return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z`) : 0;
+}
+const BACKUP_LIST_MAX = 60;
+async function renderBackupList() {
+  const el = document.getElementById('backup-list');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--text3);font-size:11px">Loading backups...</div>';
+  let rows = null;
+  const keys = await listBackupKeys();
+  if (keys) {
+    rows = keys.map(k => ({ key: k, timestamp: backupKeyToTs(k) })).sort((a, b) => b.timestamp - a.timestamp);
+    await Promise.all(rows.slice(0, BACKUP_LIST_MAX).map(async r => {
+      try { r.label = (await db.ref('campaignBackups/' + r.key + '/label').get()).val(); } catch (e) { /* label is cosmetic */ }
+    }));
+  } else {
+    const snap = await db.ref('campaignBackups').get();
+    rows = snap.exists()
+      ? Object.entries(snap.val()).map(([k, b]) => ({ key: k, timestamp: b.timestamp, label: b.label })).sort((a, b) => b.timestamp - a.timestamp)
+      : [];
+  }
+  if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:11px">No backups yet.</div>'; return; }
+  el.innerHTML = rows.slice(0, BACKUP_LIST_MAX).map(r => `
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface);border:1px solid var(--border)">
+      <div style="flex:1;font-size:11px">${new Date(r.timestamp).toLocaleString()} <span style="color:var(--text3);font-size:10px">(${esc(r.label || '')})</span></div>
+      <button class="btn btn-ghost btn-small" onclick="restoreBackup('${esc(r.key)}')">PREVIEW &amp; RESTORE</button>
+    </div>`).join('') + (rows.length > BACKUP_LIST_MAX ? `<div style="color:var(--text3);font-size:10px;padding-top:4px">Showing the newest ${BACKUP_LIST_MAX} of ${rows.length} backups (older ones are still stored).</div>` : '');
+}
+
+let _restorePending = null;
+function openRestorePreview(meta, data) {
+  _restorePending = { data };
+  document.getElementById('restore-preview-title').textContent = meta.title || 'RESTORE PREVIEW';
+  document.getElementById('restore-preview-body').innerHTML = buildRestoreSummary(meta, data);
+  openModal('restore-preview-modal');
+}
+function buildRestoreSummary(meta, data) {
+  const live = state.characters || {};
+  const bak = data.characters || {};
+  const nm = (src, id) => esc(src[id]?.name || id);
+  const added = Object.keys(bak).filter(id => !live[id]);
+  const removed = Object.keys(live).filter(id => !bak[id]);
+  const changed = Object.keys(bak).filter(id => live[id] && JSON.stringify(live[id]) !== JSON.stringify(bak[id]));
+  const list = (ids, src, max = 8) => ids.slice(0, max).map(id => nm(src, id)).join(', ') + (ids.length > max ? ` +${ids.length - max} more` : '');
+  const row = (color, label, text) => `<div style="padding:7px 10px;border-left:3px solid ${color};background:var(--surface2);margin-bottom:6px;font-size:11px;line-height:1.5"><strong style="color:${color}">${label}</strong> ${text}</div>`;
+  let html = meta.sub ? `<div style="font-size:10px;color:var(--text3);margin-bottom:8px">${esc(meta.sub)}</div>` : '';
+  html += `<div style="font-size:11px;color:var(--text2);margin-bottom:10px;line-height:1.6">This backup has <strong>${Object.keys(bak).length}</strong> characters; right now you have <strong>${Object.keys(live).length}</strong>.</div>`;
+  html += removed.length ? row('var(--red-bright)', `${removed.length} will be REMOVED`, `(exist now, not in the backup): ${list(removed, live)}`) : row('var(--green-bright)', 'Nothing removed', 'every current character is in the backup');
+  if (added.length) html += row('var(--cyan)', `${added.length} will be RESTORED`, `(in the backup, missing now): ${list(added, bak)}`);
+  if (changed.length) {
+    const hpBits = changed.slice(0, 8).map(id => {
+      const a = live[id], b = bak[id];
+      const ha = a.hp_current ?? a.hp_max, hb = b.hp_current ?? b.hp_max;
+      return esc(b.name || id) + (ha !== hb ? ` (HP ${ha}→${hb})` : '');
+    }).join(', ');
+    html += row('var(--gold-bright)', `${changed.length} will be REVERTED`, `to their backup state: ${hpBits}${changed.length > 8 ? ` +${changed.length - 8} more` : ''}`);
+  } else if (!added.length && !removed.length) {
+    html += row('var(--text3)', 'No character differences', 'this backup matches the live roster');
+  }
+  const bc = data.combat || {};
+  html += row('var(--text3)', 'Combat', `${bc.active ? 'running, round ' + (bc.round || 1) : 'not running'} in the backup (live: ${state.combat?.active ? 'running, round ' + (state.combat.round || 1) : 'not running'})`);
+  if (data.campaignName && data.campaignName !== state.campaignName) html += row('var(--gold-bright)', 'Campaign name', `"${esc(state.campaignName)}" → "${esc(data.campaignName)}"`);
+  html += `<div style="font-size:10px;color:var(--text3);margin-top:10px;line-height:1.6">Restores: characters, combat state, combat queue, map token positions and campaign name.<br>Does <strong>not</strong> touch: scenes &amp; map images, fog, security devices, portraits, alarm level, combat log, presets.<br>Afterwards, <strong>↺ UNDO</strong> in the top bar reverts the whole restore in one step.</div>`;
+  return html;
+}
+async function confirmRestore() {
+  if (!_restorePending) return;
+  const { data } = _restorePending;
+  _restorePending = null;
+  closeModal('restore-preview-modal');
+  await applyCampaignSnapshot(data);
+  showToast('Campaign restored — ↺ UNDO reverts it');
 }
 
 // ═══════════════════════════════════════════════════════════════
