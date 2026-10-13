@@ -72,6 +72,9 @@ body::after {
 }
 button { font-family: var(--font-display); font-weight: 700; cursor: pointer; border: none; border-radius: var(--radius); transition: transform 0.08s, box-shadow 0.15s, border-color 0.15s, background 0.15s; }
 button:active { transform: scale(0.96) translateY(1px); }
+/* Taps register immediately — no double-tap-zoom delay/gesture detection on
+   anything interactive (pinch-zoom is already locked app-wide). */
+button, input, select, textarea, .tab, .init-chip, .char-item, .combatant-top, .adj-btn, .roster-filter-chip { touch-action: manipulation; }
 input, textarea, select {
   font-family: var(--font);
   background: var(--surface2);
@@ -447,7 +450,10 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
   content: ''; position: absolute; left: 50%; top: 50%;
   width: 16px; height: 16px; margin: -8px 0 0 -8px;
   border: 2px solid var(--red-bright); border-radius: 50%;
-  animation: map-ping-pulse 1.3s ease-out;
+  /* both: hold the final (invisible) frame instead of snapping back to the
+     visible base ring once the animation ends — previously only a later
+     re-render (which threw the marker away) hid it again. */
+  animation: map-ping-pulse 1.3s ease-out both;
 }
 .map-ping-marker.show::after { animation-delay: 0.25s; }
 @keyframes map-ping-pulse { 0% { transform: scale(0.3); opacity: 1; } 100% { transform: scale(6); opacity: 0; } }
@@ -460,7 +466,7 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
   content: ''; position: absolute; left: 50%; top: 50%;
   width: 16px; height: 16px; margin: -8px 0 0 -8px;
   border: 2px solid var(--cyan); border-radius: 50%;
-  animation: net-ping-sweep 1.8s ease-out;
+  animation: net-ping-sweep 1.8s ease-out both;
 }
 .net-ping-marker.show::after { animation-delay: 0.3s; }
 @keyframes net-ping-sweep { 0% { transform: scale(0.3); opacity: 1; } 100% { transform: scale(10); opacity: 0; } }
@@ -732,8 +738,11 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
 /* ── MODAL ── */
 .modal-overlay {
   position: fixed; inset: 0;
-  background: rgba(2,4,10,0.86);
-  backdrop-filter: blur(3px);
+  /* No backdrop-filter: it live-blurs everything behind the modal on every
+     frame (the page keeps animating/syncing underneath) — a real cost on
+     phones for a blur that's barely visible through an already ~90%
+     opaque overlay. A touch more opacity gets the same look for free. */
+  background: rgba(2,4,10,0.91);
   z-index: 200; display: none;
   align-items: flex-start; justify-content: center;
   padding: 16px; overflow-y: auto;
@@ -997,8 +1006,11 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
   background: linear-gradient(180deg, transparent, rgba(34,224,255,0.09), transparent);
   animation: boot-sweep 3.4s ease-in-out infinite;
   pointer-events: none;
+  will-change: transform;
 }
-@keyframes boot-sweep { 0% { top: -140px; } 100% { top: 100%; } }
+/* transform, not `top` — animating top forces layout every frame, and this
+   runs during startup while the app itself is booting underneath. */
+@keyframes boot-sweep { 0% { transform: translateY(0); } 100% { transform: translateY(calc(100vh + 140px)); } }
 .boot-terminal {
   font-family: var(--font);
   font-size: 15px;
@@ -2115,6 +2127,95 @@ let statusTargetId = null;
 let expandedCombatants = new Set();
 let pollTimer = null;
 let lastStateHash = '';
+
+// ═══════════════════════════════════════════════════════════════
+// PERFORMANCE HELPERS
+// Profiled on a realistic campaign (8 combatants, 545 KB map, 8 scene
+// images, 68 KB portraits): ~60% of every render was the browser parsing,
+// hashing and re-decoding base64 images re-injected into the DOM, and every
+// sync rebuilt every card/list even when one HP number changed. These four
+// helpers fix that without changing what anything looks like.
+// ═══════════════════════════════════════════════════════════════
+
+// Portraits/maps arrive as base64 data URLs (tens to hundreds of KB).
+// Convert each distinct image to a short blob: URL ONCE; markup then
+// carries ~50 chars instead of 70-700 KB, and the browser keeps reusing the
+// already-decoded bitmap instead of re-decoding on every render.
+// `slot` identifies WHICH image ('p:<charId>', 'map', ...) so a replaced
+// portrait frees its predecessor instead of leaking it.
+const _imgUrlCache = new Map(); // slot -> { src, url }
+function imgSrc(slot, dataUrl) {
+  if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return dataUrl || '';
+  const hit = _imgUrlCache.get(slot);
+  if (hit && hit.src === dataUrl) return hit.url;
+  let url = dataUrl;
+  try {
+    const comma = dataUrl.indexOf(',');
+    const meta = dataUrl.slice(5, comma);
+    if (meta.endsWith(';base64')) {
+      const bin = atob(dataUrl.slice(comma + 1));
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      url = URL.createObjectURL(new Blob([bytes], { type: meta.slice(0, -7) || 'image/jpeg' }));
+    }
+  } catch (e) { url = dataUrl; }
+  // Revoke the old blob a moment later, not immediately — anything still
+  // mid-paint on the previous URL shouldn't lose its image under it.
+  if (hit && hit.url !== hit.src) setTimeout(() => URL.revokeObjectURL(hit.url), 5000);
+  _imgUrlCache.set(slot, { src: dataUrl, url });
+  return url;
+}
+
+// innerHTML assignment that's skipped when the markup is byte-identical to
+// the last thing THIS helper wrote — avoids re-parsing, re-laying-out and
+// restarting animations/focus/typed input for lists a sync didn't change.
+// Only use on containers that are written exclusively through this helper.
+function setHTML(el, html) {
+  if (!el || el._lastHtml === html) return false;
+  el.innerHTML = html;
+  el._lastHtml = html;
+  return true;
+}
+
+// Keyed variant for the combat list: items = [{ key, html }], each html
+// being ONE root element. When the same cards are present in the same
+// order, only the cards whose markup actually changed get replaced, so
+// tapping +1 on one combatant no longer rebuilds the other seven.
+// Falls back to a full rebuild whenever membership/order differs.
+function patchKeyedList(container, items) {
+  if (!container) return;
+  const prev = container._keyed;
+  const sameShape = prev && prev.keys.length === items.length && items.every((it, i) => prev.keys[i] === it.key) && container.children.length === items.length;
+  if (!sameShape) {
+    container.innerHTML = items.map(it => it.html).join('');
+    container._keyed = { keys: items.map(it => it.key), htmls: items.map(it => it.html) };
+    return;
+  }
+  const tpl = document.createElement('template');
+  items.forEach((it, i) => {
+    if (prev.htmls[i] === it.html) return;
+    tpl.innerHTML = it.html;
+    const fresh = tpl.content.firstElementChild;
+    if (fresh) container.children[i].replaceWith(fresh);
+    prev.htmls[i] = it.html;
+  });
+}
+
+// Coalesces bursts of async triggers (every character's portrait listener
+// fires separately at load, map image, etc.) into ONE render on the next
+// frame instead of one full render per event.
+let _charListDirty = false; // roster skipped a render while its tab was hidden — see renderCharList/switchTab
+let _renderQueued = false;
+function requestRender() {
+  if (_renderQueued) return;
+  _renderQueued = true;
+  // rAF for the normal case (one render right before the next paint); the
+  // short timeout is a fallback so a backgrounded/hidden tab — where rAF
+  // is paused entirely — still ends up with up-to-date DOM.
+  const run = () => { if (!_renderQueued) return; _renderQueued = false; renderAll(); };
+  requestAnimationFrame(run);
+  setTimeout(run, 60);
+}
 // undefined (not null) until the first sync lands, so that initial sync is
 // never mistaken for a fresh reveal broadcast and doesn't pop the overlay
 // for players who simply just logged in.
@@ -2344,7 +2445,18 @@ function startSync() {
   db.ref(dbPath()).on('value', snap => {
     if (!snap.exists()) return;
     const data = snap.val();
-    const hash = JSON.stringify(data);
+    // Change detection. Saved scenes carry their full map image INSIDE
+    // campaign/scenes (see switchScene), so naively stringifying the whole
+    // snapshot meant serialising several MB of base64 on every single tap
+    // just to learn that a number changed. Everything except the scene
+    // images is stringified normally; each scene image is represented by
+    // its length + tail, which still catches any real change.
+    const { scenes: _scenes, ...restData } = data;
+    const sceneSig = Object.entries(_scenes || {}).map(([sid, sc]) => {
+      const { mapImageData, ...scRest } = sc || {};
+      return sid + ':' + JSON.stringify(scRest) + ':' + (mapImageData ? mapImageData.length + mapImageData.slice(-32) : '');
+    }).join('|');
+    const hash = JSON.stringify(restData) + '#' + sceneSig;
     if (hash === lastStateHash) return;
     lastStateHash = hash;
     state.characters = data.characters || {};
@@ -2444,20 +2556,15 @@ function ensurePortraitListener(id) {
       portraits[id] = val;
       portraitsFull[id] = null;
     }
-    renderCharList();
-    // The combat card avatar reads this same portraits[id] map, but
-    // Firebase resolves it async — a card that already rendered (the
-    // common case: you're mid-fight when a portrait finishes loading, or
-    // it just loads after the card did) never picked up the update
-    // without this, staying stuck on the initials fallback even though
-    // portraits[id] now has the real image.
-    if (state.combat?.active) renderCombat();
-    if (combatViewMode === 'map') renderMapView();
+    // The roster, combat cards, map tokens and player view all read this
+    // same portraits[id] map, but Firebase resolves each character's
+    // portrait async (one listener each, all landing in a burst at load).
+    // A card that already rendered would otherwise stay stuck on initials,
+    // so re-render — but ONCE per frame for the whole burst (requestRender),
+    // not once per portrait.
+    requestRender();
     if (editingCharId === id) updatePortraitPreview(id);
-    if (session.role === 'player') {
-      renderPlayerMapView();
-      if (session.charId === id) updatePlayerAvatar();
-    }
+    if (session.role === 'player' && session.charId === id) updatePlayerAvatar();
     if (portraitViewerCharId === id) openPortraitViewer(id);
     if (portraitRevealCharId === id) showPortraitRevealOverlay(id);
   });
@@ -2470,7 +2577,8 @@ function updatePlayerAvatar() {
   const c = state.characters[id];
   const portrait = portraits[id];
   if (portrait) {
-    el.style.backgroundImage = `url('${portrait}')`;
+    const src = imgSrc('p:' + id, portrait);
+    if (!el.style.backgroundImage.includes(src)) el.style.backgroundImage = `url('${src}')`;
     el.textContent = '';
   } else {
     el.style.backgroundImage = 'none';
@@ -2528,7 +2636,12 @@ async function doLogin() {
       state.encounterQueue = data.encounterQueue || [];
       startSync();
       showGM();
-      maybeAutoBackup();
+      // The twice-daily auto-backup re-downloads and re-uploads the ENTIRE
+      // campaign (scene images included, often several MB). Kicking that
+      // off at the same instant as the initial sync/first render made the
+      // first seconds after login compete for the same connection — push
+      // it out of the way; it's a background safety net, not urgent.
+      setTimeout(maybeAutoBackup, 30000);
       return;
     }
     // Check player pins
@@ -2596,6 +2709,7 @@ function switchTab(name) {
   document.querySelectorAll('#screen-gm .tab').forEach((t, i) => t.classList.toggle('active', names[i] === name));
   document.querySelectorAll('#screen-gm .tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + name));
   if (name === 'settings') renderSettings();
+  if (name === 'characters' && _charListDirty) renderCharList();
   if (name === 'generator') {
     const key = localStorage.getItem('cp_api_key');
     document.getElementById('gen-no-key').style.display = key ? 'none' : 'block';
@@ -2645,7 +2759,7 @@ function renderAlarmWidget() {
   const lvl = state.alarmLevel || 0;
   const info = ALARM_LEVELS[lvl];
   const color = ALARM_COLORS[lvl];
-  el.innerHTML = `
+  setHTML(el, `
     <span style="font-size:10px;color:var(--text3);letter-spacing:0.15em;white-space:nowrap">ALARM LEVEL</span>
     <div class="adj-group">
       <button class="adj-btn red" style="width:26px" onclick="setAlarmLevel(${Math.max(0, lvl - 1)})" ${lvl <= 0 ? 'disabled' : ''}>−</button>
@@ -2653,7 +2767,7 @@ function renderAlarmWidget() {
       <button class="adj-btn green" style="width:26px" onclick="setAlarmLevel(${Math.min(3, lvl + 1)})" ${lvl >= 3 ? 'disabled' : ''}>+</button>
     </div>
     <span style="font-size:10px;color:var(--text2);flex:1;min-width:160px">${esc(info.desc)}</span>
-  `;
+  `);
 }
 async function setAlarmLevel(lvl) {
   await dbWrite('alarmLevel', Math.max(0, Math.min(3, lvl)));
@@ -2665,17 +2779,17 @@ function renderPreCombat() {
     .map(id => [id, state.characters[id]])
     .filter(([, c]) => c);
   if (!entries.length) {
-    el.innerHTML = '<div style="color:var(--text3);font-size:11px;line-height:1.6">No characters queued yet.<br>Go to the <strong>Characters</strong> tab and tap <strong>+ COMBAT</strong> on whoever is fighting this encounter.</div>';
+    setHTML(el, '<div style="color:var(--text3);font-size:11px;line-height:1.6">No characters queued yet.<br>Go to the <strong>Characters</strong> tab and tap <strong>+ COMBAT</strong> on whoever is fighting this encounter.</div>');
     return;
   }
-  el.innerHTML = entries.map(([id, c]) => `
+  setHTML(el, entries.map(([id, c]) => `
     <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid ${c.isVehicle ? 'var(--gold-bright)' : (c.isCompanion ? 'var(--blue)' : (c.isAlly ? 'var(--green-bright)' : (c.isNPC ? 'var(--red)' : 'var(--cyan)')))}">
       <div style="flex:1;font-size:13px;font-weight:700">${esc(c.name)}</div>
       <div style="font-size:10px;color:var(--text2)">${c.isDrone ? 'DRN' : (c.isVehicle ? 'VEH' : (c.isCompanion ? 'COM' : (c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC'))))}</div>
       <div style="font-size:11px;color:var(--green-bright)">${c.hp_current ?? c.hp_max}/${c.hp_max} HP</div>
       <div style="font-size:10px;color:var(--text2)">INI: ${c.initiative ?? 0}</div>
       <button class="btn btn-danger btn-small btn-icon" onclick="toggleCombatQueue('${id}')" title="Remove from queue">✕</button>
-    </div>`).join('');
+    </div>`).join(''));
 }
 
 function renderCombat() {
@@ -2683,7 +2797,7 @@ function renderCombat() {
   const order = state.combat.order || [];
   const current = state.combat.currentTurn || 0;
   // Initiative strip
-  document.getElementById('initiative-strip').innerHTML = order.map((id, i) => {
+  setHTML(document.getElementById('initiative-strip'), order.map((id, i) => {
     const c = state.characters[id]; if (!c) return '';
     const isDown = (c.hp_current ?? c.hp_max) <= 0;
     const cls = [
@@ -2695,9 +2809,13 @@ function renderCombat() {
     const rollCat = state.combat.initRolls?.[id]?.category;
     const critBadge = rollCat === 0 ? ' ★' : rollCat === 3 ? ' ☠' : '';
     return `<div class="${cls}" onclick="scrollToCombatant('${id}')" title="${critBadge ? (rollCat===0?'Crit success — initiative':'Crit fail — initiative') : ''}"><span onclick="event.stopPropagation(); openPortraitViewer('${id}')" title="${esc(c.name)} — View portrait" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}${critBadge}</span><br><span style="font-size:10px;color:inherit;opacity:0.7">${c.hp_current ?? c.hp_max}hp</span></div>`;
-  }).join('');
-  // Combatant cards
-  document.getElementById('combatants-list').innerHTML = order.map((id, i) => renderCombatantCard(id, i === current)).join('');
+  }).join(''));
+  // Combatant cards — keyed patch: only cards whose markup changed get
+  // replaced (see patchKeyedList). Cards that no longer exist (character
+  // deleted mid-combat) render '' and are filtered out so every item is
+  // exactly one root element.
+  patchKeyedList(document.getElementById('combatants-list'),
+    order.map((id, i) => ({ key: id, html: renderCombatantCard(id, i === current) })).filter(it => it.html));
   if (combatViewMode === 'map') renderMapView();
 }
 
@@ -2766,7 +2884,7 @@ function buildMapTokensHtml(interactive, netLinkedFilter) {
     // square=vehicle, hexagon=drone, circle=everyone else (PC/NPC/Ally
     // stay color-only).
     const shape = c.isDrone ? 'hexagon' : (c.isVehicle ? 'square' : (c.isCompanion ? 'octagon' : 'circle'));
-    const bg = portrait ? `background-image:url('${portrait}');` : '';
+    const bg = portrait ? `background-image:url('${imgSrc('p:' + id, portrait)}');` : '';
     const initials = esc(c.name.slice(0, 2).toUpperCase());
     // GM tokens open the dossier via the click-vs-drag pointer handlers
     // below; player tokens can't be dragged at all, so a plain onclick is
@@ -2897,6 +3015,46 @@ function buildNetPingLinesHtml() {
 // This is purely a visual/terrain layer — it does NOT hide character
 // tokens on its own; that's still each token's own eye badge (see
 // toggleTokenHidden), same as prepping any other ambush.
+// The fog's cloudy haze used to be a live SVG <feTurbulence> filter — a
+// CPU-rasterized fractal-noise pass over the whole map that re-ran every
+// time the map markup was rebuilt, to paint a layer that ends up at ~4-7%
+// opacity. Same look, baked ONCE into a small smooth-noise texture instead
+// (seeded, so it's identical every session like the old seed="7"): two
+// octaves of value noise, teal (0,179,217) with the noise as alpha. The
+// old filter's own 0.12 alpha scale is folded into the element opacity
+// below so the 8-bit alpha channel keeps its full range (no banding).
+let _fogNoiseUrl = null;
+function getFogNoiseUrl() {
+  if (_fogNoiseUrl) return _fogNoiseUrl;
+  const W = 128, H = 128;
+  let seed = 7;
+  const rand = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const lattice = (gw, gh) => Array.from({ length: gw * gh }, rand);
+  const smooth = t => t * t * (3 - 2 * t);
+  const sample = (g, gw, gh, u, v) => {
+    const x = u * (gw - 1), y = v * (gh - 1);
+    const x0 = Math.floor(x), y0 = Math.floor(y), x1 = Math.min(x0 + 1, gw - 1), y1 = Math.min(y0 + 1, gh - 1);
+    const fx = smooth(x - x0), fy = smooth(y - y0);
+    const top = g[y0 * gw + x0] + (g[y0 * gw + x1] - g[y0 * gw + x0]) * fx;
+    const bot = g[y1 * gw + x0] + (g[y1 * gw + x1] - g[y1 * gw + x0]) * fx;
+    return top + (bot - top) * fy;
+  };
+  // baseFrequency "0.015 0.03" over the 100x100 viewBox ≈ ~1.5 blobs across, ~3 down.
+  const g1 = lattice(4, 5), g2 = lattice(8, 10);
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const u = x / (W - 1), v = y / (H - 1);
+    const n = (sample(g1, 4, 5, u, v) + 0.5 * sample(g2, 8, 10, u, v)) / 1.5;
+    const i = (y * W + x) * 4;
+    img.data[i] = 0; img.data[i + 1] = 179; img.data[i + 2] = 217; img.data[i + 3] = Math.round(Math.max(0, Math.min(1, n)) * 255);
+  }
+  ctx.putImageData(img, 0, 0);
+  _fogNoiseUrl = imgSrc('fog-noise', cv.toDataURL('image/png'));
+  return _fogNoiseUrl;
+}
+
 function buildFogHtml(interactive) {
   const ns = interactive ? 'gm' : 'player';
   const empty = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></svg>`;
@@ -2922,17 +3080,13 @@ function buildFogHtml(interactive) {
   return `<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none">
     <defs>
       <filter id="fog-blur-${ns}" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.4"/></filter>
-      <filter id="fog-noise-${ns}" x="0" y="0" width="100%" height="100%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.015 0.03" numOctaves="2" seed="7" result="noise"/>
-        <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0.7  0 0 0 0 0.85  0 0 0 0.12 0"/>
-      </filter>
       <mask id="fog-mask-${ns}" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
         <rect x="0" y="0" width="100" height="100" fill="#fff"/>
         <g id="fog-shapes-${ns}" filter="url(#fog-blur-${ns})">${shapesHtml}</g>
       </mask>
     </defs>
     <rect x="0" y="0" width="100" height="100" fill="#050810" opacity="${interactive ? 0.28 : 1}" mask="url(#fog-mask-${ns})"/>
-    <rect x="0" y="0" width="100" height="100" filter="url(#fog-noise-${ns})" opacity="${interactive ? 0.3 : 0.55}" mask="url(#fog-mask-${ns})" style="mix-blend-mode:screen"/>
+    <image href="${getFogNoiseUrl()}" x="0" y="0" width="100" height="100" preserveAspectRatio="none" opacity="${interactive ? 0.036 : 0.066}" mask="url(#fog-mask-${ns})"/>
   </svg>`;
 }
 
@@ -3282,7 +3436,7 @@ function renderMapView() {
   }
   el.innerHTML = `
     <div id="map-container" style="position:relative;width:100%;overflow:hidden;border:1px solid var(--border2);background:#000;${mapTool ? 'cursor:crosshair;' : ''}" onpointerdown="onMapContainerPointerDown(event)">
-      <img src="${mapImage}" style="display:block;width:100%;height:auto;user-select:none;pointer-events:none" draggable="false">
+      <img src="${imgSrc('map', mapImage)}" style="display:block;width:100%;height:auto;user-select:none;pointer-events:none" draggable="false">
       ${buildMapDrawingsHtml()}
       ${buildSecurityObjectsHtml(true)}
       ${buildNetPingLinesHtml()}
@@ -3335,12 +3489,15 @@ function renderPlayerMapView() {
   if (!el) return;
   if (!mapImage) {
     if (mapFullscreenOpen) closeFullscreenMap(); // GM pulled the map out from under an open fullscreen view
-    el.innerHTML = '<div style="color:var(--text3);font-size:11px">GM hasn\'t uploaded a map yet.</div>';
+    setHTML(el, '<div style="color:var(--text3);font-size:11px">GM hasn\'t uploaded a map yet.</div>');
     return;
   }
-  el.innerHTML = `
+  // setHTML: players' phones re-ran this on EVERY sync (including ones
+  // that only changed someone's HP on a different screen), re-decoding
+  // the map image each time. Identical markup now costs nothing.
+  setHTML(el, `
     <div id="player-map-container" class="${mapFullscreenOpen ? 'map-fullscreen-active' : ''}" style="position:relative;width:100%;overflow:hidden;border:1px solid var(--border2);background:#000">
-      <img src="${mapImage}" style="display:block;width:100%;height:auto;user-select:none;pointer-events:none" draggable="false">
+      <img src="${imgSrc('map', mapImage)}" style="display:block;width:100%;height:auto;user-select:none;pointer-events:none" draggable="false">
       ${buildMapDrawingsHtml()}
       ${buildSecurityObjectsHtml(false)}
       ${buildNetPingLinesHtml()}
@@ -3349,7 +3506,7 @@ function renderPlayerMapView() {
       ${buildMapTokensHtml(false, 'only')}
       <div class="map-ping-marker"></div>
       <div class="net-ping-marker"></div>
-    </div>`;
+    </div>`);
   applySpottedHighlights(false);
   if (mapFullscreenOpen) positionFullscreenMapContainer();
 }
@@ -3585,7 +3742,7 @@ function renderWoundBadge(c) {
 function renderAvatar(id, name, color, sizePx) {
   const portrait = portraits[id];
   const base = `class="cc-avatar" style="width:${sizePx}px;height:${sizePx}px;border-color:${color};color:${color}`;
-  if (portrait) return `<div ${base};background-image:url('${portrait}');background-size:cover;background-position:center"></div>`;
+  if (portrait) return `<div ${base};background-image:url('${imgSrc('p:' + id, portrait)}');background-size:cover;background-position:center"></div>`;
   const initials = String(name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
   return `<div ${base}">${esc(initials)}</div>`;
 }
@@ -5220,10 +5377,11 @@ function renderRosterToolbar(totalCount) {
   const chips = [
     ['all', `All · ${totalCount}`], ['pc', 'PCs'], ['npc', 'NPCs'], ['ally', 'Allies'], ['companion', 'Companions'],
   ];
-  el.innerHTML = `
+  const wrote = setHTML(el, `
     ${chips.map(([key, label]) => `<span class="roster-filter-chip ${charListFilter === key ? 'active' : ''}" onclick="setCharListFilter('${key}')">${esc(label)}</span>`).join('')}
     <input type="text" class="roster-search" placeholder="Search roster…" value="${esc(charListSearch)}" oninput="onCharListSearch(this.value)">
-  `;
+  `);
+  if (!wrote) return; // identical markup — DOM (and the search box's focus/caret) untouched
   // Re-typing into the search box re-renders the whole toolbar on every
   // keystroke (renderCharList calls this) — preserve focus/caret so
   // typing doesn't get interrupted.
@@ -5238,19 +5396,23 @@ function renderCharList() {
   if (document.activeElement !== missionInput) missionInput.value = state.currentMission || '';
   const el = document.getElementById('char-list');
   const allChars = Object.entries(state.characters);
-  renderRosterToolbar(allChars.length);
-  if (!allChars.length) { el.innerHTML = '<div style="padding:16px;color:var(--text3);font-size:11px">No characters yet.</div>'; return; }
-  const chars = allChars.filter(([, c]) => matchesCharListFilter(c));
   allChars.forEach(([id]) => ensurePortraitListener(id));
-  if (!chars.length) { el.innerHTML = '<div style="padding:16px;color:var(--text3);font-size:11px">No characters match this filter.</div>'; return; }
-
-  el.innerHTML = renderMissionGroupedHtml(chars, ([id, c]) => charItemRow(id, c));
-
   const datalist = document.getElementById('mission-tags-datalist');
   if (datalist) {
     const allTags = [...new Set(allChars.map(([, c]) => c.mission).filter(Boolean))];
-    datalist.innerHTML = allTags.map(t => `<option value="${esc(t)}">`).join('');
+    setHTML(datalist, allTags.map(t => `<option value="${esc(t)}">`).join(''));
   }
+  // The roster is its own tab. While the GM is on Combat/Settings/etc.,
+  // rebuilding it on every sync was pure wasted work — mark it stale and
+  // let switchTab repaint it the moment it's actually shown.
+  if (!document.getElementById('tab-characters').classList.contains('active')) { _charListDirty = true; return; }
+  _charListDirty = false;
+  renderRosterToolbar(allChars.length);
+  if (!allChars.length) { setHTML(el, '<div style="padding:16px;color:var(--text3);font-size:11px">No characters yet.</div>'); return; }
+  const chars = allChars.filter(([, c]) => matchesCharListFilter(c));
+  if (!chars.length) { setHTML(el, '<div style="padding:16px;color:var(--text3);font-size:11px">No characters match this filter.</div>'); return; }
+
+  setHTML(el, renderMissionGroupedHtml(chars, ([id, c]) => charItemRow(id, c)));
 }
 
 function renderSettings() {
@@ -5301,8 +5463,8 @@ function renderPlayerView() {
   document.getElementById('player-sta-val').textContent = staCur;
   document.getElementById('player-sta-max').textContent = staMax;
   const dots = document.getElementById('player-stamina-dots');
-  dots.innerHTML = Array.from({length: staMax}, (_, i) =>
-    `<div class="dot ${i < staCur ? 'filled' : 'empty'}" onclick="adjustPlayerStat('stamina', ${i < staCur ? -1 : 1})"></div>`).join('');
+  setHTML(dots, Array.from({length: staMax}, (_, i) =>
+    `<div class="dot ${i < staCur ? 'filled' : 'empty'}" onclick="adjustPlayerStat('stamina', ${i < staCur ? -1 : 1})"></div>`).join(''));
   // IP
   const ipMax = c.ip_max ?? 0;
   const ipCur = c.ip_current ?? ipMax;
@@ -5325,29 +5487,29 @@ function renderPlayerView() {
   // Status
   const effects = c.status_effects || [];
   const statusEl = document.getElementById('player-status-chips');
-  statusEl.innerHTML = effects.length ? effects.map(e => `<span class="status-chip status-${e.type}">${esc(e.name)} ${e.rounds > 0 ? e.rounds+'r' : ''}</span>`).join('') : '<span style="font-size:10px;color:var(--text3)">No active effects</span>';
+  setHTML(statusEl, effects.length ? effects.map(e => `<span class="status-chip status-${e.type}">${esc(e.name)} ${e.rounds > 0 ? e.rounds+'r' : ''}</span>`).join('') : '<span style="font-size:10px;color:var(--text3)">No active effects</span>');
   // Armor
   const armorEl = document.getElementById('player-armor');
   let armorHtml = '';
   if (c.armor_body?.name) armorHtml += `<div class="armor-piece"><div class="armor-label">BODY</div><div class="armor-sp">${esc(c.armor_body.name)}</div><div class="armor-sp-temp">SP ${c.armor_body.sp_temp ?? c.armor_body.sp_base}/${c.armor_body.sp_base}</div></div>`;
   if (c.armor_head?.name) armorHtml += `<div class="armor-piece"><div class="armor-label">HEAD</div><div class="armor-sp">${esc(c.armor_head.name)}</div><div class="armor-sp-temp">SP ${c.armor_head.sp_temp ?? c.armor_head.sp_base}/${c.armor_head.sp_base}</div></div>`;
-  armorEl.innerHTML = armorHtml || '<span style="font-size:10px;color:var(--text3)">No armor</span>';
+  setHTML(armorEl, armorHtml || '<span style="font-size:10px;color:var(--text3)">No armor</span>');
   // Initiative
   const order = state.combat?.order || [];
   const current = state.combat?.currentTurn ?? 0;
   const isMyCurrent = order[current] === id;
   document.getElementById('player-turn-indicator').style.display = (state.combat?.active && isMyCurrent) ? 'block' : 'none';
   const initList = document.getElementById('player-initiative-list');
-  if (!state.combat?.active || !order.length) { initList.innerHTML = '<div style="color:var(--text3);font-size:11px">No active combat</div>'; }
+  if (!state.combat?.active || !order.length) { setHTML(initList, '<div style="color:var(--text3);font-size:11px">No active combat</div>'); }
   else {
-    initList.innerHTML = order.map((cid, i) => {
+    setHTML(initList, order.map((cid, i) => {
       const ch = state.characters[cid]; if (!ch) return '';
       const isMe = cid === id;
       return `<div class="init-row ${i === current ? 'current' : ''}">
         <div class="init-row-name" style="cursor:pointer;${isMe ? 'font-weight:700;color:var(--cyan)' : ''}" onclick="openPortraitViewer('${cid}')" title="View portrait">${i === current ? '▶ ' : ''}${esc(ch.name)}${isMe ? ' (you)' : ''}</div>
         ${!ch.isNPC || ch.isAlly || isMe ? `<div class="init-row-hp" style="color:${(ch.hp_current??ch.hp_max)/(ch.hp_max||1) > 0.5 ? 'var(--green-bright)' : 'var(--red-bright)'}">${ch.hp_current??ch.hp_max}hp</div>` : '<div class="init-row-hp" style="color:var(--text3)">???</div>'}
       </div>`;
-    }).join('');
+    }).join(''));
   }
   // Talent point badge (progression tracking itself is GM-only; players only
   // ever see whether they have an unused point, never the XP numbers behind it)
@@ -5356,7 +5518,7 @@ function renderPlayerView() {
   // Talents
   const talentList = document.getElementById('player-talents-list');
   const talents = c.talents || [];
-  talentList.innerHTML = talents.length ? talents.map((t, i) => `
+  setHTML(talentList, talents.length ? talents.map((t, i) => `
     <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);${t.used ? 'opacity:0.5' : ''}">
       <button class="talent-toggle ${t.used ? 'used' : 'available'}" onclick="togglePlayerTalent(${i})"></button>
       <div style="flex:1">
@@ -5364,12 +5526,12 @@ function renderPlayerView() {
         ${t.desc ? `<div style="font-size:10px;color:var(--text2)">${esc(t.desc)}</div>` : ''}
       </div>
       <div style="font-size:10px;color:var(--text3)">${t.slots || 1} slot${(t.slots||1)>1?'s':''}</div>
-    </div>`).join('') : '<div style="color:var(--text3);font-size:11px">No talents/techniques set.</div>';
+    </div>`).join('') : '<div style="color:var(--text3);font-size:11px">No talents/techniques set.</div>');
   // Weapons — live PW/bonus (attachments + active talent modifiers folded
   // in automatically), not the raw stored values, so a player never has
   // to hand-add a talent's bonus themselves.
   const weapons = c.weapons || [];
-  document.getElementById('player-weapons-list').innerHTML = weapons.length ? weapons.map((w, wi) => {
+  setHTML(document.getElementById('player-weapons-list'), weapons.length ? weapons.map((w, wi) => {
     const live = computeLiveWeaponStats(c, w);
     const techColor = TECH_BADGE_COLOR[w.tech] || '#888';
     const techBadge = (w.tech && w.tech !== 'base') ? `<span style="font-size:10px;padding:1px 6px;background:${techColor}33;border:1px solid ${techColor};color:${techColor};letter-spacing:0.1em">⚙ ${w.tech.toUpperCase()}${w.tech==='smart'&&w.techLevel?' '+w.techLevel:''}</span>` : '';
@@ -5391,14 +5553,14 @@ function renderPlayerView() {
       ${woundHint(live)}
       ${attachList}
     </div>`;
-  }).join('') : '<div style="color:var(--text3);font-size:11px">No weapons.</div>';
+  }).join('') : '<div style="color:var(--text3);font-size:11px">No weapons.</div>');
   // Techniques (§12) — same idea as the player's own Hacks tab, just
   // Stamina instead of IP and riding whichever weapon is selected.
   const techniques = c.techniques || [];
   document.getElementById('player-techniques-card').style.display = techniques.length ? '' : 'none';
   if (techniques.length) {
     const staCurT = c.stamina_current ?? c.stamina_max ?? 0;
-    document.getElementById('player-techniques-list').innerHTML = techniques.map((t, ti) => {
+    setHTML(document.getElementById('player-techniques-list'), techniques.map((t, ti) => {
       const weaponIdx = techniqueWeaponSelection[`${id}:${ti}`] ?? 0;
       const live = computeLiveTechniqueStats(c, weapons[weaponIdx], t);
       const canAfford = staCurT >= (live.stamina || 0);
@@ -5418,14 +5580,14 @@ function renderPlayerView() {
         ${woundHint(live)}
         ${live.effect ? `<div style="font-size:10px;color:var(--text2);margin-top:4px">${esc(live.effect)}</div>` : ''}
       </div>`;
-    }).join('');
+    }).join(''));
   }
   // Cyberware
   const cyberware = c.cyberware || [];
-  document.getElementById('player-cyberware-list').innerHTML = cyberware.length ? cyberware.map(cw => {
+  setHTML(document.getElementById('player-cyberware-list'), cyberware.length ? cyberware.map(cw => {
     const summary = cyberwareEffectSummary(cw);
     return `<div style="font-size:11px;color:#7aafc8;padding:4px 0">⬡ ${esc(cw)}${summary ? ` <span style="color:var(--text3);font-size:10px">— ${esc(summary)}</span>` : ''}</div>`;
-  }).join('') : '<div style="color:var(--text3);font-size:11px">No cyberware.</div>';
+  }).join('') : '<div style="color:var(--text3);font-size:11px">No cyberware.</div>');
   // Netrunning — the tab itself is hidden entirely for characters with
   // nothing set up here (no cyberdeck/firewall/hacks), same "hide if
   // there's nothing to show" rule the GM's own hacks card already uses.
@@ -5440,7 +5602,7 @@ function renderPlayerView() {
       `${deckLabel}${liveFw ? ' · Firewall ' + liveFw : ''} · ${ipCur}/${ipMax} IP`;
     const { characters: hackChars, devices: hackDevices } = getHackTargetOptions(id);
     const hasHackTargets = hackChars.length || hackDevices.length;
-    document.getElementById('player-hacks-list').innerHTML = hacks.length ? hacks.map((h, hi) => {
+    setHTML(document.getElementById('player-hacks-list'), hacks.length ? hacks.map((h, hi) => {
       const live = computeLiveHackStats(c, h);
       const canAfford = ipCur >= live.ip;
       const condChips = renderConditionalModChips(c, 'pw', 'hacks');
@@ -5466,45 +5628,45 @@ function renderPlayerView() {
         ${woundHint(live)}
         ${live.effect ? `<div style="font-size:10px;color:var(--text2);margin-top:4px">${esc(live.effect)}</div>` : ''}
       </div>`;
-    }).join('') : '<div style="color:var(--text3);font-size:11px">No hacks known yet.</div>';
+    }).join('') : '<div style="color:var(--text3);font-size:11px">No hacks known yet.</div>');
   }
   renderPlayerCompanionTab(id);
   // EB
   document.getElementById('player-eb').textContent = (c.eurodollar || 0).toLocaleString();
   // Inventory
   const inv = c.inventory || [];
-  document.getElementById('player-inventory-list').innerHTML = inv.length ? inv.map(item => `
+  setHTML(document.getElementById('player-inventory-list'), inv.length ? inv.map(item => `
     <div style="display:flex;gap:8px;align-items:center;padding:7px 10px;background:var(--surface2);border:1px solid var(--border)">
       <div style="flex:1;font-size:11px">${esc(item.name)}</div>
       ${item.qty > 1 ? `<div style="font-size:10px;color:var(--cyan)">×${item.qty}</div>` : ''}
       ${item.slots > 1 ? `<div style="font-size:10px;color:var(--text3)">${item.slots}sl</div>` : ''}
       ${item.note ? `<div style="font-size:10px;color:var(--text2)">${esc(item.note)}</div>` : ''}
-    </div>`).join('') : '<div style="color:var(--text3);font-size:11px">Empty.</div>';
+    </div>`).join('') : '<div style="color:var(--text3);font-size:11px">Empty.</div>');
   // ── Stats tab ─────────────────────────────────────────────────
   const st = c.stats;
   if (st) {
     const hpB = c.origin_hp_bonus || 0, staB = c.origin_sta_bonus || 0, ipB = c.origin_ip_bonus || 0, humanityB = c.origin_humanity_bonus || 0;
     const d = calcDerived(st, hpB, staB, ipB, humanityB, computeLiveCyberwareImpact(c));
-    document.getElementById('player-derived').innerHTML = d ? Object.entries(d).map(([k,v]) => `
+    setHTML(document.getElementById('player-derived'), d ? Object.entries(d).map(([k,v]) => `
       <div style="background:var(--surface2);border:1px solid var(--border);padding:7px 10px">
         <div style="font-size:10px;color:var(--text3);letter-spacing:0.1em;margin-bottom:2px">${k}</div>
         <div style="font-size:12px;color:var(--cyan)">${v.split('=').pop().trim()}</div>
-      </div>`).join('') : '<div style="color:var(--text3);font-size:11px">No data</div>';
+      </div>`).join('') : '<div style="color:var(--text3);font-size:11px">No data</div>');
     const statRow = (label, val) => `
       <div style="background:var(--surface2);border:1px solid var(--border);padding:7px 10px;display:flex;align-items:center;gap:6px">
         <div style="font-size:10px;color:var(--text2);flex:1;letter-spacing:0.06em">${label}</div>
         <div style="font-size:16px;font-weight:700;color:var(--text)">${val}</div>
       </div>`;
-    document.getElementById('player-stats-power').innerHTML = STAT_KEYS.power.map(k => statRow(k.charAt(0).toUpperCase()+k.slice(1), st[k]??'—')).join('');
-    document.getElementById('player-stats-mobility').innerHTML = STAT_KEYS.mobility.map(k => statRow(k.charAt(0).toUpperCase()+k.slice(1), st[k]??'—')).join('');
-    document.getElementById('player-stats-mind').innerHTML = STAT_KEYS.mind.map(k => statRow(k.charAt(0).toUpperCase()+k.slice(1), st[k]??'—')).join('');
-    document.getElementById('player-stats-special').innerHTML = [
+    setHTML(document.getElementById('player-stats-power'), STAT_KEYS.power.map(k => statRow(k.charAt(0).toUpperCase()+k.slice(1), st[k]??'—')).join(''));
+    setHTML(document.getElementById('player-stats-mobility'), STAT_KEYS.mobility.map(k => statRow(k.charAt(0).toUpperCase()+k.slice(1), st[k]??'—')).join(''));
+    setHTML(document.getElementById('player-stats-mind'), STAT_KEYS.mind.map(k => statRow(k.charAt(0).toUpperCase()+k.slice(1), st[k]??'—')).join(''));
+    setHTML(document.getElementById('player-stats-special'), [
       statRow('Luck', st.luck??'—'),
       statRow('Humanity (current/max)', `${c.humanity_current ?? '—'} / ${c.humanity_max ?? '—'}`),
-    ].join('');
+    ].join(''));
     const reaction = computeLiveReactionStats(c);
     const reactionChips = renderConditionalModChips(c, 'reaction');
-    document.getElementById('player-reaction-block').innerHTML = reaction.pw == null ? '' : `
+    setHTML(document.getElementById('player-reaction-block'), reaction.pw == null ? '' : `
       <div style="background:var(--surface2);border:1px solid var(--border);padding:7px 10px;grid-column:1/-1">
         <div style="display:flex;align-items:center;gap:6px">
           <div style="font-size:10px;color:var(--text2);flex:1;letter-spacing:0.06em">REACTION ROLL (Drive+Reflexes)</div>
@@ -5513,12 +5675,12 @@ function renderPlayerView() {
         </div>
         ${reactionChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px">${reactionChips.join('')}</div>` : ''}
         ${reaction.talentNames?.length ? `<div style="font-size:10px;color:var(--blue-bright);margin-top:4px">✦ ${reaction.talentNames.map(esc).join(', ')}</div>` : ''}
-      </div>`;
+      </div>`);
   } else {
     ['player-derived','player-stats-power','player-stats-mobility','player-stats-mind','player-stats-special'].forEach(id => {
-      document.getElementById(id).innerHTML = '<div style="color:var(--text3);font-size:11px">No stats set — ask your GM.</div>';
+      setHTML(document.getElementById(id), '<div style="color:var(--text3);font-size:11px">No stats set — ask your GM.</div>');
     });
-    document.getElementById('player-reaction-block').innerHTML = '';
+    setHTML(document.getElementById('player-reaction-block'), '');
   }
   // Notes (skip while the player is actively typing so remote updates don't clobber the cursor)
   const notesEl = document.getElementById('player-notes');
@@ -5535,7 +5697,7 @@ function renderPlayerCompanionTab(myId) {
   const companions = Object.entries(state.characters).filter(([, ch]) => ch.isCompanion && ch.owner_char_id === myId);
   document.getElementById('player-tab-btn-companion').style.display = companions.length ? '' : 'none';
   if (!companions.length) return;
-  document.getElementById('player-companion-list').innerHTML = companions.map(([cid, ch]) => {
+  setHTML(document.getElementById('player-companion-list'), companions.map(([cid, ch]) => {
     ensurePortraitListener(cid);
     const portrait = portraits[cid];
     const hpMax = ch.hp_max || 1;
@@ -5573,7 +5735,7 @@ function renderPlayerCompanionTab(myId) {
     }).join('');
     return `<div class="player-card">
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
-        <div style="width:48px;height:48px;border-radius:50%;flex-shrink:0;background-color:var(--surface2);background-size:cover;background-position:center;border:2px solid var(--blue);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--blue);${portrait ? `background-image:url('${portrait}');` : ''}">${portrait ? '' : esc(ch.name.slice(0, 2).toUpperCase())}</div>
+        <div style="width:48px;height:48px;border-radius:50%;flex-shrink:0;background-color:var(--surface2);background-size:cover;background-position:center;border:2px solid var(--blue);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--blue);${portrait ? `background-image:url('${imgSrc('p:' + cid, portrait)}');` : ''}">${portrait ? '' : esc(ch.name.slice(0, 2).toUpperCase())}</div>
         <div style="flex:1">
           <div class="player-card-title" style="margin:0">${esc(ch.name)}</div>
           <div style="font-size:10px;color:var(--text3);letter-spacing:0.1em">COMPANION</div>
@@ -5595,7 +5757,7 @@ function renderPlayerCompanionTab(myId) {
       <div class="player-card-title" style="font-size:10px;margin-bottom:4px">Weapons</div>
       ${weaponsHtml}
     </div>`;
-  }).join('');
+  }).join(''));
 }
 
 let notesSaveTimer = null;
