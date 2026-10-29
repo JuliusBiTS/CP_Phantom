@@ -733,6 +733,10 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
   padding: 16px; overflow-y: auto;
 }
 .modal-overlay.open { display: flex; }
+/* The transfer picker opens FROM the loot/inventory window, so it has to
+   sit above it (they used to share one level and the later one in the
+   page won, hiding the picker behind the window that opened it). */
+#transfer-modal { z-index: 210; }
 .modal {
   background: linear-gradient(180deg, var(--surface3), var(--surface));
   border: 1px solid var(--border);
@@ -981,6 +985,19 @@ html.perf-lite .cond-mod-chip.on, html.perf-lite .security-token, html.perf-lite
 html.perf-lite .map-token, html.perf-lite .security-token,
 html.perf-lite .combatant-card.active-turn::before, html.perf-lite .combatant-card.active-turn::after { filter: none !important; }
 html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: none !important; }
+/* ── Hack cards: one clearly bounded block per hack, read left to right ── */
+.hack-card { background: var(--surface2); border: 1px solid var(--border2); border-left: 3px solid var(--cyan); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.hack-head { display: flex; align-items: center; gap: 8px; }
+.hack-name { flex: 1; font-size: 12px; font-weight: 700; color: var(--text); letter-spacing: 0.03em; }
+.hack-cost { color: var(--gold-bright); font-weight: 700; font-size: 11px; }
+.hack-meta { font-size: 10px; color: var(--cyan); }
+.hack-run { display: flex; gap: 6px; align-items: stretch; flex-wrap: wrap; padding-top: 6px; border-top: 1px dashed var(--border2); }
+.hack-run select { flex: 1 1 130px; min-width: 0; font-size: 11px; }
+.hack-run input.hack-roll { width: 62px; flex: 0 0 auto; font-size: 12px; text-align: center; }
+.hack-fire { flex: 0 0 auto; width: auto; font-weight: 700; letter-spacing: 0.1em; padding: 4px 14px; }
+.hack-verdict { font-size: 11px; color: var(--text3); min-height: 15px; }
+.hack-verdict.hit { color: var(--green-bright); font-weight: 700; }
+.hack-verdict.miss { color: var(--red-bright); font-weight: 700; }
 /* ── TOAST ── */
 .toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -1124,8 +1141,9 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
   <div class="card">
     <div class="brand">CYBERPUNK PHANTOM //</div>
     <div class="title-large">CAMPAIGN TRACKER</div>
-    <div class="subtitle">First-time setup — connect to Firebase</div>
+    <div class="subtitle">Create a NEW campaign (GM only)</div>
     <div class="error-msg" id="setup-error"></div>
+    <div style="background:rgba(255,170,0,0.08);border:1px solid var(--gold-bright);color:var(--gold-bright);font-size:11px;line-height:1.6;padding:8px 12px;margin-bottom:12px">⚠ Only for a brand-new, EMPTY database. <strong>Players: this is not for you</strong> — go back and join with your PIN. This screen refuses to touch a campaign that already exists.</div>
     <div class="field">
       <label>Firebase Database URL</label>
       <input type="text" id="setup-db-url" placeholder="https://your-project-default-rtdb.firebaseio.com">
@@ -1138,13 +1156,13 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
       <label>Campaign Name</label>
       <input type="text" id="setup-campaign" placeholder="e.g. The Time Market" maxlength="40">
     </div>
-    <button class="btn btn-primary" onclick="doSetup()">INITIALIZE CAMPAIGN</button>
+    <button class="btn btn-primary" onclick="doSetup()">CREATE NEW CAMPAIGN</button>
     <div class="note">
       Needs a free Firebase Realtime Database.<br>
       1. Go to <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a><br>
       2. New project → Realtime Database → Start in test mode<br>
       3. Copy the database URL above (ends in .firebaseio.com)<br>
-      Already set up? <a href="#" onclick="showLogin()">Login instead</a>
+      Joining a campaign someone else runs? <a href="#" onclick="showLogin();return false">Go back and join</a>
     </div>
   </div>
 </div>
@@ -1154,19 +1172,20 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
   <div class="card">
     <div class="brand">CYBERPUNK PHANTOM //</div>
     <div class="title-large" id="login-campaign-name">CAMPAIGN</div>
-    <div class="subtitle">Enter your PIN to connect</div>
+    <div class="subtitle">Join the campaign — enter your PIN</div>
     <div class="error-msg" id="login-error">Wrong PIN. Try again.</div>
     <div class="field" id="login-db-field" style="display:none">
-      <label>Database URL (first time on this device)</label>
+      <label>Campaign address (Firebase Database URL) — the player link from your GM fills this in</label>
       <input type="text" id="login-db-url" placeholder="https://your-project.firebaseio.com">
     </div>
     <div class="field">
       <label>PIN</label>
       <input type="password" id="login-pin" placeholder="Your PIN" maxlength="8" onkeydown="if(event.key==='Enter')doLogin()">
     </div>
-    <button class="btn btn-primary" onclick="doLogin()">CONNECT</button>
+    <button class="btn btn-primary" onclick="doLogin()">JOIN CAMPAIGN</button>
     <hr class="divider">
-    <p class="note">GM: Use your GM PIN for full access.<br>Players: Use the PIN your GM gave you.<br>First time on this device? Ask your GM for the Database URL.</p>
+    <p class="note">Players: enter the PIN your GM gave you. First time on this device? Open the <strong>player link</strong> your GM sent — it fills in the campaign address for you.<br>GM: log in here with your GM PIN.</p>
+    <p class="note" style="margin-top:14px;opacity:0.75">Running a brand-new campaign? <a href="#" onclick="showSetup();return false">Create a new campaign (GM only) ▸</a></p>
   </div>
 </div>
 
@@ -1268,6 +1287,15 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
         </div>
         <button class="btn btn-ghost btn-small" style="align-self:flex-end;height:36px" onclick="saveApiKey()">SAVE</button>
       </div>
+      <div class="section-heading">GM PIN</div>
+      <div style="color:var(--text2);font-size:11px;margin-bottom:8px;line-height:1.6">Change the PIN that opens the GM view. Needs your current PIN, and can't match any player's PIN.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+        <input type="password" id="gm-pin-current" placeholder="Current PIN" maxlength="8" autocomplete="off" style="flex:1 1 110px;min-width:0">
+        <input type="password" id="gm-pin-new" placeholder="New PIN (4–8)" maxlength="8" autocomplete="off" style="flex:1 1 110px;min-width:0">
+        <input type="password" id="gm-pin-confirm" placeholder="Repeat new PIN" maxlength="8" autocomplete="off" style="flex:1 1 110px;min-width:0">
+        <button class="btn btn-ghost btn-small" onclick="changeGmPin()">CHANGE GM PIN</button>
+      </div>
+      <hr class="divider">
       <div class="section-heading">Player PINs</div>
       <div style="color:var(--text2);font-size:11px;margin-bottom:8px;line-height:1.6">Assign a PIN to each PC character. Players use this PIN to access their character on their phone.</div>
       <button class="btn btn-ghost btn-small" style="margin-bottom:10px" onclick="copyPlayerLink()">⎘ COPY PLAYER LINK</button>
@@ -1277,6 +1305,10 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
       <div class="section-heading">Performance</div>
       <div style="color:var(--text2);font-size:11px;margin-bottom:8px;line-height:1.6">If the tool stutters on a weak device, performance mode turns off the looping glows, pulses and shadows (the layout and all functions stay). Remembered on this device only — players have their own ⚡ button in their top bar.</div>
       <button class="btn btn-ghost btn-small" style="margin-bottom:6px" onclick="toggleLite()">⚡ PERFORMANCE MODE: <span class="lite-state">OFF</span></button>
+      <hr class="divider">
+      <div class="section-heading">Tidy Up Generated Characters</div>
+      <div style="color:var(--text2);font-size:11px;margin-bottom:8px;line-height:1.6">For characters created before these rules: moves cash written as items (e.g. "Credchip, 350 EB") into real ED, and gives generated NPCs without one a tier-based Firewall (Grunt 8 / Threat 15 / Boss 22, netrunners 10 / 18 / 26). Safe to run any time; one Undo reverts it.</div>
+      <button class="btn btn-ghost btn-small" onclick="tidyGeneratedCharacters()">🧹 TIDY UP NOW</button>
       <hr class="divider">
       <div class="section-heading">Backups</div>
       <div style="color:var(--text2);font-size:11px;margin-bottom:8px;line-height:1.6">Auto-backs up twice per day (AM/PM), kept forever — nothing is ever deleted automatically. "Backup Now" snapshots into Firebase on demand; "Download" saves a file to your computer (survives even if Firebase itself is lost). Restoring overwrites everything currently live — it always asks first.</div>
@@ -1578,7 +1610,7 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
       <div class="player-card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <div class="player-card-title" style="margin:0">Inventory</div>
-          <div style="font-size:11px;color:var(--gold-bright)">₡ <span id="player-eb">0</span> ed</div>
+          <div style="font-size:11px;color:var(--gold-bright)">₡ <span id="player-eb">0</span> ED</div>
         </div>
         <div id="player-inventory-list" style="display:flex;flex-direction:column;gap:4px"></div>
       </div>
@@ -1659,7 +1691,7 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
         </div>
       </div>
       <div class="inline-row">
-        <div class="field"><label>Eurodollars (ed)</label><input type="number" id="cm-eb" placeholder="700" min="0"></div>
+        <div class="field"><label>Eurodollars (ED)</label><input type="number" id="cm-eb" placeholder="700" min="0"></div>
       </div>
       <div class="inline-row">
         <div class="field">
@@ -1771,6 +1803,7 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
 
       <div class="section-heading" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
         <span>Talents (max 10 slots) — pick from the book to auto-apply its PW/WB/Firewall bonus</span>
+        <button class="btn btn-ghost btn-small" onclick="addFittingTalents(editingCharId)" title="Adds 2-3 talents that fit this character's archetype and stat levels (skips ones already owned)">✦ ADD FITTING TALENTS</button>
         <button class="btn btn-ghost btn-small" onclick="openTalentPickerModal(editingCharId,true)" title="Browse every talent this character could ever take, with a one-click take/undo — same picker the player sees, but unfiltered">📖 BROWSE ALL TALENTS</button>
       </div>
       <div id="cm-talents-list" style="display:flex;flex-direction:column;gap:4px"></div>
@@ -2763,6 +2796,13 @@ async function doSetup() {
   if (!url || !pin) { showError(err, 'Database URL and GM PIN required.'); return; }
   if (!initFirebase(url)) { showError(err, 'Invalid Firebase URL.'); return; }
   try {
+    // Never overwrite an existing campaign (this used to replace the GM PIN
+    // and campaign name of a live game when a player pressed the button).
+    const existing = await dbRead();
+    if (existing && (existing.gmPin || existing.campaignName || existing.characters)) {
+      showError(err, 'A campaign already exists at this address, so setup is blocked to protect it. Go back and JOIN with your PIN. (GMs can change their PIN under Settings.)');
+      return;
+    }
     await dbWrite('campaignName', name);
     await dbWrite('gmPin', btoa(pin));
     localStorage.setItem('cp_db_url', url);
@@ -2789,7 +2829,7 @@ async function doLogin() {
   }
   try {
     const data = await dbRead();
-    if (!data) { showError(err, 'No campaign data found. Check the Database URL.'); return; }
+    if (!data) { showError(err, 'No campaign found at that address. Check the link — or, if this is a brand-new database, use "Create a new campaign" below.'); return; }
     // Store campaign name
     if (data.campaignName) { localStorage.setItem('cp_campaign', data.campaignName); document.getElementById('login-campaign-name').textContent = data.campaignName.toUpperCase(); }
     // Check GM
@@ -4934,6 +4974,13 @@ async function removePortrait() {
 
 function renderLootAndItems(c, id) {
   let html = '';
+  const cashPlan = planCashConversion(c);
+  html += `<div class="detail-row" style="align-items:center;flex-wrap:wrap;gap:6px">
+    <span class="detail-label">ED</span>
+    <span style="color:var(--gold-bright);font-weight:700;font-size:12px">${(c.eurodollar || 0).toLocaleString()} ED</span>
+    ${(c.eurodollar || 0) > 0 ? `<button class="btn btn-ghost btn-small btn-icon" style="padding:2px 6px" onclick="openTransferModal('${id}','ed')" title="Give ED to...">→</button>` : ''}
+    ${cashPlan.changed ? `<button class="btn btn-gold btn-small" onclick="convertCashItems('${id}')" title="Cash written as an item (e.g. a credchip) becomes real ED">💰 MOVE ${cashPlan.total} ED FROM ITEMS</button>` : ''}
+  </div>`;
   html += `<div class="detail-row" style="align-items:flex-start">
     <span class="detail-label" style="margin-top:4px">ITEMS</span>
     <div style="display:flex;flex-direction:column;gap:4px;flex:1">
@@ -5125,27 +5172,28 @@ function renderHacksSection(c, id) {
         const ipCur = c.ip_current ?? c.ip_max ?? 0;
         const canAfford = ipCur >= live.ip;
         const condChips = renderConditionalModChips(c, 'pw', 'hacks');
-        return `<div style="font-size:11px">
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <span style="flex:1;color:var(--text)">${esc(h.name)}</span>
-            <span style="color:var(--gold-bright);font-weight:700">${live.ip} IP</span>
-            <button class="btn ${canAfford ? 'btn-primary' : 'btn-ghost'} btn-small" style="padding:1px 8px;font-size:10px" onclick="useHack('${id}',${hi})" ${canAfford ? '' : 'disabled'}>USE</button>
+        return `<div class="hack-card">
+          <div class="hack-head">
+            <span class="hack-name">${esc(h.name)}</span>
+            <span class="hack-cost" title="IP cost (you have ${ipCur})">${live.ip} IP</span>
           </div>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:2px">
-            <span style="font-size:10px;color:var(--cyan)">${esc(live.pwLabel)}${live.pw!=null?' · '+live.pw:''}</span>
-            ${live.dice ? `<span style="font-size:10px;color:var(--cyan)">→ ${live.dice}×d20</span>` : ''}
-            ${hasTargets ? `<select id="hack-target-${id}-${hi}" style="font-size:10px" onchange="onHackTargetChange('${id}',${hi},this.value)">
-              <option value="">vs target...</option>
+          <div class="hack-meta">${esc(live.pwLabel)}${live.pw!=null?' · '+live.pw:''}${live.dice ? ' → ' + live.dice + '×d20' : ''}</div>
+          ${hasTargets ? `<div class="hack-run">
+            <select id="hack-target-${id}-${hi}" onchange="refreshHackVerdict('gm','${id}',${hi})">
+              <option value="">Target…</option>
               ${characters.length ? `<optgroup label="Characters">${characters.map(o => `<option value="${o.key}">${esc(o.name)}</option>`).join('')}</optgroup>` : ''}
               ${devices.length ? `<optgroup label="Devices">${devices.map(o => `<option value="${o.key}">${esc(o.name)}</option>`).join('')}</optgroup>` : ''}
             </select>
-            <input type="number" id="hack-roll-${id}-${hi}" placeholder="roll" style="width:44px;font-size:10px" title="Your total dice roll for this hack">
-            <span id="hack-vs-${id}-${hi}" style="font-size:10px;color:var(--text2)"></span>` : ''}
+            <input type="number" class="hack-roll" id="hack-roll-${id}-${hi}" placeholder="roll" oninput="refreshHackVerdict('gm','${id}',${hi})" title="The player's total roll for this hack">
+            <button class="btn ${canAfford ? 'btn-primary' : 'btn-ghost'} hack-fire" onclick="useHack('${id}',${hi})" ${canAfford ? '' : 'disabled title="Not enough IP"'}>FIRE ▸</button>
           </div>
-          ${condChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">${condChips.join('')}</div>` : ''}
-          ${live.talentNames?.length ? `<div style="font-size:10px;color:var(--blue-bright);padding-left:2px;margin-top:2px">✦ ${live.talentNames.map(esc).join(', ')}</div>` : ''}
+          <div class="hack-verdict" id="hack-vs-${id}-${hi}">1 · pick a target   2 · enter the roll   3 · FIRE</div>` : `<div class="hack-run">
+            <button class="btn ${canAfford ? 'btn-primary' : 'btn-ghost'} hack-fire" onclick="useHack('${id}',${hi})" ${canAfford ? '' : 'disabled title="Not enough IP"'}>RUN (spend IP) ▸</button>
+          </div>`}
+          ${condChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap">${condChips.join('')}</div>` : ''}
+          ${live.talentNames?.length ? `<div style="font-size:10px;color:var(--blue-bright)">✦ ${live.talentNames.map(esc).join(', ')}</div>` : ''}
           ${woundHint(live)}
-          ${live.effect ? `<div style="font-size:10px;color:var(--text2);padding-left:2px;margin-top:2px">${esc(live.effect)}</div>` : ''}
+          ${live.effect ? `<div style="font-size:10px;color:var(--text2)">${esc(live.effect)}</div>` : ''}
         </div>`;
       }).join('')}
     </div>
@@ -5785,28 +5833,29 @@ function renderPlayerView() {
       const live = computeLiveHackStats(c, h);
       const canAfford = ipCur >= live.ip;
       const condChips = renderConditionalModChips(c, 'pw', 'hacks');
-      return `<div style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border)">
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <span style="flex:1;font-size:12px">${esc(h.name)}</span>
-          <span style="font-size:11px;color:var(--gold-bright);font-weight:700">${live.ip} IP</span>
-          <button class="btn ${canAfford ? 'btn-primary' : 'btn-ghost'} btn-small" style="padding:2px 10px;font-size:10px" onclick="usePlayerHack(${hi})" ${canAfford ? '' : 'disabled'}>USE</button>
+      return `<div class="hack-card">
+        <div class="hack-head">
+          <span class="hack-name">${esc(h.name)}</span>
+          <span class="hack-cost" title="IP cost (you have ${ipCur})">${live.ip} IP</span>
         </div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
-          <span style="font-size:10px;color:var(--cyan)">${esc(live.pwLabel)}${live.pw!=null?' · '+live.pw:''}</span>
-          ${live.dice ? `<span style="font-size:10px;color:var(--cyan)">→ ${live.dice}×d20</span>` : ''}
-          ${hasHackTargets ? `<select id="player-hack-target-${hi}" style="font-size:10px;width:auto" onchange="onPlayerHackTargetChange(${hi},this.value)">
-            <option value="">vs target...</option>
+        <div class="hack-meta">${esc(live.pwLabel)}${live.pw!=null?' · '+live.pw:''}${live.dice ? ' → ' + live.dice + '×d20' : ''}</div>
+        ${hasHackTargets ? `<div class="hack-run">
+          <select id="player-hack-target-${hi}" onchange="refreshHackVerdict('player',null,${hi})">
+            <option value="">Target…</option>
             ${hackChars.length ? `<optgroup label="Characters">${hackChars.map(o => `<option value="${o.key}">${esc(o.name)}</option>`).join('')}</optgroup>` : ''}
             ${hackDevices.length ? `<optgroup label="Devices">${hackDevices.map(o => `<option value="${o.key}">${esc(o.name)}</option>`).join('')}</optgroup>` : ''}
           </select>
-          <input type="number" id="player-hack-roll-${hi}" placeholder="roll" style="width:44px;font-size:10px" title="Your total dice roll for this hack">
+          <input type="number" class="hack-roll" id="player-hack-roll-${hi}" placeholder="roll" oninput="refreshHackVerdict('player',null,${hi})" title="Your total dice roll for this hack">
           ${Number.isFinite(live.pw) ? `<button class="btn btn-ghost btn-small roll-btn" onclick="rollPlayerPool('hack',${hi})" title="Digital roll — fills the roll box (wound penalty included)">🎲</button>` : ''}
-          <span id="player-hack-vs-${hi}" style="font-size:10px;color:var(--text2)"></span>` : ''}
+          <button class="btn ${canAfford ? 'btn-primary' : 'btn-ghost'} hack-fire" onclick="usePlayerHack(${hi})" ${canAfford ? '' : 'disabled title="Not enough IP"'}>FIRE ▸</button>
         </div>
-        ${condChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${condChips.join('')}</div>` : ''}
-        ${live.talentNames?.length ? `<div style="font-size:10px;color:var(--blue-bright);margin-top:4px">✦ ${live.talentNames.map(esc).join(', ')}</div>` : ''}
+        <div class="hack-verdict" id="player-hack-vs-${hi}">1 · pick a target   2 · enter the roll   3 · FIRE</div>` : `<div class="hack-run">
+          <button class="btn ${canAfford ? 'btn-primary' : 'btn-ghost'} hack-fire" onclick="usePlayerHack(${hi})" ${canAfford ? '' : 'disabled title="Not enough IP"'}>RUN (spend IP) ▸</button>
+        </div>`}
+        ${condChips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap">${condChips.join('')}</div>` : ''}
+        ${live.talentNames?.length ? `<div style="font-size:10px;color:var(--blue-bright)">✦ ${live.talentNames.map(esc).join(', ')}</div>` : ''}
         ${woundHint(live)}
-        ${live.effect ? `<div style="font-size:10px;color:var(--text2);margin-top:4px">${esc(live.effect)}</div>` : ''}
+        ${live.effect ? `<div style="font-size:10px;color:var(--text2)">${esc(live.effect)}</div>` : ''}
       </div>`;
     }).join('') : '<div style="color:var(--text3);font-size:11px">No hacks known yet.</div>');
   }
@@ -6182,6 +6231,11 @@ async function nextRound() {
       else if (t.regen_stat === 'stamina') regenSta += t.regen_amount;
       else if (t.regen_stat === 'ip') regenIp += t.regen_amount;
     }
+    // The deck's own regen (Basic +1 / Standard +2 / Military +3 / Blackmarket +4)
+    // — previously only displayed on the sheet, never applied. Stacks with
+    // talent regen (Jack In etc.).
+    const deck = c.cyberdeck ? CYBERDECK_INFO[c.cyberdeck] : null;
+    if (deck?.ipRegen) regenIp += deck.ipRegen;
     if (dmg > 0 || regenHp > 0) {
       const hpMax = c.hp_max || 1;
       const newHp = Math.min(hpMax, Math.max(-(c.stats?.grit || 0), (c.hp_current ?? hpMax) - dmg + regenHp));
@@ -6198,6 +6252,8 @@ async function nextRound() {
       const ipMax = c.ip_max || 0;
       const newIp = Math.min(ipMax, (c.ip_current ?? ipMax) + regenIp);
       updates['characters/' + id + '/ip_current'] = newIp;
+      const ipBefore = c.ip_current ?? ipMax;
+      if (newIp !== ipBefore) roundNotes.push(`${c.name} +${newIp - ipBefore} IP`);
     }
   }
   // Ping's network reveal ticks down and clears the same way a status
@@ -6310,12 +6366,7 @@ async function useHack(id, hi) {
 // Pure client-side preview (no Firebase write, doesn't need to survive a
 // re-render) — mirrors how the damage modal's calculator updates its
 // preview text directly rather than persisting UI-only selection state.
-function onHackTargetChange(id, hi, targetKey) {
-  const el = document.getElementById(`hack-vs-${id}-${hi}`);
-  if (!el) return;
-  const fw = resolveHackTargetFirewall(targetKey, state.characters[id]);
-  el.textContent = fw ? `vs ${fw.name}: Firewall ${fw.value}` : '';
-}
+function onHackTargetChange(id, hi) { refreshHackVerdict('gm', id, hi); }
 
 async function toggleFlink(id) {
   const c = state.characters[id]; if (!c) return;
@@ -6413,7 +6464,10 @@ function populateTransferTargets(excludeId) {
   sel.innerHTML = targets.length
     ? targets.map(([id, t]) => `<option value="${id}">${esc(t.name)}${t.isCompanion ? ' (COM)' : (t.isNPC ? ' (NPC)' : '')}</option>`).join('')
     : '<option value="">No other characters</option>';
+  // Hand out several items in a row? Keep the same recipient selected.
+  if (lastTransferTarget && lastTransferTarget !== excludeId && state.characters[lastTransferTarget]) sel.value = lastTransferTarget;
 }
+let lastTransferTarget = null;
 
 function openTransferModal(charId, kind, index, weaponIndex) {
   const c = state.characters[charId]; if (!c) return;
@@ -6437,6 +6491,12 @@ function openTransferModal(charId, kind, index, weaponIndex) {
   } else if (kind === 'armor_body' || kind === 'armor_head') {
     const armor = c[kind]; if (!armor) return;
     document.getElementById('transfer-item-label').textContent = `${armor.name} (SP ${armor.sp_base})`;
+  } else if (kind === 'ed') {
+    const ed = c.eurodollar || 0; if (!ed) return;
+    document.getElementById('transfer-item-label').textContent = 'Eurodollars (ED)';
+    document.getElementById('transfer-qty').value = ed;
+    document.getElementById('transfer-qty').max = ed;
+    qtyField.style.display = 'block';
   } else if (kind === 'attachment') {
     const w = (c.weapons || [])[weaponIndex]; const att = w?.attachments?.[index]; if (!att) return;
     document.getElementById('transfer-item-label').textContent = `${att.name} (from ${w.name})`;
@@ -6465,7 +6525,7 @@ function openGiveAllLootModal(charId) {
   const lootCount = (c.loot || []).length;
   const ed = c.eurodollar || 0;
   document.getElementById('transfer-item-label').textContent =
-    `All loot (${lootCount} item${lootCount !== 1 ? 's' : ''}${ed ? ' + ' + ed + ' ed' : ''})`;
+    `All loot (${lootCount} item${lootCount !== 1 ? 's' : ''}${ed ? ' + ' + ed + ' ED' : ''})`;
   document.getElementById('transfer-qty-field').style.display = 'none';
   document.getElementById('transfer-weapon-field').style.display = 'none';
   openModal('transfer-modal');
@@ -6520,22 +6580,38 @@ async function confirmTransfer() {
     if (qty >= (item.qty || 1)) items.splice(index, 1);
     else items[index] = { ...item, qty: (item.qty || 1) - qty };
     updates['characters/' + charId + '/inventory'] = items;
-    updates['characters/' + targetId + '/inventory'] = mergeIntoInventory([...(target.inventory || [])], item.name, qty);
+    // Cash lines ("350 ED credchip") go to the recipient's Eurodollars, not into their item list.
+    const cashEach = parseCashAmount(item.name);
+    if (cashEach) updates['characters/' + targetId + '/eurodollar'] = (target.eurodollar || 0) + cashEach * qty;
+    else updates['characters/' + targetId + '/inventory'] = mergeIntoInventory([...(target.inventory || [])], item.name, qty);
   } else if (kind === 'loot') {
     const loot = [...(source.loot || [])];
     const [item] = loot.splice(index, 1);
     if (item === undefined) return;
     updates['characters/' + charId + '/loot'] = loot;
-    updates['characters/' + targetId + '/inventory'] = mergeIntoInventory([...(target.inventory || [])], item, 1);
+    const cashLoot = parseCashAmount(item);
+    if (cashLoot) updates['characters/' + targetId + '/eurodollar'] = (target.eurodollar || 0) + cashLoot;
+    else updates['characters/' + targetId + '/inventory'] = mergeIntoInventory([...(target.inventory || [])], item, 1);
   } else if (kind === 'loot-all') {
     let targetItems = [...(target.inventory || [])];
-    for (const item of source.loot || []) targetItems = mergeIntoInventory(targetItems, item, 1);
+    let cashIn = 0;
+    for (const item of source.loot || []) {
+      const n = parseCashAmount(item);
+      if (n) cashIn += n; else targetItems = mergeIntoInventory(targetItems, item, 1);
+    }
     updates['characters/' + targetId + '/inventory'] = targetItems;
     updates['characters/' + charId + '/loot'] = [];
-    if (source.eurodollar) {
-      updates['characters/' + targetId + '/eurodollar'] = (target.eurodollar || 0) + source.eurodollar;
+    const edTotal = (source.eurodollar || 0) + cashIn;
+    if (edTotal) {
+      updates['characters/' + targetId + '/eurodollar'] = (target.eurodollar || 0) + edTotal;
       updates['characters/' + charId + '/eurodollar'] = 0;
     }
+  } else if (kind === 'ed') {
+    const have = source.eurodollar || 0;
+    const amt = Math.max(1, Math.min(have, parseInt(document.getElementById('transfer-qty').value, 10) || have));
+    if (!have) return;
+    updates['characters/' + charId + '/eurodollar'] = have - amt;
+    updates['characters/' + targetId + '/eurodollar'] = (target.eurodollar || 0) + amt;
   }
 
   await dbUpdate(updates);
@@ -6546,6 +6622,7 @@ async function confirmTransfer() {
     const parts = path.split('/'); // 'characters/<id>/<field>'
     if (parts[0] === 'characters' && state.characters[parts[1]]) state.characters[parts[1]][parts[2]] = val;
   }
+  lastTransferTarget = targetId;
   closeModal('transfer-modal');
   showToast('Given to ' + target.name + '.');
   if (lootModalCharId) openLootModal(lootModalCharId);
@@ -7934,6 +8011,8 @@ async function removeLootInvRow(id, i) {
 async function saveCharacter() {
   const name = document.getElementById('cm-name').value.trim();
   if (!name) { showToast('Name required!'); return; }
+  const pinClashMsg = pinClash(document.getElementById('cm-pin').value.trim(), editingCharId);
+  if (pinClashMsg) { showToast(pinClashMsg, 4000); return; }
   const typeVal = document.getElementById('cm-type').value;
   const isVehicle = typeVal === 'vehicle';
   const isDrone = typeVal === 'drone';
@@ -8183,12 +8262,7 @@ async function usePlayerTechnique(ti) {
 }
 
 // Pure client-side preview, mirrors the GM's onHackTargetChange.
-function onPlayerHackTargetChange(hi, targetKey) {
-  const el = document.getElementById(`player-hack-vs-${hi}`);
-  if (!el) return;
-  const fw = resolveHackTargetFirewall(targetKey, state.characters[session.charId]);
-  el.textContent = fw ? `vs ${fw.name}: Firewall ${fw.value}` : '';
-}
+function onPlayerHackTargetChange(hi) { refreshHackVerdict('player', null, hi); }
 
 async function adjustPlayerStat(stat, delta) {
   const id = session.charId;
@@ -8229,6 +8303,9 @@ async function updateCampaignName(val) {
 }
 
 async function setPlayerPin(charId, pin) {
+  pin = String(pin || '').trim();
+  const clash = pinClash(pin, charId);
+  if (clash) { showToast(clash, 4000); renderSettings(); return; }
   await dbWrite('characters/' + charId + '/pin', pin || null);
   showToast('PIN updated.');
 }
@@ -8856,6 +8933,297 @@ async function confirmRestore() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// CASH (ED) — the generator and loot tables write money as plain text
+// ("Credchip, 350 EB"). Those lines are recognised and turned into the
+// character's real Eurodollar (ED) amount: at generation, on transfer,
+// and on demand for characters that already exist. Conservative on
+// purpose: a line only counts as cash if nothing else is in it beyond
+// cash-container words, so "Cyberdeck worth 800 ED" stays an item.
+// ═══════════════════════════════════════════════════════════════
+const CASH_AMOUNT_AFTER = /(\d{1,3}(?:[.,]\d{3})+|\d+)\s*(?:(?:eddies|eddy|euro\s?dollars?|eurodollars?|eds?|ebs?)\b|€\$|₡)/i;
+const CASH_AMOUNT_BEFORE = /(?:€\$|₡)\s*(\d{1,3}(?:[.,]\d{3})+|\d+)/i;
+const CASH_FILLER = new Set(['credchip', 'credchips', 'cred', 'chip', 'chips', 'cash', 'money', 'wallet', 'stash', 'bills', 'notes', 'roll', 'rolls',
+  'bundle', 'stack', 'loose', 'change', 'of', 'with', 'worth', 'in', 'a', 'an', 'the', 'some', 'small', 'anonymous', 'untraceable', 'encrypted',
+  'loaded', 'unmarked', 'contains', 'holding', 'holds', 'total', 'and', 'plus', 'found', 'hidden', 'ed', 'eb', 'eddies', 'street', 'gang',
+  'pocket', 'pockets', 'certified', 'physical', 'paper', 'coins', 'coin', 'eurodollar', 'eurodollars', 'euro', 'dollars', 'dollar']);
+function parseCashAmount(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  const m = CASH_AMOUNT_AFTER.exec(s) || CASH_AMOUNT_BEFORE.exec(s);
+  if (!m) return null;
+  const rest = (s.slice(0, m.index) + ' ' + s.slice(m.index + m[0].length)).toLowerCase().replace(/[^a-zäöüß' ]+/g, ' ').split(/\s+/).filter(Boolean);
+  if (!rest.every(w => CASH_FILLER.has(w))) return null;
+  const n = parseInt(m[1].replace(/[.,]/g, ''), 10);
+  return n > 0 ? n : null;
+}
+function extractCash(list) {
+  let total = 0;
+  const rest = [];
+  (list || []).forEach(item => { const n = parseCashAmount(item); if (n) total += n; else rest.push(item); });
+  return { total, rest };
+}
+function planCashConversion(c) {
+  const fromLoot = extractCash(c.loot || []);
+  let invTotal = 0;
+  const invRest = [];
+  (c.inventory || []).forEach(it => {
+    const n = parseCashAmount(it?.name);
+    if (n) invTotal += n * (parseInt(it.qty, 10) || 1); else invRest.push(it);
+  });
+  const total = fromLoot.total + invTotal;
+  return { total, loot: fromLoot.rest, inventory: invRest, changed: total > 0 };
+}
+async function convertCashItems(id) {
+  const c = state.characters[id]; if (!c) return;
+  const plan = planCashConversion(c);
+  if (!plan.changed) { showToast('No cash items found'); return; }
+  const updates = {
+    ['characters/' + id + '/loot']: plan.loot,
+    ['characters/' + id + '/inventory']: plan.inventory,
+    ['characters/' + id + '/eurodollar']: (c.eurodollar || 0) + plan.total,
+  };
+  logTo(updates, `${c.name}: ${plan.total} ED moved from items into Eurodollars`);
+  await dbUpdate(updates);
+  for (const [path, val] of Object.entries(updates)) {
+    const parts = path.split('/');
+    if (parts[0] === 'characters' && state.characters[parts[1]]) state.characters[parts[1]][parts[2]] = val;
+  }
+  showToast(`+${plan.total} ED → ${c.name}`);
+  if (lootModalCharId === id) openLootModal(id);
+  renderAll();
+}
+// Firewall bands for generated NPCs (§10.2): everyone has one, scaled by
+// tier. Netrunners keep their own, higher bands (NETRUNNER_FIREWALL_BY_TIER).
+const FIREWALL_BY_TIER = { GRUNT: 8, THREAT: 15, BOSS: 22 };
+// One-click catch-up for characters generated before these rules existed:
+// moves cash lines into ED and gives generated NPCs a tier-based Firewall.
+async function tidyGeneratedCharacters() {
+  const updates = {};
+  let cashChars = 0, cashTotal = 0, fwChars = 0;
+  Object.entries(state.characters).forEach(([id, c]) => {
+    const plan = planCashConversion(c);
+    if (plan.changed) {
+      cashChars++; cashTotal += plan.total;
+      updates['characters/' + id + '/loot'] = plan.loot;
+      updates['characters/' + id + '/inventory'] = plan.inventory;
+      updates['characters/' + id + '/eurodollar'] = (c.eurodollar || 0) + plan.total;
+    }
+    const generatedNpc = c.isNPC && c.tier && !c.isVehicle && !c.isDrone && !c.isSecurityUnit && !c.isCompanion;
+    if (generatedNpc && !c.firewall) {
+      const table = c.cyberdeck ? NETRUNNER_FIREWALL_BY_TIER : FIREWALL_BY_TIER;
+      updates['characters/' + id + '/firewall'] = table[c.tier] || 8;
+      fwChars++;
+    }
+  });
+  if (!cashChars && !fwChars) { showToast('Nothing to tidy up — all characters are already in order'); return; }
+  logTo(updates, `Tidy-up: ${cashTotal} ED moved out of items (${cashChars} characters), Firewall added to ${fwChars}`);
+  await dbUpdate(updates);
+  showToast(`Tidied: ${cashTotal} ED moved (${cashChars} chars), Firewall added to ${fwChars}`, 4500);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GENERATED TALENTS — picked by code (never invented by the model) to
+// fit the archetype, how many scales with tier: Grunt 1-2, Threat ~3,
+// Boss 3-5, each at a level the character's own tree level has actually
+// earned (and capped by tier: Grunt I, Threat up to II, Boss up to III).
+// Only talents whose requirement is a plain tree level qualify — chain
+// prerequisites (e.g. "Gauntlet II") and special-gated ones are skipped.
+// ═══════════════════════════════════════════════════════════════
+const ARCHETYPE_TALENT_POOLS = {
+  BRUISER:   ['Wuchtig', 'Kampfrausch', 'Praezisionsschlag', 'Ruestungsbrecher', 'Standhaft', 'Zaeh wie Leder', 'Kampferfahrung', 'Kampfinstinkt', 'Regenerationsgewebe', 'Zweiter Atem'],
+  GUNNER:    ['Waffenmeister', 'Scharfschuetze', 'Ruhige Hand', 'Erste Kugel', 'Kampferfahrung', 'Deckungsmeister', 'Suppression Spezialist', 'Snap Shot', 'Munitionseffizienz'],
+  SNIPER:    ['Scharfschuetze', 'Hawk Eye', 'Holo-Zielfernrohr', 'Jaegers Instinkt', 'Schnappschuss', 'Gezielte Schuesse', 'Ruhige Hand', 'Erste Kugel'],
+  NETRUNNER: ['Jack In', 'System Expertise', 'Efficient Code', 'Deep Reserves', 'Exploit', 'Firewall Bypass', 'Ghost Protocol', 'RAM Recovery', 'Cascade'],
+  STEALTH:   ['Flankenangriff', 'Schattentaenzer', 'Schattenangriff', 'Kampfinstinkt', 'Erste Kugel', 'Reflexkette', 'Ghost Shot', 'Schnelle Auffassung'],
+  SUPPORT:   ['Feldmedizin', 'First Aid', 'Taktischer Ueberblick', 'Holo-Markierung', 'Pharma-Kenntnis', 'Eiserne Nerven', 'Erste Hilfe', 'Kaltbluetig'],
+  HEAVY:     ['Gauntlet-Training', 'Ruestungsbrecher (Heavy)', 'Wuchtig', 'Kampferfahrung', 'Standhaft', 'Taktisches Gespuer', 'Zielgenauigkeit'],
+};
+const TALENT_COUNT_BY_TIER = { GRUNT: [1, 2], THREAT: [2, 3, 3, 3], BOSS: [3, 4, 4, 5] };
+const TALENT_MAX_LEVELS_BY_TIER = { GRUNT: 1, THREAT: 2, BOSS: 3 };
+function findTalentEntry(name) {
+  for (const list of Object.values(TALENT_CATALOG)) {
+    const hit = list.find(t => t.name === name);
+    if (hit) return hit;
+  }
+  return null;
+}
+// The saved shape of one owned talent level — identical to what the
+// talent picker's "TAKE" writes (see takeTalentLevel), so generated and
+// hand-picked talents are indistinguishable everywhere else.
+function makeTalentRow(name, level) {
+  const row = { name, lvl: level.lvl, desc: level.effect, req: level.req, mods: (level.mods || []).map(m => ({ ...m })) };
+  if (level.regen_stat) { row.regen_stat = level.regen_stat; row.regen_amount = level.regen_amount; }
+  if (level.maxBonus) row.maxBonus = { ...level.maxBonus };
+  if (level.fullIpAtCombatStart) row.fullIpAtCombatStart = true;
+  if (level.usesPerFight) row.usesPerFight = level.usesPerFight;
+  if (level.statusGrant) row.statusGrant = { ...level.statusGrant };
+  if (level.statusGrantChoice) row.statusGrantChoice = level.statusGrantChoice.map(o => ({ ...o }));
+  if (level.markBonus) row.markBonus = { ...level.markBonus };
+  if (level.rallyBonus) row.rallyBonus = { ...level.rallyBonus };
+  if (level.hackIpDiscount) row.hackIpDiscount = { ...level.hackIpDiscount };
+  if (level.trigger) row.trigger = { label: level.trigger.label, effects: level.trigger.effects.map(e => ({ ...e })) };
+  return row;
+}
+function abilitiesFromTalents(rows) {
+  return (rows || []).filter(r => r.usesPerFight > 0)
+    .map(r => ({ name: r.name, desc: r.desc || '', usesMax: r.usesPerFight, usesCurrent: r.usesPerFight, talentSource: r.name }));
+}
+// opts: { count, exclude:Set<name>, skipStats:[...] } — skipStats lists
+// max-bonus stats (hp/stamina/ip/armor) that must NOT be picked because
+// the caller can't apply them (e.g. generated NPCs have fixed HP/Stamina).
+function pickFittingTalents(archetype, tier, stats, opts) {
+  opts = opts || {};
+  const pool = ARCHETYPE_TALENT_POOLS[archetype] || ARCHETYPE_TALENT_POOLS.GUNNER;
+  const counts = TALENT_COUNT_BY_TIER[tier] || [2, 3];
+  const want = opts.count ?? counts[Math.floor(Math.random() * counts.length)];
+  const maxLevels = TALENT_MAX_LEVELS_BY_TIER[tier] || 2;
+  const skip = new Set(opts.skipStats || []);
+  const ghost = { stats };
+  const cands = [];
+  pool.forEach((name, idx) => {
+    if (opts.exclude && opts.exclude.has(name)) return;
+    const entry = findTalentEntry(name); if (!entry) return;
+    let best = -1;
+    for (let i = 0; i < Math.min(maxLevels, entry.levels.length); i++) {
+      const lv = entry.levels[i];
+      const req = parseTalentReq(lv.req);
+      if (!req || req.extra) break;                       // chain / special requirement
+      if (getTreeLevel(ghost, req.tree) < req.level) break; // not earned yet
+      if (lv.maxBonus && skip.has(lv.maxBonus.stat)) break;
+      best = i;
+    }
+    if (best < 0) return;
+    const lv = entry.levels[best];
+    const mechanical = (lv.mods && lv.mods.length) || lv.regen_stat || lv.maxBonus || lv.usesPerFight || lv.trigger;
+    cands.push({ name, level: lv, w: (pool.length - idx) * (mechanical ? 1.6 : 1) });
+  });
+  const out = [];
+  while (out.length < want && cands.length) {
+    let r = Math.random() * cands.reduce((a, c) => a + c.w, 0);
+    let k = 0;
+    for (; k < cands.length - 1; k++) { r -= cands[k].w; if (r <= 0) break; }
+    out.push(cands.splice(k, 1)[0]);
+  }
+  return out.map(c => makeTalentRow(c.name, c.level));
+}
+// Best-guess archetype of an existing character, from its kit and stats.
+function inferArchetype(c) {
+  if (c.cyberdeck || (c.hacks || []).length) return 'NETRUNNER';
+  const w = (c.weapons || []).map(x => String(x.name || '')).join(' ').toLowerCase();
+  if (/sniper|anti-materiel/.test(w)) return 'SNIPER';
+  if (/launcher|minigun|flamethrower|cryo|rocket/.test(w)) return 'HEAVY';
+  const lv = t => getTreeLevel({ stats: c.stats || {} }, t);
+  const p = lv('power'), m = lv('mobility'), n = lv('mind');
+  if (/knife|sword|blade|katana|machete|bat\b|mantis|ripper|axe|hammer|melee|chainsaw|fist/.test(w) && p >= m) return 'BRUISER';
+  if (n > p && n > m) return 'SUPPORT';
+  if (p > m) return 'BRUISER';
+  return 'GUNNER';
+}
+// Character-sheet button: add fitting talents to an existing character
+// (converted allies, older generated NPCs, hand-built PCs with none).
+async function addFittingTalents(id) {
+  const c = state.characters[id];
+  if (!id || !c) { showToast('Save the character first, then add talents'); return; }
+  if (!c.stats) { showToast('This character has no attributes to base talents on'); return; }
+  const existing = new Set((c.talents || []).map(t => t.name));
+  const archetype = inferArchetype(c);
+  const tier = ['GRUNT', 'THREAT', 'BOSS'].includes(c.tier) ? c.tier : 'THREAT';
+  const skipStats = [];
+  if (c.hp_override) skipStats.push('hp');
+  if (c.sta_override) skipStats.push('stamina');
+  if (c.ip_override) skipStats.push('ip');
+  if (!c.armor_body) skipStats.push('armor');
+  const fresh = pickFittingTalents(archetype, tier, c.stats, { exclude: existing, skipStats });
+  if (!fresh.length) { showToast('No fitting talents available at this character\'s stat levels'); return; }
+  const talents = [...(c.talents || []), ...fresh];
+  const updates = { ['characters/' + id + '/talents']: talents };
+  const abilities = [...(c.abilities || []), ...abilitiesFromTalents(fresh)];
+  if (abilities.length !== (c.abilities || []).length) updates['characters/' + id + '/abilities'] = abilities;
+  const tmp = { ...c };
+  fresh.forEach(r => {
+    if (!r.maxBonus) return;
+    applyMaxBonusDelta(tmp, undefined, r.maxBonus, updates, id);
+    Object.assign(tmp, patchFromUpdates(updates, id, ['hp_max', 'hp_current', 'stamina_max', 'stamina_current', 'ip_max', 'ip_current']));
+  });
+  logTo(updates, `${c.name} gains talents: ${fresh.map(r => r.name + ' ' + r.lvl).join(', ')}`);
+  await dbUpdate(updates);
+  state.characters[id] = { ...c, talents, ...(updates['characters/' + id + '/abilities'] ? { abilities } : {}),
+    ...patchFromUpdates(updates, id, ['hp_max', 'hp_current', 'stamina_max', 'stamina_current', 'ip_max', 'ip_current']) };
+  if (editingCharId === id) renderTalentRows(talents);
+  showToast(`${fresh.map(r => r.name + ' ' + r.lvl).join(', ')} added`, 4000);
+  renderAll();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HACK CARDS — live verdict. Same rule useHack/usePlayerHack apply:
+// a hack hits when the roll is HIGHER than the target's Firewall.
+// kind: 'gm' (ids carry the character id) | 'player'
+// ═══════════════════════════════════════════════════════════════
+function refreshHackVerdict(kind, id, hi) {
+  const tId = kind === 'gm' ? `hack-target-${id}-${hi}` : `player-hack-target-${hi}`;
+  const rId = kind === 'gm' ? `hack-roll-${id}-${hi}` : `player-hack-roll-${hi}`;
+  const vId = kind === 'gm' ? `hack-vs-${id}-${hi}` : `player-hack-vs-${hi}`;
+  const el = document.getElementById(vId); if (!el) return;
+  const key = document.getElementById(tId)?.value;
+  const rollRaw = document.getElementById(rId)?.value;
+  const src = kind === 'gm' ? state.characters[id] : state.characters[session.charId];
+  const fw = key ? resolveHackTargetFirewall(key, src) : null;
+  if (!fw) {
+    el.className = 'hack-verdict';
+    el.textContent = key ? '' : '1 · pick a target   2 · enter the roll   3 · FIRE';
+    return;
+  }
+  const roll = parseInt(rollRaw, 10);
+  if (isNaN(roll)) { el.className = 'hack-verdict'; el.textContent = `vs ${fw.name} · Firewall ${fw.value} — now enter the roll`; return; }
+  const hit = roll > fw.value;
+  el.className = 'hack-verdict ' + (hit ? 'hit' : 'miss');
+  el.textContent = `${roll} vs ${fw.name} Firewall ${fw.value} → ${hit ? 'HIT' : 'MISS'}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PINS — one rule for every place a PIN is set: no two PINs the same,
+// and no player PIN equal to the GM PIN (the GM check runs first at
+// login, so a matching player PIN would open the GM view).
+// ═══════════════════════════════════════════════════════════════
+function pinClash(pin, exceptCharId, forGm) {
+  if (!pin) return null;
+  if (!forGm && session.gmPin && pin === session.gmPin) return 'That is the GM PIN — choose a different one';
+  for (const [cid, ch] of Object.entries(state.characters || {})) {
+    if (cid !== exceptCharId && ch.pin && ch.pin === pin) return `That PIN is already used by ${ch.name}`;
+  }
+  return null;
+}
+async function changeGmPin() {
+  const say = (t) => showToast(t, 4500);
+  if (session.role !== 'gm') return;
+  const cur = document.getElementById('gm-pin-current').value.trim();
+  const nw = document.getElementById('gm-pin-new').value.trim();
+  const cf = document.getElementById('gm-pin-confirm').value.trim();
+  if (!cur || !nw || !cf) { say('Fill in all three fields'); return; }
+  let stored;
+  try { stored = (await db.ref(dbPath() + '/gmPin').get()).val(); }
+  catch (e) { say('Could not check the current PIN — are you online?'); return; }
+  let ok = false;
+  try { ok = !!stored && atob(stored) === cur; } catch (e) { ok = false; }
+  if (!ok) { say('Current PIN is wrong'); return; }
+  if (nw.length < 4 || nw.length > 8) { say('The new PIN must be 4–8 characters'); return; }
+  if (!/^[\x20-\x7e]+$/.test(nw)) { say('Use letters, numbers and standard symbols only'); return; }
+  if (nw !== cf) { say('New PIN and confirmation do not match'); return; }
+  const clash = pinClash(nw, null, true);
+  if (clash) { say(clash); return; }
+  // Written directly (not through dbWrite) so a PIN change can never end
+  // up on the Undo stack and be reverted by an accidental Ctrl+Z.
+  await db.ref(dbPath() + '/gmPin').set(btoa(nw));
+  session.gmPin = nw;
+  ['gm-pin-current', 'gm-pin-new', 'gm-pin-confirm'].forEach(i => { document.getElementById(i).value = ''; });
+  say('GM PIN changed — use the new PIN next time you log in');
+}
+function showSetup() {
+  document.getElementById('setup-error').style.display = 'none';
+  showScreen('screen-setup');
+}
+
+// ═══════════════════════════════════════════════════════════════
 // UTILS
 // ═══════════════════════════════════════════════════════════════
 function openModal(id) { document.getElementById(id).classList.add('open'); }
@@ -8931,7 +9299,7 @@ SINGLE ENEMY JSON (respond ONLY with this, no backticks, no extra text):
 ENCOUNTER JSON (respond ONLY with this when asked for encounter, no backticks):
 {"encounterTitle":"string","encounterSummary":"string","partySize":number,"difficulty":"EASY|BALANCED|BRUTAL","enemies":[...same format as single enemy...],"encounterTactics":"string","gmNote":null}
 
-LOOT: Always include 3-6 items. Do NOT mention the enemy's equipped weapon or armor here — those are already recoverable directly from their weapon/armor slots. Only list separate found items: credchips, ammo, cyberware (needs Chirurgie roll to harvest), narrative items.
+LOOT: Always include 3-6 items. Do NOT mention the enemy's equipped weapon or armor here — those are already recoverable directly from their weapon/armor slots. Only list separate found items: credchips, ammo, cyberware (needs Chirurgie roll to harvest), narrative items. Money is ALWAYS written as a plain amount in ED, e.g. "Credchip, 350 ED" — never EB, eddies or €$ — and as ONE credchip line at most.
 LARGE ENCOUNTERS (5+ enemies): Keep flavor/tactics/gmNote short (1-2 sentences). JSON must be complete and valid.
 
 VEHICLE GENERATION: Used when the user asks for a vehicle instead of an NPC. Every vehicle in Cyberpunk Phantom is a NAMED stat block from the rulebook — there is no attribute-distribution system for vehicles like there is for characters. DO NOT INVENT STATS. Your job is to pick the ONE named vehicle from the VEHICLE CATALOG below that best matches the request, and let the numbers come from that exact template. Only fill "weaponOverride" or "statOverride" fields when the user's request specifically asks for something different from the stock vehicle (a different weapon loadout, battle damage, a modified/reskinned version, etc.) — leave them null/empty otherwise so the vehicle uses the template's exact canonical stats. A vehicle's weapon systems are fired by whoever is manning them using their OWN character stats (not the vehicle's) — this is intentional, don't try to give the vehicle attributes.
@@ -9401,7 +9769,7 @@ async function applyLootCash() {
   const c = requireLootTarget(); if (!c || !lootLastResult) return;
   const amount = lootLastResult.rolledCash || 0;
   await dbWrite('characters/' + lootTargetId + '/eurodollar', (c.eurodollar || 0) + amount);
-  showToast(`+${amount} ed → ${c.name}`);
+  showToast(`+${amount} ED → ${c.name}`);
 }
 
 async function applyLootWeapon() {
@@ -11987,6 +12355,9 @@ function processGeneratedEnemy(e) {
     }
     // Netrunner kit (§10): deck tier, Firewall, and hacks all rolled from
     // tier/faction alone — see rollNetrunnerHacks for why this isn't LLM-picked.
+    // Every generated NPC has a Firewall by tier (Grunt 8 / Threat 15 / Boss 22);
+    // netrunners override it just below with their own higher bands.
+    e.firewall = FIREWALL_BY_TIER[tier] || 8;
     if (archetype === 'NETRUNNER') {
       e.cyberdeck = NETRUNNER_DECK_BY_TIER[tier] || 'Basic';
       e.firewall = NETRUNNER_FIREWALL_BY_TIER[tier] || 10;
@@ -12006,6 +12377,22 @@ function processGeneratedEnemy(e) {
     } else {
       e.armor = { name: e.armor?.name || 'Improvised Armor', SP_body: FALLBACK_ARMOR_SP[tier] + subdermalBonus, SP_head: null, note: null };
     }
+
+    // Talents: picked by code to fit the archetype, count/level scaled by tier.
+    // HP/Stamina/armor bonus talents are skipped (generated NPCs have fixed
+    // values); an IP-pool bonus is folded into ip_max here.
+    try {
+      e.talents = pickFittingTalents(archetype, tier, rawAttrs, { skipStats: ['hp', 'stamina', 'armor'] });
+      e.talents.forEach(t => { if (t.maxBonus?.stat === 'ip') e.ip_max += t.maxBonus.amount; });
+      e.abilities = abilitiesFromTalents(e.talents);
+    } catch (talentErr) {
+      console.error('Talent pick failed, continuing without talents:', talentErr);
+      e.talents = []; e.abilities = [];
+    }
+    // Cash written into the loot list becomes real ED.
+    const cash = extractCash(e.loot);
+    e.eurodollar = cash.total;
+    e.loot = cash.rest;
 
     // Flink is tier-clamped regardless of what the model chose.
     if (tier === 'GRUNT') e.flink = false;
@@ -12328,7 +12715,8 @@ function renderEnemyResult(e) {
   }).join('');
   const cyber = (e.cyberware||[]).map(c=>`<div style="color:#7aafc8;font-size:11px;margin-bottom:2px">⬡ ${esc(c)}</div>`).join('');
   const hacksList = (e.hacks||[]).map(h=>`<div style="color:var(--cyan);font-size:11px;margin-bottom:2px">▸ ${esc(h.name)}</div>`).join('');
-  const loot = (e.loot||[]).map(l=>`<div style="color:#9aaa7a;font-size:11px;margin-bottom:2px">◈ ${esc(l)}</div>`).join('');
+  const talentsHtml = (e.talents||[]).map(t=>`<div style="color:var(--blue-bright);font-size:11px;margin-bottom:2px">✦ ${esc(t.name)} ${esc(t.lvl||'')} <span style="color:var(--text3)">— ${esc(t.desc||'')}</span></div>`).join('');
+  const loot = (e.eurodollar ? `<div style="color:var(--gold-bright);font-size:11px;margin-bottom:2px">💰 ${e.eurodollar} ED</div>` : '') + (e.loot||[]).map(l=>`<div style="color:#9aaa7a;font-size:11px;margin-bottom:2px">◈ ${esc(l)}</div>`).join('');
   const pw2 = e.combat?.secondaryPW ? `<div style="background:rgba(255,255,255,0.04);padding:5px 11px;border:1px solid rgba(255,255,255,0.05)"><span style="color:var(--text2);font-size:10px">${esc(e.combat.secondaryPWLabel)} </span><span style="font-size:14px;font-weight:700">${e.combat.secondaryPW}</span></div>` : '';
   const isAlly = e.faction === 'ally';
   return `<div style="background:var(--surface);border:1px solid ${tc};${isAlly ? 'border-left:3px solid var(--green-bright);' : ''}overflow:hidden">
@@ -12356,6 +12744,7 @@ function renderEnemyResult(e) {
       ${wpns ? `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">WEAPONS</div>${wpns}</div>` : ''}
       ${cyber ? `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">CYBERWARE</div>${cyber}</div>` : ''}
       ${hacksList ? `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">${esc(e.cyberdeck||'')} DECK · HACKS</div>${hacksList}</div>` : ''}
+      ${talentsHtml ? `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">TALENTS</div>${talentsHtml}</div>` : ''}
       <div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">TACTICS</div><p style="font-size:11px;color:#777;line-height:1.65">${esc(e.tactics||'')}</p></div>
       ${loot ? `<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text3);letter-spacing:0.18em;margin-bottom:5px">LOOT</div>${loot}</div>` : ''}
       ${e.imagePrompt ? `<div style="margin-bottom:10px">
@@ -12550,7 +12939,10 @@ function genResultToCharacter(enemy) {
     // where the GM sees it again mid-fight.
     tactics: enemy.tactics || '',
     gm_note: enemy.gmNote || '',
-    status_effects: [], talents: [], inventory: [], eurodollar: 0
+    status_effects: [], inventory: [],
+    talents: (enemy.talents || []).map(t => JSON.parse(JSON.stringify(t))),
+    abilities: enemy.abilities || [],
+    eurodollar: enemy.eurodollar || 0
   };
 }
 
@@ -12777,8 +13169,9 @@ window.addEventListener('load', () => {
     }
   }
   const url = localStorage.getItem('cp_db_url');
+  // New device with no link: land on JOIN (address + PIN), never on setup.
   if (url) { initFirebase(url); showLogin(); }
-  else showScreen('screen-setup');
+  else showLogin();
 });
 </script>
 </body>
