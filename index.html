@@ -1394,7 +1394,11 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
           <button class="loot-tier-btn" id="ltier-3" onclick="setLootTier(3)" style="flex:1;padding:6px;font-size:10px;letter-spacing:0.1em;background:transparent;border:1px solid var(--border2);color:var(--text3);cursor:pointer;font-family:var(--font)">T3 CORPO</button>
           <button class="loot-tier-btn" id="ltier-4" onclick="setLootTier(4)" style="flex:1;padding:6px;font-size:10px;letter-spacing:0.1em;background:transparent;border:1px solid var(--border2);color:var(--text3);cursor:pointer;font-family:var(--font)">T4 ELITE</button>
         </div>
-        <button class="btn btn-primary btn-small" style="width:100%;margin-bottom:12px" onclick="rollLoot()">🎲 ROLL LOOT</button>
+        <div style="display:flex;gap:6px;align-items:stretch;margin-bottom:12px">
+          <button class="btn btn-primary btn-small" style="flex:1" onclick="rollLoot()">🎲 ROLL LOOT</button>
+          <input type="number" id="loot-manual-roll" min="1" max="20" step="1" inputmode="numeric" placeholder="Player's d20" title="Type the d20 the player rolled" style="width:112px;text-align:center" onkeydown="if(event.key==='Enter')useManualLootRoll()">
+          <button class="btn btn-ghost btn-small" style="white-space:nowrap" onclick="useManualLootRoll()" title="Look up the loot for the d20 the player rolled">USE ROLL</button>
+        </div>
         <div id="loot-roll-result"></div>
       </div>
 
@@ -10139,8 +10143,29 @@ function rollLootRow(startTier) {
   }
 }
 
-function rollLoot() {
-  const { tier, roll, row } = rollLootRow(lootTier);
+// Player rolled the physical d20: the GM types it in and the table row for
+// that number is looked up on the selected tier. A natural 20 on tiers 1–3
+// bumps to the next tier per the rulebook, but the re-roll has to be a new
+// physical roll, so the field is cleared and the tier button moves up; a 20 on
+// tier 4 is the JACKPOT row.
+function useManualLootRoll() {
+  const input = document.getElementById('loot-manual-roll');
+  const roll = Math.floor(Number(input.value));
+  if (!Number.isFinite(roll) || roll < 1 || roll > 20) { showToast('Enter the d20 the player rolled (1–20).'); input.focus(); return; }
+  if (roll === 20 && lootTier < 4) {
+    setLootTier(lootTier + 1);
+    input.value = '';
+    input.focus();
+    document.getElementById('loot-roll-result').innerHTML = `<div style="font-size:12px;color:var(--gold-bright);line-height:1.6">Natural 20! Bumped up to <strong>Tier ${lootTier}</strong> — have the player roll the d20 again and enter it.</div>`;
+    lootLastResult = null;
+    return;
+  }
+  input.value = '';
+  rollLoot({ tier: lootTier, roll, row: LOOT_TABLES[lootTier].rows[roll - 1] });
+}
+
+function rollLoot(fixed) {
+  const { tier, roll, row } = fixed || rollLootRow(lootTier);
   const result = { tier, roll, row };
   if (row.type === 'weapon') {
     const catalogEntry = WEAPON_TABLE[row.weapon];
