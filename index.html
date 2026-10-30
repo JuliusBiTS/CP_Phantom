@@ -1917,6 +1917,11 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
     </div>
     <div class="modal-body">
       <div id="dmg-calc-section" style="display:none;margin-bottom:10px;padding:8px;background:var(--surface2);border:1px solid var(--border2)">
+        <div id="dmg-calc-target-row" style="display:none;margin-bottom:6px">
+          <select id="dmg-calc-target" style="width:100%" onchange="onDmgCalcTargetChange()">
+            <option value="">Target...</option>
+          </select>
+        </div>
         <div class="inline-row" style="gap:4px;margin-bottom:6px">
           <select id="dmg-calc-attacker" style="flex:1" onchange="onDmgCalcAttackerChange()">
             <option value="">Attacker...</option>
@@ -1953,7 +1958,7 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
       </div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-danger" style="flex:1;padding:12px" onclick="applyDmg(-1)">− DAMAGE</button>
-        <button class="btn btn-gold" style="flex:1;padding:12px" onclick="applyDmg(1)">+ HEAL</button>
+        <button class="btn btn-gold" id="dmg-btn-heal" style="flex:1;padding:12px" onclick="applyDmg(1)">+ HEAL</button>
       </div>
     </div>
   </div>
@@ -5452,6 +5457,7 @@ function renderCombatantCard(id, isActive) {
           <div class="hp-bar"><div class="hp-bar-fill ${hpClass}" style="width:${hpPct}%"></div></div>
         </div>
         ${downBadge}
+        ${(!isDown && !bulkMode && (c.weapons || []).length) ? `<button class="btn ${isActive ? 'btn-gold' : 'btn-ghost'} btn-small attack-btn" style="padding:2px 8px;font-size:10px;letter-spacing:0.08em" onclick="event.stopPropagation(); openAttackModal('${id}')" title="Attack with ${esc(c.name)} — pick target, weapon and roll">⚔ ATTACK</button>` : ''}
         ${flinkHas ? `<span class="flink-badge ${flinkUsed ? 'flink-used' : 'flink-available'}">${flinkUsed ? 'FLINK ✓' : 'FLINK'}</span>` : ''}
       </div>
     </div>
@@ -6734,7 +6740,12 @@ function toggleDetail(id, forceOpen) {
 // DAMAGE MODAL
 // ═══════════════════════════════════════════════════════════════
 let dmgHealMode = false;
+let dmgAttackMode = false; // true when opened from an attacker's ⚔ ATTACK button (attacker fixed, target chosen in the modal)
+let dmgFixedAttackerId = null;
+const lastAttackWeapon = {}; // attackerId → weapon index last used, so a switch to the knife sticks
 function openDmgModal(id, mode) {
+  dmgAttackMode = false;
+  dmgFixedAttackerId = null;
   dmgTargetId = id;
   dmgHealMode = mode === 'heal';
   const c = state.characters[id];
@@ -6744,21 +6755,85 @@ function openDmgModal(id, mode) {
   openModal('dmg-modal');
 }
 
+// ⚔ ATTACK on the attacker's own card: the attacker and their main weapon are
+// already set, the GM picks who is being hit, types the roll, and the damage
+// lands on the TARGET (HP + armor ablation) while the magazine tick comes off
+// the ATTACKER's weapon — the same split applyDmg already does for the
+// attacker dropdown, just started from the other side.
+function openAttackModal(attackerId) {
+  const a = state.characters[attackerId]; if (!a) return;
+  dmgAttackMode = true;
+  dmgFixedAttackerId = attackerId;
+  dmgHealMode = false;
+  dmgTargetId = null;
+  document.getElementById('dmg-display').textContent = '0';
+  populateDmgCalc();
+  updateDmgModalTitle();
+  openModal('dmg-modal');
+}
+function updateDmgModalTitle() {
+  const el = document.getElementById('dmg-modal-title');
+  if (dmgAttackMode) {
+    const a = state.characters[dmgFixedAttackerId], t = state.characters[dmgTargetId];
+    el.textContent = 'ATTACK · ' + (a?.name || '').toUpperCase() + (t ? ' → ' + t.name.toUpperCase() : '');
+  }
+}
+// Which side a combatant is on, so the target list can put the opposing side
+// first (drones/companions follow their owner).
+function dmgSide(c) {
+  const src = (c.isDrone || c.isCompanion) && c.owner_char_id && state.characters[c.owner_char_id] ? state.characters[c.owner_char_id] : c;
+  return (src.isAlly || src.isCompanion || !src.isNPC) ? 'party' : 'enemy';
+}
+// The weapon to pre-select: the one used last time by this attacker, else the
+// first non-shield weapon in their list (the generator and the sheets put the
+// main weapon first), else just the first.
+function mainWeaponIndex(attackerId) {
+  const weapons = state.characters[attackerId]?.weapons || [];
+  if (!weapons.length) return -1;
+  const last = lastAttackWeapon[attackerId];
+  if (last != null && weapons[last]) return last;
+  const nonShield = weapons.findIndex(w => matchWeaponName(w.name)?.slotType !== 'shield');
+  return nonShield >= 0 ? nonShield : 0;
+}
+
 // Damage calculator: pick an attacker + their weapon, see the live PW to
 // tell the player what to roll, type the roll result, and get
 // roll+bonus-targetSP (min 1) to push into the keypad above. Doesn't touch
 // dmgKey/applyDmg at all — it's purely a pre-fill convenience.
 function populateDmgCalc() {
   const section = document.getElementById('dmg-calc-section');
+  const targetRow = document.getElementById('dmg-calc-target-row');
+  const attackerSel = document.getElementById('dmg-calc-attacker');
+  document.getElementById('dmg-btn-heal').style.display = dmgAttackMode ? 'none' : '';
+  targetRow.style.display = dmgAttackMode ? 'block' : 'none';
+  attackerSel.disabled = dmgAttackMode;
   if (dmgHealMode) { section.style.display = 'none'; return; }
   section.style.display = 'block';
-  const attackerSel = document.getElementById('dmg-calc-attacker');
   const order = state.combat?.order || [];
-  attackerSel.innerHTML = '<option value="">Attacker...</option>' + order
-    .filter(cid => cid !== dmgTargetId)
-    .map(cid => state.characters[cid] ? [cid, state.characters[cid]] : null)
-    .filter(pair => pair && (pair[1].hp_current ?? pair[1].hp_max ?? 1) > 0)
-    .map(([cid, c]) => `<option value="${cid}">${esc(c.name)}</option>`).join('');
+  const alive = cid => state.characters[cid] && (state.characters[cid].hp_current ?? state.characters[cid].hp_max ?? 1) > 0;
+  if (dmgAttackMode) {
+    const a = state.characters[dmgFixedAttackerId];
+    attackerSel.innerHTML = `<option value="${dmgFixedAttackerId}">${esc(a?.name || '')}</option>`;
+    // opposing side first, nearest first when both tokens are on a scaled map
+    const mySide = a ? dmgSide(a) : 'party';
+    const posA = state.map?.tokens?.[dmgFixedAttackerId];
+    const cands = order.filter(cid => cid !== dmgFixedAttackerId && alive(cid)).map(cid => {
+      const c = state.characters[cid];
+      const d = getRealDistanceMeters(posA, state.map?.tokens?.[cid]);
+      return { cid, c, d, opposing: dmgSide(c) !== mySide };
+    }).sort((x, y) => (y.opposing - x.opposing) || ((x.d ?? 1e9) - (y.d ?? 1e9)));
+    const opt = x => `<option value="${x.cid}">${esc(x.c.name)}${x.d != null ? ' · ' + Math.round(x.d) + ' m' : ''}</option>`;
+    const opp = cands.filter(x => x.opposing), own = cands.filter(x => !x.opposing);
+    document.getElementById('dmg-calc-target').innerHTML = '<option value="">Target...</option>'
+      + (opp.length ? `<optgroup label="Enemies">${opp.map(opt).join('')}</optgroup>` : '')
+      + (own.length ? `<optgroup label="Same side">${own.map(opt).join('')}</optgroup>` : '');
+    if (cands.length === 1) { document.getElementById('dmg-calc-target').value = cands[0].cid; dmgTargetId = cands[0].cid; }
+    else if (opp.length === 1) { document.getElementById('dmg-calc-target').value = opp[0].cid; dmgTargetId = opp[0].cid; }
+  } else {
+    attackerSel.innerHTML = '<option value="">Attacker...</option>' + order
+      .filter(cid => cid !== dmgTargetId && alive(cid))
+      .map(cid => `<option value="${cid}">${esc(state.characters[cid].name)}</option>`).join('');
+  }
   document.getElementById('dmg-calc-weapon').innerHTML = '<option value="">Weapon...</option>';
   document.getElementById('dmg-calc-pw').textContent = '';
   document.getElementById('dmg-calc-distance').textContent = '';
@@ -6767,12 +6842,25 @@ function populateDmgCalc() {
   const resultEl = document.getElementById('dmg-calc-result');
   resultEl.textContent = '—';
   resultEl.dataset.value = '';
+  // Attacker pre-selected: the fixed one (⚔ ATTACK), otherwise whoever's turn
+  // it is — you almost always record the hit of the combatant who is acting.
+  const turnId = order[state.combat?.currentTurn || 0];
+  const preId = dmgAttackMode ? dmgFixedAttackerId : (turnId && turnId !== dmgTargetId && alive(turnId) ? turnId : '');
+  if (preId) attackerSel.value = preId;
+  onDmgCalcAttackerChange();
+}
+function onDmgCalcTargetChange() {
+  dmgTargetId = document.getElementById('dmg-calc-target').value || null;
+  updateDmgModalTitle();
+  onDmgCalcChange();
 }
 function onDmgCalcAttackerChange() {
   const attackerId = document.getElementById('dmg-calc-attacker').value;
   const weaponSel = document.getElementById('dmg-calc-weapon');
   const weapons = state.characters[attackerId]?.weapons || [];
   weaponSel.innerHTML = '<option value="">Weapon...</option>' + weapons.map((w,i) => `<option value="${i}">${esc(w.name)}</option>`).join('');
+  const main = mainWeaponIndex(attackerId);
+  if (main >= 0) weaponSel.value = String(main);
   onDmgCalcChange();
 }
 function onDmgCalcChange() {
@@ -6780,6 +6868,7 @@ function onDmgCalcChange() {
   const attacker = state.characters[attackerId];
   const wi = document.getElementById('dmg-calc-weapon').value;
   const weapon = attacker?.weapons?.[wi];
+  if (attacker && weapon && wi !== '') lastAttackWeapon[attackerId] = Number(wi);
   const pwEl = document.getElementById('dmg-calc-pw');
   const distEl = document.getElementById('dmg-calc-distance');
   const sitEl = document.getElementById('dmg-calc-situational');
@@ -6794,7 +6883,7 @@ function onDmgCalcChange() {
   // attack isn't possible without a talent/weapon exception, which the
   // GM applies by judgment. Weapon bonus/damage are untouched by
   // distance — only the PW (and so the dice count) changes.
-  const dist = getDistancePWInfo(attackerId, dmgTargetId, weapon.name);
+  const dist = dmgTargetId ? getDistancePWInfo(attackerId, dmgTargetId, weapon.name) : null;
   let effectivePw = live.pw;
   if (dist && live.pw != null) {
     if (dist.multiplier == null) effectivePw = null;
@@ -6823,7 +6912,10 @@ function onDmgCalcChange() {
   const roll = parseInt(document.getElementById('dmg-calc-roll').value) || 0;
   const target = state.characters[dmgTargetId];
   const targetSP = target?.armor_body?.sp_temp ?? target?.armor_body?.sp_base ?? 0;
-  if (roll > 0) {
+  if (roll > 0 && !target) {
+    resultEl.textContent = 'pick a target';
+    resultEl.dataset.value = '';
+  } else if (roll > 0) {
     const dmg = Math.max(1, roll + effectiveBonus - targetSP);
     resultEl.textContent = `${dmg} dmg (${roll}+${effectiveBonus}-${targetSP})`;
     resultEl.dataset.value = dmg;
@@ -6848,6 +6940,7 @@ function dmgKey(k) {
 }
 
 async function applyDmg(sign) {
+  if (dmgAttackMode && !state.characters[dmgTargetId]) { showToast('Pick a target first.'); return; }
   const val = parseInt(document.getElementById('dmg-display').textContent) || 0;
   if (!val) { closeModal('dmg-modal'); return; }
   const id = dmgTargetId;
