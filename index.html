@@ -1289,10 +1289,11 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
       <div class="inline-row">
         <div class="field" style="flex:1">
           <label>API Key</label>
-          <input type="password" id="settings-api-key" placeholder="sk-ant-...">
+          <input type="password" id="settings-api-key" placeholder="sk-ant-..." autocomplete="off">
         </div>
         <button class="btn btn-ghost btn-small" style="align-self:flex-end;height:36px" onclick="saveApiKey()">SAVE</button>
       </div>
+      <div id="api-key-status" style="font-size:10px;color:var(--text3);margin:-4px 0 10px"></div>
       <div class="section-heading">GM PIN</div>
       <div style="color:var(--text2);font-size:11px;margin-bottom:8px;line-height:1.6">Change the PIN that opens the GM view. Needs your current PIN, and can't match any player's PIN.</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
@@ -2943,9 +2944,7 @@ function switchTab(name) {
   if (name === 'settings') renderSettings();
   if (name === 'characters' && _charListDirty) renderCharList();
   if (name === 'generator') {
-    const key = localStorage.getItem('cp_api_key');
-    document.getElementById('gen-no-key').style.display = key ? 'none' : 'block';
-    if (key) document.getElementById('settings-api-key').value = key;
+    refreshApiKeyUI();
   }
 }
 
@@ -5683,6 +5682,7 @@ function renderCharList() {
 
 function renderSettings() {
   document.getElementById('settings-campaign').value = state.campaignName;
+  refreshApiKeyUI();
   const el = document.getElementById('player-pins-list');
   const pcs = Object.entries(state.characters).filter(([,c]) => !c.isNPC && !c.isCompanion);
   el.innerHTML = pcs.length ? pcs.map(([id, c]) => `
@@ -9652,12 +9652,31 @@ function copyPlayerLink() {
 // ═══════════════════════════════════════════════════════════════
 // SETTINGS — API KEY
 // ═══════════════════════════════════════════════════════════════
+// The key lives only in this browser's localStorage (never in Firebase). Reads
+// and writes are guarded so a blocked/cleared store shows a clear message
+// instead of silently looking like "forgot my key", and we ask the browser to
+// mark this site's storage persistent so it isn't evicted under disk pressure.
+function readApiKey() { try { return localStorage.getItem('cp_api_key') || ''; } catch (e) { return ''; } }
+function refreshApiKeyUI() {
+  const key = readApiKey();
+  const input = document.getElementById('settings-api-key');
+  if (input && key && document.activeElement !== input) input.value = key;
+  const noKey = document.getElementById('gen-no-key'); if (noKey) noKey.style.display = key ? 'none' : 'block';
+  const st = document.getElementById('api-key-status');
+  if (st) {
+    st.textContent = key ? '✓ Key saved in this browser (…' + key.slice(-4) + ')' : 'No key saved in this browser yet.';
+    st.style.color = key ? 'var(--green-bright)' : 'var(--text3)';
+  }
+}
 function saveApiKey() {
   const key = document.getElementById('settings-api-key').value.trim();
   if (!key) { showToast('No key entered.'); return; }
-  localStorage.setItem('cp_api_key', key);
+  try { localStorage.setItem('cp_api_key', key); }
+  catch (e) { showToast('This browser blocked saving the key (private window or blocked site data).', 6000); return; }
+  if (readApiKey() !== key) { showToast('The key could not be saved in this browser.', 6000); return; }
+  try { navigator.storage?.persist?.(); } catch (e) { /* best effort */ }
   showToast('API key saved.');
-  document.getElementById('gen-no-key').style.display = 'none';
+  refreshApiKeyUI();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -13022,7 +13041,7 @@ function setGenPS(n) {
 }
 
 async function runGenerator() {
-  const key = localStorage.getItem('cp_api_key');
+  const key = readApiKey();
   if (!key) { showToast('Set API key in Settings first!'); switchTab('settings'); return; }
   const prompt = document.getElementById('gen-prompt').value.trim();
   if (!prompt) return;
