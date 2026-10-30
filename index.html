@@ -998,6 +998,10 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
 .hack-verdict { font-size: 11px; color: var(--text3); min-height: 15px; }
 .hack-verdict.hit { color: var(--green-bright); font-weight: 700; }
 .hack-verdict.miss { color: var(--red-bright); font-weight: 700; }
+#mission-import-body label { display: flex; gap: 8px; align-items: center; text-transform: none; letter-spacing: 0; font-size: 11px; color: var(--text2); text-align: left; margin-bottom: 2px; }
+#mission-import-body input[type=checkbox], #mission-import-body input[type=radio] { width: auto; flex: 0 0 auto; margin: 0; padding: 0; }
+.scene-group-head { display: flex; justify-content: space-between; font-size: 10px; letter-spacing: 0.15em; color: var(--gold-bright); text-transform: uppercase; padding: 8px 2px 4px; }
+.scene-group-head span { color: var(--text3); }
 /* ── TOAST ── */
 .toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -1263,6 +1267,8 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
           <input type="text" id="current-mission-input" placeholder="e.g. Mission 1: Neon Bridge" onchange="onCurrentMissionChange(this.value)">
         </div>
         <button class="btn btn-ghost btn-small" style="height:36px" onclick="openPortraitGallery()">🖼 PORTRAITS</button>
+        <button class="btn btn-ghost btn-small" style="height:36px" onclick="openMissionImportPicker()" title="Load a mission pack: scenes, security, enemies, NPCs and presets in one go">📦 IMPORT MISSION</button>
+        <input type="file" accept="application/json,.json" id="mission-file-input" style="display:none" onchange="handleMissionFile(event)">
       </div>
       <div class="roster-toolbar" id="roster-toolbar"></div>
     </div>
@@ -1305,6 +1311,10 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
       <div class="section-heading">Performance</div>
       <div style="color:var(--text2);font-size:11px;margin-bottom:8px;line-height:1.6">If the tool stutters on a weak device, performance mode turns off the looping glows, pulses and shadows (the layout and all functions stay). Remembered on this device only — players have their own ⚡ button in their top bar.</div>
       <button class="btn btn-ghost btn-small" style="margin-bottom:6px" onclick="toggleLite()">⚡ PERFORMANCE MODE: <span class="lite-state">OFF</span></button>
+      <hr class="divider">
+      <div class="section-heading">Map Storage</div>
+      <div style="color:var(--text2);font-size:11px;margin-bottom:8px;line-height:1.6">Scene maps used to be stored inside the main campaign data, so every connection downloaded all of them. This moves your existing scene maps into their own storage (needs the updated Firebase rules). Safe to run any time; the scene you're currently on moves when you switch away from it.</div>
+      <button class="btn btn-ghost btn-small" onclick="migrateSceneImagesToStore()">🗺 MOVE SCENE MAPS TO SEPARATE STORAGE</button>
       <hr class="divider">
       <div class="section-heading">Tidy Up Generated Characters</div>
       <div style="color:var(--text2);font-size:11px;margin-bottom:8px;line-height:1.6">For characters created before these rules: moves cash written as items (e.g. "Credchip, 350 EB") into real ED, and gives generated NPCs without one a tier-based Firewall (Grunt 8 / Threat 15 / Boss 22, netrunners 10 / 18 / 26). Safe to run any time; one Undo reverts it.</div>
@@ -1940,6 +1950,21 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
         <button class="btn btn-danger" style="flex:1;padding:12px" onclick="applyDmg(-1)">− DAMAGE</button>
         <button class="btn btn-gold" style="flex:1;padding:12px" onclick="applyDmg(1)">+ HEAL</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Mission Import Modal -->
+<div class="modal-overlay" id="mission-import-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <span class="modal-title" id="mission-import-title">IMPORT MISSION</span>
+      <button class="modal-close" onclick="closeModal('mission-import-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="mission-import-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-small" onclick="closeModal('mission-import-modal')">CANCEL</button>
+      <button class="btn btn-primary btn-small" id="mission-import-btn" onclick="runMissionImport()" disabled>IMPORT NOW</button>
     </div>
   </div>
 </div>
@@ -4592,16 +4617,29 @@ function renderScenesModal() {
   // wide (buttons have real min-content width from their label text, the
   // input doesn't, so it absorbed the entire space deficit and became
   // unreadable/untypeable).
-  el.innerHTML = entries.length ? entries.map(([id, s]) => {
+  const row = ([id, s]) => {
     const isLive = id === state.activeSceneId;
     return `<div style="padding:6px 8px;border:1px solid ${isLive ? 'var(--cyan)' : 'var(--border2)'};margin-bottom:4px">
       <input type="text" value="${esc(s.name || '')}" style="width:100%;font-size:12px;margin-bottom:4px" onchange="renameScene('${id}',this.value)">
+      <input type="text" list="scene-mission-list" value="${esc(s.mission || '')}" placeholder="Mission folder…" style="width:100%;font-size:10px;margin-bottom:4px" onchange="setSceneMission('${id}',this.value)">
       <div class="inline-row" style="justify-content:flex-end;gap:8px">
         ${isLive ? '<span style="font-size:10px;color:var(--cyan);white-space:nowrap;margin-right:auto">● LIVE</span>' : `<button class="btn btn-primary btn-small" onclick="switchScene('${id}')">ACTIVATE</button>`}
         <button class="btn btn-danger btn-icon" onclick="deleteScene('${id}')" ${isLive ? 'disabled title="Switch away first"' : ''}>✕</button>
       </div>
     </div>`;
-  }).join('') : '<div style="color:var(--text3);font-size:11px">No scenes yet.</div>';
+  };
+  // Scenes sit in folders by mission (current mission first, unsorted last).
+  const groups = {};
+  entries.forEach(e => { (groups[e[1].mission || ''] = groups[e[1].mission || ''] || []).push(e); });
+  const keys = Object.keys(groups).sort((a, b) => (a === state.currentMission ? -1 : b === state.currentMission ? 1 : a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)));
+  const showHeads = keys.length > 1 || (keys.length === 1 && keys[0] !== '');
+  const html = keys.map(m => {
+    const list = groups[m].sort((a, b) => (a[1].order ?? 1e9) - (b[1].order ?? 1e9) || String(a[1].name).localeCompare(String(b[1].name)));
+    return (showHeads ? `<div class="scene-group-head">${m ? '📁 ' + esc(m) : 'Unsorted'}<span>${list.length}</span></div>` : '') + list.map(row).join('');
+  }).join('');
+  const missions = [...new Set(entries.map(e => e[1].mission).filter(Boolean))];
+  el.innerHTML = (entries.length ? html : '<div style="color:var(--text3);font-size:11px">No scenes yet.</div>') +
+    `<datalist id="scene-mission-list">${missions.map(m => `<option value="${esc(m)}">`).join('')}</datalist>`;
 }
 async function createScene() {
   const input = document.getElementById('scene-new-name');
@@ -4644,6 +4682,8 @@ async function deleteScene(id) {
   state.scenes = scenes;
   try {
     await dbWrite('scenes', scenes);
+    try { await db.ref('sceneImages/' + id).set(null); } catch (imgErr) { /* orphan image is harmless */ }
+    delete sceneImageCache[id];
   } catch (e) {
     console.error('deleteScene failed:', e);
     showToast('Could not delete scene: ' + (e.message || e));
@@ -4673,21 +4713,24 @@ async function switchScene(newId) {
   const oldId = state.activeSceneId;
   try {
     if (oldId) {
-      await dbUpdate({
+      const saveOld = {
         ['scenes/' + oldId + '/securityObjects']: state.securityObjects || {},
         ['scenes/' + oldId + '/tokens']: state.map?.tokens || {},
         ['scenes/' + oldId + '/mapDrawings']: state.mapDrawings || [],
         ['scenes/' + oldId + '/scaleMetersWidth']: state.mapScaleMetersWidth || null,
         ['scenes/' + oldId + '/imageAspect']: state.mapImageAspect || null,
-        ['scenes/' + oldId + '/mapImageData']: mapImage || null,
         ['scenes/' + oldId + '/fogShapes']: state.fogShapes || [],
         ['scenes/' + oldId + '/fogEnabled']: state.fogEnabled || false,
         ['scenes/' + oldId + '/fogAutoReveal']: state.fogAutoReveal || false,
         ['scenes/' + oldId + '/fogVisionRadius']: state.fogVisionRadius ?? 15,
-      });
+      };
+      // The map image goes to the image store (sceneImages/…) when it can —
+      // falling back to the old inline copy — and only when it changed.
+      Object.assign(saveOld, await buildSceneImageSaveUpdates(oldId));
+      await dbUpdate(saveOld);
     }
     const target = state.scenes[newId] || {};
-    const targetImage = target.mapImageData || null;
+    const targetImage = await loadSceneImage(newId);
     // 'mapImage' (singular) is the separate, already-proven-working
     // top-level path the rest of the app renders from — still written
     // here so renderMapView/the mapImage listener keep working unchanged.
@@ -9221,6 +9264,319 @@ async function changeGmPin() {
 function showSetup() {
   document.getElementById('setup-error').style.display = 'none';
   showScreen('screen-setup');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SCENE IMAGE STORE — each scene's map lives at sceneImages/{sceneId}
+// instead of inside campaign/scenes, so connecting no longer downloads
+// every prepped map. Needs the sceneImages block in the Firebase rules;
+// everything here degrades safely if it isn't there yet: a failed write
+// falls back to the old inline storage (never a lost map), and the
+// import runs a probe first and says exactly what's wrong.
+// ═══════════════════════════════════════════════════════════════
+const sceneImageCache = {}; // sceneId -> data URL last known to be in the store
+async function probeSceneImageStore() {
+  try {
+    await db.ref('sceneImages/_probe').set('probe');
+    await db.ref('sceneImages/_probe').set(null);
+    return true;
+  } catch (e) { return false; }
+}
+async function saveSceneImageToStore(sceneId, dataUrl) {
+  try { await db.ref('sceneImages/' + sceneId).set(dataUrl); return true; }
+  catch (e) { console.error('sceneImages write failed (rules?):', e); return false; }
+}
+async function loadSceneImage(sceneId) {
+  const sc = state.scenes?.[sceneId] || {};
+  if (sc.imageStored) {
+    try {
+      const snap = await db.ref('sceneImages/' + sceneId).get();
+      if (snap.exists()) { sceneImageCache[sceneId] = snap.val(); return snap.val(); }
+    } catch (e) { console.error('sceneImages read failed:', e); }
+  }
+  return sc.mapImageData || null;
+}
+// Updates that save the LIVE map image into a scene being switched away
+// from: into the store when possible, inline (the old way) when not, and
+// not at all when it's already there unchanged.
+async function buildSceneImageSaveUpdates(sid) {
+  const p = 'scenes/' + sid + '/';
+  if (!mapImage) return { [p + 'mapImageData']: null, [p + 'imageStored']: null };
+  if (sceneImageCache[sid] === mapImage) return {};
+  if (await saveSceneImageToStore(sid, mapImage)) {
+    sceneImageCache[sid] = mapImage;
+    return { [p + 'imageStored']: true, [p + 'mapImageData']: null };
+  }
+  return { [p + 'mapImageData']: mapImage, [p + 'imageStored']: null };
+}
+// One-click: move maps that are still stored inside campaign/scenes into
+// the store. (The live scene's own image moves when you switch away from it.)
+async function migrateSceneImagesToStore() {
+  if (!(await probeSceneImageStore())) {
+    showToast('Firebase blocks the new image path — publish the updated rules first (see the instructions)', 7000);
+    return;
+  }
+  const ids = Object.keys(state.scenes || {}).filter(id => state.scenes[id].mapImageData && id !== state.activeSceneId);
+  if (!ids.length) { showToast('Nothing to move — no scene keeps its map inside the campaign data'); return; }
+  let moved = 0;
+  for (const id of ids) {
+    const img = state.scenes[id].mapImageData;
+    if (!(await saveSceneImageToStore(id, img))) continue;
+    sceneImageCache[id] = img;
+    // Direct write on purpose: don't push multi-MB strings onto the Undo stack.
+    await db.ref('/').update({
+      [dbPath() + '/scenes/' + id + '/mapImageData']: null,
+      [dbPath() + '/scenes/' + id + '/imageStored']: true,
+    });
+    moved++;
+    showToast(`Moved ${moved}/${ids.length} maps…`, 1500);
+  }
+  showToast(`Done — ${moved} map${moved === 1 ? '' : 's'} moved out of the main campaign data`, 4500);
+}
+async function setSceneMission(id, mission) {
+  if (!state.scenes[id]) return;
+  const m = String(mission || '').trim();
+  state.scenes[id] = { ...state.scenes[id], mission: m || null };
+  await dbWrite('scenes/' + id + '/mission', m || null);
+  renderScenesModal();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MISSION IMPORT — one file ("mission pack", .json) carries a whole
+// mission: its scenes (map, scale, fog, hidden tokens, security devices
+// with view cones), its fully built characters and its encounter
+// presets. Characters land in the roster under the mission's folder,
+// scenes under the same folder in the Scenes panel. Importing is
+// previewed first, backs the campaign up first, and is ONE Undo step
+// (maps excepted — those sit in the image store). Re-importing the same
+// pack updates what it created before instead of duplicating it.
+// ═══════════════════════════════════════════════════════════════
+const MISSION_PACK_FORMAT = 'cp-phantom-mission';
+const MISSION_PACK_VERSION = 1;
+let _missionPack = null;
+function openMissionImportPicker() { document.getElementById('mission-file-input').click(); }
+function handleMissionFile(event) {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let pack;
+    try { pack = JSON.parse(reader.result); } catch (e) { showToast('That file is not a readable mission pack.'); return; }
+    previewMissionPack(pack, file.name);
+  };
+  reader.readAsText(file);
+}
+const clampPct = v => Math.max(0, Math.min(100, Number.isFinite(+v) ? +v : 50));
+// Optional character art in a pack: { crop: <~200px square>, full: <≤768px> } as
+// image data URLs — the same two images the portrait editor stores.
+function isValidPortrait(p) {
+  return !!p && typeof p.crop === 'string' && p.crop.startsWith('data:image/') && p.crop.length < 1500000
+    && (!p.full || (typeof p.full === 'string' && p.full.startsWith('data:image/') && p.full.length < 2500000));
+}
+function validateMissionPack(pack) {
+  const errors = [], warnings = [];
+  const stats = { chars: 0, scenes: 0, devices: 0, tokens: 0, presets: 0, imageBytes: 0, portraits: 0 };
+  if (!pack || pack.format !== MISSION_PACK_FORMAT) { errors.push('Not a CP Phantom mission pack (wrong or missing "format").'); return { errors, warnings, stats }; }
+  if (pack.version !== MISSION_PACK_VERSION) errors.push(`Unsupported pack version ${pack.version} (this tool reads version ${MISSION_PACK_VERSION}).`);
+  if (!pack.id || typeof pack.id !== 'string') errors.push('Pack has no id.');
+  if (!pack.mission || typeof pack.mission !== 'string') errors.push('Pack has no mission name.');
+  const chars = pack.characters && typeof pack.characters === 'object' ? pack.characters : {};
+  Object.entries(chars).forEach(([k, c]) => {
+    stats.chars++;
+    if (!c || typeof c.name !== 'string' || !c.name.trim()) errors.push(`Character "${k}" has no name.`);
+    else if (!(Number(c.hp_max) > 0)) warnings.push(`${c.name}: no valid max HP — will be given 10.`);
+    if (c && c.portrait) {
+      if (isValidPortrait(c.portrait)) stats.portraits++;
+      else warnings.push(`${c.name || k}: portrait is missing a valid crop or is too large — skipped.`);
+    }
+  });
+  const sceneKeys = new Set();
+  (Array.isArray(pack.scenes) ? pack.scenes : []).forEach((s, i) => {
+    stats.scenes++;
+    const label = s && s.name ? `Scene "${s.name}"` : `Scene #${i + 1}`;
+    if (!s || !s.key || sceneKeys.has(s.key)) { errors.push(`${label}: missing or duplicate key.`); return; }
+    sceneKeys.add(s.key);
+    if (!s.name) errors.push(`${label}: no name.`);
+    if (typeof s.image !== 'string' || !s.image.startsWith('data:image/')) errors.push(`${label}: map image missing or not an embedded image.`);
+    else if (s.image.length > 7900000) errors.push(`${label}: map image is too large (${(s.image.length / 1e6).toFixed(1)} MB; limit 7.9 MB).`);
+    else stats.imageBytes += s.image.length;
+    Object.keys(s.tokens || {}).forEach(ck => { stats.tokens++; if (!chars[ck]) errors.push(`${label}: token for unknown character "${ck}".`); });
+    (s.security || []).forEach(d => {
+      stats.devices++;
+      if (!SECURITY_DEVICE_CATALOG[d.deviceType]) errors.push(`${label}: unknown security device "${d.deviceType}".`);
+      if (!d.pos || !Number.isFinite(+d.pos.x) || !Number.isFinite(+d.pos.y)) warnings.push(`${label}: device "${d.name || d.deviceType}" has no position — placed at the centre.`);
+    });
+  });
+  (pack.presets || []).forEach(p => {
+    stats.presets++;
+    (p.characters || []).forEach(ck => { if (!chars[ck]) errors.push(`Preset "${p.name}": unknown character "${ck}".`); });
+    if (p.sceneKey && !sceneKeys.has(p.sceneKey)) errors.push(`Preset "${p.name}": unknown scene "${p.sceneKey}".`);
+  });
+  if (!stats.chars && !stats.scenes) errors.push('The pack is empty.');
+  return { errors, warnings, stats };
+}
+async function previewMissionPack(pack, fileName) {
+  const v = validateMissionPack(pack);
+  _missionPack = { pack, v, probeOk: null, busy: false };
+  document.getElementById('mission-import-title').textContent = 'IMPORT MISSION';
+  const body = document.getElementById('mission-import-body');
+  const importBtn = document.getElementById('mission-import-btn');
+  importBtn.disabled = true;
+  openModal('mission-import-modal');
+  if (v.errors.length) {
+    body.innerHTML = `<div style="font-size:11px;color:var(--text3);margin-bottom:8px">${esc(fileName || '')}</div>` +
+      `<div style="padding:8px 10px;border-left:3px solid var(--red-bright);background:var(--surface2);font-size:11px;line-height:1.6"><strong style="color:var(--red-bright)">Cannot import — ${v.errors.length} problem${v.errors.length === 1 ? '' : 's'}:</strong><br>${v.errors.slice(0, 12).map(esc).join('<br>')}</div>`;
+    return;
+  }
+  body.innerHTML = '<div style="color:var(--text3);font-size:11px">Checking…</div>';
+  const probeOk = await probeSceneImageStore();
+  _missionPack.probeOk = probeOk;
+  const existChars = Object.entries(state.characters).filter(([, c]) => c.importKey && c.importKey.startsWith(pack.id + ':')).length;
+  const existScenes = Object.values(state.scenes || {}).filter(s => s.importKey && s.importKey.startsWith(pack.id + ':')).length;
+  const scenesHtml = pack.scenes.map(s => `<div style="display:flex;gap:8px;align-items:center;padding:6px;border:1px solid var(--border2);margin-bottom:4px">
+      <img src="${s.image}" style="width:84px;height:48px;object-fit:cover;border:1px solid var(--border)">
+      <div style="font-size:11px;line-height:1.5"><strong>${esc(s.name)}</strong><br><span style="color:var(--text2)">${(s.security || []).length} devices · ${Object.keys(s.tokens || {}).length} tokens · fog ${s.fog?.enabled === false ? 'off' : 'ON'}</span></div>
+    </div>`).join('');
+  const kinds = { pc: 0, npc: 0, ally: 0, other: 0 };
+  Object.values(pack.characters || {}).forEach(c => { if (c.isAlly) kinds.ally++; else if (c.isNPC) kinds.npc++; else kinds.other++; });
+  const warnHtml = v.warnings.length ? `<div style="padding:7px 10px;border-left:3px solid var(--gold-bright);background:var(--surface2);font-size:11px;line-height:1.6;margin-bottom:8px"><strong style="color:var(--gold-bright)">Notes:</strong><br>${v.warnings.slice(0, 8).map(esc).join('<br>')}</div>` : '';
+  const probeHtml = probeOk
+    ? `<div style="font-size:11px;color:var(--green-bright);margin-bottom:8px">✓ Map storage check passed</div>`
+    : `<div style="padding:8px 10px;border-left:3px solid var(--red-bright);background:var(--surface2);font-size:11px;line-height:1.6;margin-bottom:8px"><strong style="color:var(--red-bright)">Map storage is blocked by your Firebase rules.</strong> Publish the updated rules (a <code>sceneImages</code> block), then try again — or tick the box below to keep the maps inside the campaign data the old way (works, but makes every connection download them).<label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer"><input type="checkbox" id="mission-inline" onchange="document.getElementById('mission-import-btn').disabled=!this.checked"> Import anyway, store maps inside the campaign</label></div>`;
+  body.innerHTML = `
+    <div style="font-size:10px;color:var(--text3);margin-bottom:4px">${esc(fileName || '')}</div>
+    <div style="font-family:var(--font-display);font-size:16px;font-weight:800;margin-bottom:8px">${esc(pack.mission)}</div>
+    <div style="font-size:11px;color:var(--text2);line-height:1.7;margin-bottom:10px">
+      <strong>${v.stats.scenes}</strong> scenes · <strong>${v.stats.devices}</strong> security devices · <strong>${v.stats.tokens}</strong> map tokens<br>
+      <strong>${v.stats.chars}</strong> characters (${kinds.npc} enemies/NPCs, ${kinds.ally} allies${kinds.other ? ', ' + kinds.other + ' other' : ''}) · <strong>${v.stats.presets}</strong> encounter presets · <strong>${v.stats.portraits}</strong> portraits<br>
+      Maps ≈ ${(v.stats.imageBytes / 1e6).toFixed(1)} MB. Everything is placed hidden/unrevealed, fog starts ON.
+    </div>
+    ${probeHtml}${warnHtml}
+    ${scenesHtml}
+    ${(existChars || existScenes) ? `<div style="margin-top:8px;font-size:11px;line-height:1.6"><strong style="color:var(--gold-bright)">This mission was imported before</strong> (${existScenes} scenes, ${existChars} characters).
+      <label style="display:flex;gap:8px;align-items:center;margin-top:4px;cursor:pointer"><input type="radio" name="mission-mode" value="update" checked> Update them in place (their current HP etc. reset to the pack)</label>
+      <label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="radio" name="mission-mode" value="copy"> Import as new copies alongside</label></div>` : ''}
+    <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:11px;cursor:pointer"><input type="checkbox" id="mission-set-current" checked> Make this the current mission</label>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:4px;font-size:11px;cursor:pointer"><input type="checkbox" id="mission-backup" checked> Back up the campaign first (recommended)</label>
+    <div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6">Afterwards, <strong>↺ UNDO</strong> removes the characters, scenes and presets in one step.</div>`;
+  importBtn.disabled = !probeOk;
+}
+function newCharId(i) { return 'char_' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2, 5); }
+async function runMissionImport() {
+  const ctx = _missionPack;
+  if (!ctx || ctx.busy || ctx.v.errors.length) return;
+  ctx.busy = true;
+  const { pack } = ctx;
+  const btn = document.getElementById('mission-import-btn');
+  const body = document.getElementById('mission-import-body');
+  const status = (t) => { btn.textContent = t; };
+  btn.disabled = true;
+  const mode = document.querySelector('input[name="mission-mode"]:checked')?.value || 'update';
+  const setCurrent = document.getElementById('mission-set-current')?.checked;
+  const doBackup = document.getElementById('mission-backup')?.checked;
+  const inline = !ctx.probeOk && document.getElementById('mission-inline')?.checked;
+  const written = []; // scene image ids written, to roll back if the import aborts
+  try {
+    if (doBackup) { status('BACKING UP…'); await takeBackupSnapshot('before mission import: ' + pack.mission); }
+    // Which previously imported items does this pack map onto?
+    const existChar = {}, existScene = {};
+    if (mode === 'update') {
+      Object.entries(state.characters).forEach(([id, c]) => { if (c.importKey && c.importKey.startsWith(pack.id + ':')) existChar[c.importKey.slice(pack.id.length + 1)] = id; });
+      Object.entries(state.scenes || {}).forEach(([id, s]) => { if (s.importKey && s.importKey.startsWith(pack.id + ':') && id !== state.activeSceneId) existScene[s.importKey.slice(pack.id.length + 1)] = id; });
+    }
+    const charId = {}; let n = 0;
+    Object.keys(pack.characters || {}).forEach(k => { charId[k] = existChar[k] || newCharId(n++); });
+    const sceneId = {};
+    pack.scenes.forEach((s, i) => { sceneId[s.key] = existScene[s.key] || ('scene_' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2, 4)); });
+    // 1. maps first (so no scene ever points at a missing image)
+    const updates = {};
+    for (let i = 0; i < pack.scenes.length; i++) {
+      const s = pack.scenes[i];
+      status(`MAPS ${i + 1}/${pack.scenes.length}…`);
+      if (!inline) {
+        if (!(await saveSceneImageToStore(sceneId[s.key], s.image))) throw new Error(`Could not store the map for "${s.name}" (Firebase rules?).`);
+        written.push(sceneId[s.key]);
+        sceneImageCache[sceneId[s.key]] = s.image;
+      }
+    }
+    status('IMPORTING…');
+    // 1b. portraits (best effort — a failed portrait never blocks the import)
+    let portraitFails = 0;
+    for (const [k, src] of Object.entries(pack.characters || {})) {
+      if (!isValidPortrait(src.portrait)) continue;
+      try { await db.ref('portraits/' + charId[k]).set(JSON.stringify({ crop: src.portrait.crop, full: src.portrait.full || null })); }
+      catch (pe) { portraitFails++; console.error('Portrait write failed for ' + src.name, pe); }
+    }
+    // 2. characters
+    Object.entries(pack.characters || {}).forEach(([k, src]) => {
+      const { portrait: _art, ...srcNoArt } = src; // art lives under portraits/, never in the campaign record
+      const c = JSON.parse(JSON.stringify(srcNoArt));
+      c.mission = pack.mission;
+      c.importKey = pack.id + ':' + k;
+      c.pin = null;
+      if (!(Number(c.hp_max) > 0)) c.hp_max = 10;
+      if (c.hp_current == null) c.hp_current = c.hp_max;
+      if (!Array.isArray(c.status_effects)) c.status_effects = [];
+      if (c.owner_char_id && charId[c.owner_char_id]) c.owner_char_id = charId[c.owner_char_id];
+      updates['characters/' + charId[k]] = c;
+    });
+    // 3. scenes
+    pack.scenes.forEach((s, i) => {
+      const sid = sceneId[s.key];
+      const sec = {};
+      (s.security || []).forEach((d, di) => {
+        const rec = createSecurityObjectRecord(d.deviceType);
+        if (!rec) return;
+        if (d.name) rec.name = String(d.name).slice(0, 80);
+        rec.pos = { x: clampPct(d.pos?.x), y: clampPct(d.pos?.y) };
+        if (Number.isFinite(+d.rotation)) rec.rotation = ((+d.rotation % 360) + 360) % 360;
+        if (Number.isFinite(+d.coneAngle)) rec.coneAngle = Math.max(10, Math.min(180, +d.coneAngle));
+        if (Number.isFinite(+d.visualRange)) rec.visualRange = Math.max(0, Math.min(100, +d.visualRange));
+        if (Number.isFinite(+d.rangeMetersOverride)) rec.rangeMetersOverride = +d.rangeMetersOverride;
+        if (d.note) rec.note = String(d.note).slice(0, 300);
+        rec.revealed = !!d.revealed;
+        sec['sec_' + Date.now() + '_' + i + '_' + di + '_' + Math.random().toString(36).slice(2, 4)] = rec;
+      });
+      const tokens = {};
+      Object.entries(s.tokens || {}).forEach(([ck, t]) => { tokens[charId[ck]] = { x: clampPct(t.x), y: clampPct(t.y), hidden: t.hidden !== false }; });
+      const fog = s.fog || {};
+      const rec = {
+        name: s.name, mission: pack.mission, order: i, importKey: pack.id + ':' + s.key,
+        securityObjects: sec, tokens, mapDrawings: s.drawings || [],
+        scaleMetersWidth: Number.isFinite(+s.scaleMetersWidth) ? +s.scaleMetersWidth : null,
+        imageAspect: Number.isFinite(+s.imageAspect) ? +s.imageAspect : null,
+        fogEnabled: fog.enabled !== false, fogAutoReveal: !!fog.autoReveal,
+        fogVisionRadius: Number.isFinite(+fog.visionRadius) ? +fog.visionRadius : 15,
+        fogShapes: Array.isArray(fog.shapes) ? fog.shapes : [],
+      };
+      if (inline) rec.mapImageData = s.image; else rec.imageStored = true;
+      updates['scenes/' + sid] = rec;
+    });
+    // 4. presets
+    (pack.presets || []).forEach((p, i) => {
+      const pid = 'enc_' + pack.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) + '_' + i + '_' + Math.random().toString(36).slice(2, 4);
+      updates['encounterPresets/' + pid] = {
+        name: p.name, charIds: (p.characters || []).map(ck => charId[ck]), sceneId: p.sceneKey ? sceneId[p.sceneKey] : null, ts: Date.now() + i,
+      };
+    });
+    if (setCurrent) updates['currentMission'] = pack.mission;
+    logTo(updates, `Imported mission "${pack.mission}": ${pack.scenes.length} scenes, ${Object.keys(pack.characters || {}).length} characters`);
+    await dbUpdate(updates);
+    expandedMissionGroups.add(pack.mission);
+    closeModal('mission-import-modal');
+    renderAll();
+    showToast(`Imported "${pack.mission}" — ${pack.scenes.length} scenes, ${Object.keys(pack.characters || {}).length} characters${portraitFails ? ` (${portraitFails} portraits could not be stored)` : ''}. Open Scenes to activate one.`, 6000);
+  } catch (e) {
+    console.error('Mission import failed', e);
+    // Nothing structural was written yet (maps go first, data last in ONE update),
+    // so the only thing to clean up is any map already stored.
+    for (const sid of written) { try { await db.ref('sceneImages/' + sid).set(null); } catch (x) { /* best effort */ } }
+    body.insertAdjacentHTML('afterbegin', `<div style="padding:8px 10px;border-left:3px solid var(--red-bright);background:var(--surface2);font-size:11px;margin-bottom:8px"><strong style="color:var(--red-bright)">Import stopped:</strong> ${esc(e.message || e)} Nothing was changed.</div>`);
+    btn.disabled = false;
+  }
+  btn.textContent = 'IMPORT NOW';
+  ctx.busy = false;
 }
 
 // ═══════════════════════════════════════════════════════════════
