@@ -2658,6 +2658,40 @@ async function dbUpdate(updates, label, prevOverrides) {
   await db.ref('/').update(prefixed);
 }
 
+// Talent rows store a copy of the catalog's mods from the moment the level was
+// taken, so a corrected catalog value never reaches characters that already
+// have the talent. This re-copies the mods for just the corrected talents
+// (listed by name) onto matching name+level rows. Runs once per GM page load,
+// writes straight to the database (no undo entry — it's a data correction).
+const TALENT_MOD_CORRECTIONS = ['Ruestungsbrecher', 'Armor Breaker', 'System Expertise'];
+let talentCorrectionsDone = false;
+function correctTalentMods() {
+  if (talentCorrectionsDone || session.role !== 'gm' || typeof TALENT_CATALOG === 'undefined') return;
+  talentCorrectionsDone = true;
+  const catalogLevel = (name, lvl) => {
+    for (const list of Object.values(TALENT_CATALOG)) {
+      const t = list.find(x => x.name === name);
+      const l = t?.levels.find(x => x.lvl === lvl);
+      if (l) return l;
+    }
+    return null;
+  };
+  const updates = {};
+  Object.entries(state.characters).forEach(([id, c]) => {
+    (c.talents || []).forEach((t, ti) => {
+      if (!TALENT_MOD_CORRECTIONS.includes(t.name)) return;
+      const lv = catalogLevel(t.name, t.lvl);
+      if (!lv) return;
+      const want = (lv.mods || []).map(m => ({ ...m }));
+      if (JSON.stringify(t.mods || []) !== JSON.stringify(want)) updates[dbPath() + '/characters/' + id + '/talents/' + ti + '/mods'] = want;
+    });
+  });
+  if (Object.keys(updates).length) {
+    db.ref('/').update(updates).then(() => console.log('Corrected talent modifiers on ' + Object.keys(updates).length + ' talent rows'))
+      .catch(e => console.warn('Talent correction failed', e));
+  }
+}
+
 function startSync() {
   if (pollTimer) clearInterval(pollTimer);
   startConnectionWatch();
@@ -2683,6 +2717,7 @@ function startSync() {
     if (hash === lastStateHash) return;
     lastStateHash = hash;
     state.characters = data.characters || {};
+    correctTalentMods();
     state.combat = data.combat || { active: false, round: 1, currentTurn: 0, order: [] };
     state.campaignName = data.campaignName || 'Campaign';
     state.currentMission = data.currentMission || '';
@@ -5642,19 +5677,25 @@ function renderRosterToolbar(totalCount) {
   const chips = [
     ['all', `All · ${totalCount}`], ['pc', 'PCs'], ['npc', 'NPCs'], ['ally', 'Allies'], ['companion', 'Companions'],
   ];
-  const wrote = setHTML(el, `
-    ${chips.map(([key, label]) => `<span class="roster-filter-chip ${charListFilter === key ? 'active' : ''}" onclick="setCharListFilter('${key}')">${esc(label)}</span>`).join('')}
-    <input type="text" class="roster-search" placeholder="Search roster…" value="${esc(charListSearch)}" oninput="onCharListSearch(this.value)">
-  `);
-  if (!wrote) return; // identical markup — DOM (and the search box's focus/caret) untouched
-  // Re-typing into the search box re-renders the whole toolbar on every
-  // keystroke (renderCharList calls this) — preserve focus/caret so
-  // typing doesn't get interrupted.
-  const input = el.querySelector('.roster-search');
-  if (input && document.activeElement?.classList.contains('roster-search')) {
-    input.focus();
-    input.setSelectionRange(input.value.length, input.value.length);
+  // The search box is created ONCE and never re-rendered: only the chips are
+  // rebuilt. (Rebuilding the input on every keystroke dropped its focus —
+  // after innerHTML the old element is gone and activeElement is <body> — so
+  // you had to click back in after each letter.)
+  let input = el.querySelector('.roster-search');
+  if (!input) {
+    el.innerHTML = '<span class="roster-chips" style="display:contents"></span>';
+    input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'roster-search';
+    input.placeholder = 'Search roster…';
+    input.setAttribute('autocomplete', 'off');
+    input.addEventListener('input', () => onCharListSearch(input.value));
+    el.appendChild(input);
+    el._lastHtml = undefined;
   }
+  const chipsEl = el.querySelector('.roster-chips');
+  setHTML(chipsEl, chips.map(([key, label]) => `<span class="roster-filter-chip ${charListFilter === key ? 'active' : ''}" onclick="setCharListFilter('${key}')">${esc(label)}</span>`).join(''));
+  if (document.activeElement !== input && input.value !== charListSearch) input.value = charListSearch;
 }
 function renderCharList() {
   const missionInput = document.getElementById('current-mission-input');
@@ -11140,8 +11181,8 @@ const TALENT_CATALOG = {
     { name: 'System Expertise', levels: [
       { lvl:'I', req:'Mind 8', effect:'+2 PW on all Routine Hacks (Int+Focus)', mods:[{appliesTo:'pw',scope:'hacks',amount:2,conditional:false}] },
       { lvl:'II', req:'Mind 12', effect:'+2 PW on all Exotic Hacks (Int+Creativity) too', mods:[{appliesTo:'pw',scope:'hacks',amount:2,conditional:false}] },
-      { lvl:'III', req:'Mind 16', effect:'+2 PW on ALL hacks (stacks)', mods:[{appliesTo:'pw',scope:'hacks',amount:2,conditional:false}] },
-      { lvl:'IV', req:'Mind 22', effect:'+2 PW all hacks. Crit Fail has no downside anymore — the hack just fails.', mods:[{appliesTo:'pw',scope:'hacks',amount:2,conditional:false}] },
+      { lvl:'III', req:'Mind 16', effect:'+2 PW on ALL hacks (stacks)', mods:[{appliesTo:'pw',scope:'hacks',amount:4,conditional:false}] },
+      { lvl:'IV', req:'Mind 22', effect:'+2 PW all hacks. Crit Fail has no downside anymore — the hack just fails.', mods:[{appliesTo:'pw',scope:'hacks',amount:6,conditional:false}] },
     ]},
     { name: 'Exploit', levels: [
       { lvl:'I', req:'Mind 10', effect:'+2 PW on hacks vs targets with active Cyberware Malfunction', mods:[{appliesTo:'pw',scope:'hacks',amount:2,conditional:true}] },
@@ -11201,9 +11242,9 @@ const TALENT_CATALOG = {
       { lvl:'IV', req:'Power 22', effect:'+6 WB. Crit Success: Weapon Bonus doubled on that hit.', mods:[{appliesTo:'wb',scope:'melee',amount:6,conditional:false}] },
     ]},
     { name: 'Ruestungsbrecher', levels: [
-      { lvl:'I', req:'Power 10', effect:'Melee hits reduce target SP by 1 per hit', mods:[{appliesTo:'armorAblation',scope:'melee',amount:0,conditional:false}] },
-      { lvl:'II', req:'Power 14', effect:'SP reduction: 2 per hit', mods:[{appliesTo:'armorAblation',scope:'melee',amount:1,conditional:false}] },
-      { lvl:'III', req:'Power 18', effect:'SP reduction: 3. Crit Success: 6 (not automated — apply the extra manually on a crit).', mods:[{appliesTo:'armorAblation',scope:'melee',amount:2,conditional:false}] },
+      { lvl:'I', req:'Power 10', effect:'Melee hits reduce target SP by 1 per hit', mods:[{appliesTo:'armorAblation',scope:'melee',amount:1,conditional:false}] },
+      { lvl:'II', req:'Power 14', effect:'SP reduction: 2 per hit', mods:[{appliesTo:'armorAblation',scope:'melee',amount:2,conditional:false}] },
+      { lvl:'III', req:'Power 18', effect:'SP reduction: 3. Crit Success: 6 (not automated — apply the extra manually on a crit).', mods:[{appliesTo:'armorAblation',scope:'melee',amount:3,conditional:false}] },
     ]},
     { name: 'Kampfrausch', levels: [
       { lvl:'I', req:'Power 10', effect:'After a melee kill: +2 PW on the next attack this round', mods:[{appliesTo:'pw',scope:'melee',amount:2,conditional:true}] },
