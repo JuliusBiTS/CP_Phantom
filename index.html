@@ -8822,22 +8822,63 @@ function downloadRecap() {
 // scene (not its image — that's already stored), so loading the preset
 // later puts the board back the way it was when you saved.
 // ═══════════════════════════════════════════════════════════════
+// Presets are grouped under their mission (saved on the preset, or — for ones
+// saved before that existed — taken from the scene they point at) so 50+
+// encounters across many missions stay collapsed. Same header look as the
+// roster's mission groups; the current mission opens by default.
+const PRESET_NO_MISSION = 'Other presets';
+let presetGroupOpen = {}; // mission → true/false once the user has toggled it
+function presetMission(p) {
+  return p.mission || (p.sceneId && state.scenes?.[p.sceneId]?.mission) || PRESET_NO_MISSION;
+}
+function presetGroupIsOpen(tag) {
+  return tag in presetGroupOpen ? presetGroupOpen[tag] : tag === state.currentMission;
+}
+function togglePresetGroup(tag) {
+  presetGroupOpen[tag] = !presetGroupIsOpen(tag);
+  renderPresets();
+}
+function presetRowHtml([pid, p]) {
+  const ids = p.charIds || [];
+  const have = ids.filter(cid => state.characters[cid]).length;
+  const scene = p.sceneId && state.scenes?.[p.sceneId]?.name;
+  return `<div class="preset-row">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
+      <div style="font-size:10px;color:var(--text2)">${have}${have !== ids.length ? '/' + ids.length : ''} fighter${ids.length === 1 ? '' : 's'}${scene ? ' · 🗺 ' + esc(scene) : ''}${have !== ids.length ? ' · ' + (ids.length - have) + ' no longer in roster' : ''}</div>
+    </div>
+    <button class="btn btn-primary btn-small" style="width:auto" onclick="loadEncounterPreset('${pid}')">LOAD</button>
+    <button class="btn btn-danger btn-small btn-icon" onclick="deleteEncounterPreset('${pid}')" title="Delete preset">✕</button>
+  </div>`;
+}
 function renderPresets() {
   const el = document.getElementById('encounter-presets'); if (!el) return;
-  const presets = Object.entries(state.encounterPresets || {}).filter(([, p]) => p && p.name).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
-  setHTML(el, presets.length ? presets.map(([pid, p]) => {
-    const ids = p.charIds || [];
-    const have = ids.filter(cid => state.characters[cid]).length;
-    const scene = p.sceneId && state.scenes?.[p.sceneId]?.name;
-    return `<div class="preset-row">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
-        <div style="font-size:10px;color:var(--text2)">${have}${have !== ids.length ? '/' + ids.length : ''} fighter${ids.length === 1 ? '' : 's'}${scene ? ' · 🗺 ' + esc(scene) : ''}${have !== ids.length ? ' · ' + (ids.length - have) + ' no longer in roster' : ''}</div>
-      </div>
-      <button class="btn btn-primary btn-small" style="width:auto" onclick="loadEncounterPreset('${pid}')">LOAD</button>
-      <button class="btn btn-danger btn-small btn-icon" onclick="deleteEncounterPreset('${pid}')" title="Delete preset">✕</button>
-    </div>`;
-  }).join('') : '<div style="color:var(--text3);font-size:11px;line-height:1.6">No presets yet — queue a fight above, then save it here to reuse it later.</div>');
+  const presets = Object.entries(state.encounterPresets || {}).filter(([, p]) => p && p.name);
+  if (!presets.length) {
+    setHTML(el, '<div style="color:var(--text3);font-size:11px;line-height:1.6">No presets yet — queue a fight above, then save it here to reuse it later.</div>');
+    return;
+  }
+  const groups = {};
+  presets.forEach(e => { (groups[presetMission(e[1])] = groups[presetMission(e[1])] || []).push(e); });
+  // current mission first, "Other presets" last, the rest alphabetical
+  const tags = Object.keys(groups).sort((a, b) => {
+    if (a === state.currentMission) return -1;
+    if (b === state.currentMission) return 1;
+    if (a === PRESET_NO_MISSION) return 1;
+    if (b === PRESET_NO_MISSION) return -1;
+    return a.localeCompare(b);
+  });
+  setHTML(el, tags.map(tag => {
+    const isOpen = presetGroupIsOpen(tag);
+    // imported packs list in story order (oldest first); hand-saved presets newest first
+    const rows = groups[tag].sort((a, b) => tag === PRESET_NO_MISSION ? (b[1].ts || 0) - (a[1].ts || 0) : (a[1].ts || 0) - (b[1].ts || 0));
+    return `<div class="mission-group-header ${isOpen ? 'open' : ''}" data-mission="${esc(tag)}" onclick="togglePresetGroup(this.dataset.mission)">
+      <span class="chevron">▶</span>
+      <span>${esc(tag)}</span>
+      <span class="mission-group-count">${rows.length}</span>
+    </div>
+    ${isOpen ? `<div class="mission-group-body">${rows.map(presetRowHtml).join('')}</div>` : ''}`;
+  }).join(''));
 }
 async function saveEncounterPreset() {
   const ids = (state.encounterQueue || []).filter(id => state.characters[id]);
@@ -8846,8 +8887,9 @@ async function saveEncounterPreset() {
   const name = (prompt('Name this encounter preset:', 'Encounter ' + n) || '').trim();
   if (!name) return;
   const sid = state.activeSceneId && state.scenes?.[state.activeSceneId] ? state.activeSceneId : null;
+  const mission = (sid && state.scenes[sid].mission) || state.currentMission || null;
   const updates = {
-    ['encounterPresets/enc_' + Date.now().toString(36)]: { name: name.slice(0, 60), charIds: ids, sceneId: sid, ts: Date.now() },
+    ['encounterPresets/enc_' + Date.now().toString(36)]: { name: name.slice(0, 60), charIds: ids, sceneId: sid, mission, ts: Date.now() },
   };
   if (sid) {
     Object.assign(updates, {
@@ -9557,13 +9599,14 @@ async function runMissionImport() {
     (pack.presets || []).forEach((p, i) => {
       const pid = 'enc_' + pack.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) + '_' + i + '_' + Math.random().toString(36).slice(2, 4);
       updates['encounterPresets/' + pid] = {
-        name: p.name, charIds: (p.characters || []).map(ck => charId[ck]), sceneId: p.sceneKey ? sceneId[p.sceneKey] : null, ts: Date.now() + i,
+        name: p.name, charIds: (p.characters || []).map(ck => charId[ck]), sceneId: p.sceneKey ? sceneId[p.sceneKey] : null, mission: pack.mission, ts: Date.now() + i,
       };
     });
     if (setCurrent) updates['currentMission'] = pack.mission;
     logTo(updates, `Imported mission "${pack.mission}": ${pack.scenes.length} scenes, ${Object.keys(pack.characters || {}).length} characters`);
     await dbUpdate(updates);
     expandedMissionGroups.add(pack.mission);
+    presetGroupOpen[pack.mission] = true;
     closeModal('mission-import-modal');
     renderAll();
     showToast(`Imported "${pack.mission}" — ${pack.scenes.length} scenes, ${Object.keys(pack.characters || {}).length} characters${portraitFails ? ` (${portraitFails} portraits could not be stored)` : ''}. Open Scenes to activate one.`, 6000);
