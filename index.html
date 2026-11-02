@@ -859,6 +859,16 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
 .reveal-name { font-size: 26px; font-weight: 700; letter-spacing: 0.08em; }
 .reveal-flavor { max-width: 460px; font-size: 13px; line-height: 1.7; color: var(--text2); font-style: italic; }
 .reveal-hint { font-size: 10px; letter-spacing: 0.25em; color: var(--text3); margin-top: 8px; }
+/* Props & vistas: the full-screen reveal, the paper look for text handouts, and the player's handout folder */
+.prop-paper { background: #e8e2d0; color: #1c1a16; font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.6; padding: 22px 26px; max-width: min(90vw, 560px); max-height: 62vh; overflow: auto; white-space: pre-wrap; text-align: left; box-shadow: 0 6px 30px rgba(0,0,0,.6); }
+.prop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.prop-card { background: var(--surface); border: 1px solid var(--border2); cursor: pointer; display: flex; flex-direction: column; }
+.prop-card:hover { border-color: var(--cyan); }
+.prop-card .prop-thumb { aspect-ratio: 4 / 3; background: #0b0f16 center / contain no-repeat; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--text3); padding: 6px; text-align: center; overflow: hidden; }
+.prop-card .prop-meta { padding: 6px 8px 8px; }
+.prop-card .prop-title { font-size: 12px; font-weight: 700; line-height: 1.3; }
+.prop-card .prop-cap { font-size: 10px; color: var(--text3); line-height: 1.4; margin-top: 2px; }
+.prop-new { font-size: 8px; letter-spacing: .14em; color: var(--gold-bright); border: 1px solid var(--gold-bright); padding: 1px 4px; margin-left: 4px; }
 /* Player-facing fullscreen map — a phone in portrait showing a landscape
    battle map (the common case) only fills a small strip of the screen at
    its normal width-constrained size. Rather than reparenting the map DOM
@@ -1202,6 +1212,7 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
     <span class="topbar-title" id="gm-campaign-title">CAMPAIGN</span>
     <span id="gm-combat-badge" class="topbar-badge badge-combat" style="display:none">● COMBAT</span>
     <span id="gm-round-display" class="topbar-round" style="display:none"></span>
+    <button id="props-btn" class="btn btn-ghost btn-small" onclick="openPropsGallery()" title="Posters, handouts and vistas of the current mission — show them to the players">PROPS</button>
     <button id="log-btn" class="btn btn-ghost btn-small" onclick="openLogModal()" title="Combat log &amp; session recap">LOG</button>
     <button id="undo-btn" class="btn btn-ghost btn-small" style="opacity:0.4" onclick="undoLast()" disabled title="Nothing to undo">↺ UNDO</button>
     <span class="topbar-badge badge-gm">GM</span>
@@ -1473,6 +1484,7 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
     <button class="tab" onclick="switchPlayerTab('inventory')">Inventory</button>
     <button class="tab" onclick="switchPlayerTab('notes')">Notes</button>
     <button class="tab" onclick="switchPlayerTab('map')">Map</button>
+    <button class="tab" id="player-tab-btn-handouts" onclick="switchPlayerTab('handouts')">Handouts</button>
   </div>
   <div id="player-turn-banner" class="turn-banner"></div>
 
@@ -1645,6 +1657,15 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
       </div>
     </div>
   </div>
+  <div id="player-tab-handouts" class="tab-content main-scroll">
+    <div class="player-view">
+      <div class="player-card">
+        <div class="player-card-title">Handouts &amp; things you have seen</div>
+        <div id="player-handouts-list"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="player-tab-map" class="tab-content main-scroll">
     <div class="player-view">
       <div class="player-card">
@@ -2271,6 +2292,17 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
 
 <!-- GM-triggered fullscreen portrait reveal, broadcast to every player -->
 <div id="portrait-reveal-overlay" class="portrait-reveal-overlay" onclick="dismissPortraitReveal()"></div>
+<div id="prop-reveal-overlay" class="portrait-reveal-overlay" onclick="dismissPropReveal()"></div>
+<div class="modal-overlay" id="props-modal">
+  <div class="modal" style="max-width:1040px;width:96vw">
+    <div class="modal-header">
+      <span class="modal-title" id="props-modal-title">PROPS &amp; VISTAS</span>
+      <button class="modal-close" onclick="closeModal('props-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="props-modal-body"></div>
+    <div class="modal-footer" id="props-modal-footer"></div>
+  </div>
+</div>
 <div id="map-fullscreen-backdrop" onclick="closeFullscreenMap()"></div>
 <button class="map-fullscreen-close-btn" id="map-fullscreen-close-btn" onclick="closeFullscreenMap()" title="Exit fullscreen">✕</button>
 
@@ -2429,6 +2461,9 @@ function requestRender() {
 // never mistaken for a fresh reveal broadcast and doesn't pop the overlay
 // for players who simply just logged in.
 let lastPortraitRevealTs = undefined;
+// Props & vistas (posters, handouts, vistas the GM shows): same skip-first-sync rule.
+let lastPropRevealTs = undefined;
+let propRevealId = null;
 // Same "skip the first sync" convention as lastPortraitRevealTs, so a
 // fresh page load doesn't replay whatever ping happened to be sitting
 // in the DB already.
@@ -2768,6 +2803,17 @@ function startSync() {
     } else if (lastPortraitRevealTs === undefined) {
       lastPortraitRevealTs = null;
     }
+    state.props = data.props || {};
+    state.propReveal = data.propReveal || null;
+    if (state.propReveal && state.propReveal.ts !== lastPropRevealTs) {
+      const firstPropSync = lastPropRevealTs === undefined;
+      lastPropRevealTs = state.propReveal.ts;
+      if (!firstPropSync && session.role === 'player') showPropReveal(state.propReveal.id);
+    } else if (lastPropRevealTs === undefined) {
+      lastPropRevealTs = null;
+    }
+    if (session.role === 'player') renderPlayerHandouts(true);
+    else if (document.getElementById('props-modal')?.classList.contains('open')) { try { window.Forge && Forge.refreshGallery(); } catch (e) { /* ignore */ } }
     state.mapDrawings = data.mapDrawings || [];
     state.fogShapes = data.fogShapes || [];
     state.fogEnabled = data.fogEnabled || false;
@@ -2852,6 +2898,11 @@ function ensurePortraitListener(id) {
     if (session.role === 'player' && session.charId === id) updatePlayerAvatar();
     if (portraitViewerCharId === id) openPortraitViewer(id);
     if (portraitRevealCharId === id) showPortraitRevealOverlay(id);
+    if (id.startsWith('prop_')) {
+      if (propRevealId && 'prop_' + propRevealId === id && document.getElementById('prop-reveal-overlay')?.classList.contains('show')) showPropReveal(propRevealId);
+      if (session.role === 'player') renderPlayerHandouts(true);
+      else if (document.getElementById('props-modal')?.classList.contains('open')) { try { window.Forge && Forge.refreshGallery(); } catch (e) { /* ignore */ } }
+    }
   });
 }
 
@@ -3010,9 +3061,10 @@ function switchTab(name) {
 }
 
 function switchPlayerTab(name) {
-  const names = ['status','stats','talents','gear','netrunning','companion','inventory','notes','map'];
+  const names = ['status','stats','talents','gear','netrunning','companion','inventory','notes','map','handouts'];
   document.querySelectorAll('#screen-player .tab').forEach((t, i) => t.classList.toggle('active', names[i] === name));
   document.querySelectorAll('#screen-player .tab-content').forEach(c => c.classList.toggle('active', c.id === 'player-tab-' + name));
+  if (name === 'handouts') renderPlayerHandouts();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4159,6 +4211,70 @@ function showPortraitRevealOverlay(id) {
 function dismissPortraitReveal() {
   document.getElementById('portrait-reveal-overlay')?.classList.remove('show');
   portraitRevealCharId = null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PROPS & VISTAS — posters, handouts, documents, objects, vistas
+// The GM keeps the full records (prompt, notes, beats) in the Forge draft;
+// only the player-facing part (title, caption, text, shown flag) is published
+// to campaign/props/<id>, and the image goes to portraits/prop_<id> (same
+// storage and listener as portraits, so no extra database rule is needed).
+// ═══════════════════════════════════════════════════════════════
+const PROP_SEEN_KEY = 'cp_seen_props';
+const PROP_KIND_LABEL = { vista: 'Vistas', poster: 'Posters', document: 'Documents', handout: 'Handouts', screen: 'Screens', object: 'Objects' };
+function seenProps() { try { return JSON.parse(localStorage.getItem(PROP_SEEN_KEY) || '{}'); } catch (e) { return {}; } }
+function markPropSeen(id) {
+  if (session.role !== 'player') return;
+  try { const s = seenProps(); if (!s[id]) { s[id] = Date.now(); localStorage.setItem(PROP_SEEN_KEY, JSON.stringify(s)); } } catch (e) { /* private mode */ }
+  renderPlayerHandouts(true);
+}
+function propImgSrc(id, full) {
+  ensurePortraitListener('prop_' + id);
+  const k = 'prop_' + id;
+  return full ? (portraitsFull[k] || portraits[k] || '') : (portraits[k] || portraitsFull[k] || '');
+}
+function showPropReveal(id) {
+  const p = state.props && state.props[id]; const el = document.getElementById('prop-reveal-overlay');
+  if (!p || !el) return;
+  propRevealId = id;
+  const img = propImgSrc(id, true);
+  el.innerHTML = `
+    <div class="reveal-portrait" style="border-color:var(--cyan);box-shadow:0 0 60px rgba(0,229,255,.25)">
+      ${img ? `<img class="reveal-portrait-img" style="max-width:min(92vw,900px);max-height:66vh" src="${img}">` : p.text ? `<div class="prop-paper">${esc(p.text)}</div>` : `<div class="prop-paper" style="opacity:.55">…</div>`}
+    </div>
+    <div class="reveal-name" style="color:var(--cyan);font-size:22px">${esc(p.title)}</div>
+    ${p.caption ? `<p class="reveal-flavor">${esc(p.caption)}</p>` : ''}
+    <div class="reveal-hint">TAP ANYWHERE TO CLOSE</div>`;
+  el.classList.add('show');
+  markPropSeen(id);
+}
+function dismissPropReveal() {
+  document.getElementById('prop-reveal-overlay')?.classList.remove('show');
+  propRevealId = null;
+}
+function shownProps() {
+  return Object.entries(state.props || {}).filter(([, p]) => p && p.shown).map(([id, p]) => ({ id, ...p }));
+}
+function renderPlayerHandouts(badgeOnly) {
+  const list = shownProps(); const seen = seenProps();
+  const fresh = list.filter(p => !seen[p.id]).length;
+  const btn = document.getElementById('player-tab-btn-handouts');
+  if (btn) btn.innerHTML = 'Handouts' + (fresh ? ` <span class="prop-new">${fresh} NEW</span>` : '');
+  const box = document.getElementById('player-handouts-list');
+  if (!box || !document.getElementById('player-tab-handouts')?.classList.contains('active')) return;
+  if (!list.length) { box.innerHTML = '<div style="font-size:12px;color:var(--text3);line-height:1.6">Nothing yet. Posters, documents and views your GM shows you will be kept here.</div>'; return; }
+  const missions = [...new Set(list.map(p => p.mission || ''))].sort((a, b) => (a === state.currentMission ? -1 : b === state.currentMission ? 1 : a.localeCompare(b)));
+  const kindOrder = Object.keys(PROP_KIND_LABEL);
+  box.innerHTML = missions.map(m => {
+    const items = list.filter(p => (p.mission || '') === m).sort((a, b) => kindOrder.indexOf(a.kind) - kindOrder.indexOf(b.kind) || (a.order || 0) - (b.order || 0));
+    return `<div style="font-size:10px;letter-spacing:.16em;color:var(--text3);margin:10px 0 6px;text-transform:uppercase">${esc(m || 'Other')}</div><div class="prop-grid">${items.map(p => {
+      const src = propImgSrc(p.id, false);
+      return `<div class="prop-card" onclick="showPropReveal('${p.id}')"><div class="prop-thumb" ${src ? `style="background-image:url('${src}')"` : ''}>${src ? '' : esc((p.text || p.title || '').slice(0, 90))}</div><div class="prop-meta"><div class="prop-title">${esc(p.title)}${seen[p.id] ? '' : '<span class="prop-new">NEW</span>'}</div>${p.caption ? `<div class="prop-cap">${esc(p.caption)}</div>` : ''}</div></div>`;
+    }).join('')}</div>`;
+  }).join('');
+}
+function openPropsGallery() {
+  if (window.Forge && Forge.openGallery) Forge.openGallery(); else showToast('The Forge did not load — reload the page.');
 }
 
 // Cast board for the current mission (falls back to whoever's in the
@@ -14056,7 +14172,7 @@ F.drafts = {}; F.draft = null; F.step = 1; F.loaded = false; F.abort = false; F.
 F.meta = { bible: '', known: [], hidden: [] };
 F.settings = { cap: 1.5, imgModel: 'gpt-image-2.5-sunburst', imgQuality: 'low' };
 F.session = { usd: 0, calls: 0 };
-const blankArt = () => ({ maps: {}, portraits: {}, placements: {} });
+const blankArt = () => ({ maps: {}, portraits: {}, placements: {}, props: {} });
 F.art = blankArt();   // art of the CURRENT draft; kept in memory and mirrored to IndexedDB (large images)
 const artCache = {};
 function idb() { return new Promise((res, rej) => { try { const r = indexedDB.open('cp_forge', 1); r.onupgradeneeded = () => r.result.createObjectStore('art'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } }); }
@@ -14069,7 +14185,7 @@ async function useArt(d) {   // switch F.art to this draft's pictures (loading t
   if (artCache[d.id]) { F.art = artCache[d.id]; return; }
   const mem = artCache[d.id] = blankArt(); F.art = mem;
   const saved = await idbGet(d.id);
-  if (saved) { ['maps', 'portraits', 'placements'].forEach(k => Object.assign(mem[k], saved[k] || {}, mem[k])); if (F.draft && F.draft.id === d.id) F.render(); }
+  if (saved) { ['maps', 'portraits', 'placements', 'props'].forEach(k => Object.assign(mem[k], saved[k] || {}, mem[k])); if (F.draft && F.draft.id === d.id) F.render(); }
 }
 const KNOWN_DEFAULT = [
   'They stole a sealed cube (never opened) from a Militech convoy in the Badlands.',
@@ -14106,7 +14222,9 @@ F.saveMeta = async function () {
 };
 function setStatus(t) { const el = $('forge-status'); if (el) el.textContent = t === 'saved' ? '✓ saved' : t; }
 
-F.onOpen = async function () {
+F.ensureLoaded = function () { return F._loading || (F._loading = loadAll()); };
+F.onOpen = async function () { await F.ensureLoaded(); F.render(); };
+async function loadAll() {
   if (!F.loaded) {
     F.loaded = true;
     F.drafts = lsLoad();
@@ -14124,14 +14242,13 @@ F.onOpen = async function () {
     if (ids.length) { F.draft = F.drafts[ids[0]]; F.step = F.draft.outline ? 2 : 1; useArt(F.draft); }
     try { F.settings = Object.assign(F.settings, JSON.parse(localStorage.getItem('cp_forge_settings') || '{}')); } catch (e) { /* ignore */ }
   }
-  F.render();
-};
+}
 function persistSettings() { try { localStorage.setItem('cp_forge_settings', JSON.stringify(F.settings)); } catch (e) { /* ignore */ } }
 
 function newDraft() {
   return { id: uid('fm_'), created: Date.now(), updated: Date.now(), title: 'Untitled mission',
     brief: { text: '', relevance: 'gig', threads: [], reveal: 'none', hours: 4, varun: true, aiden: true, samurai: false, tier: 'typical', tone: '', region: '', must: '', ban: '', lang: 'English' },
-    pitches: [], pick: null, outline: null, seg: {}, locks: {}, notes: {}, cast: [], locations: [], rosterAdded: false, cost: { total: 0, calls: [] } };
+    pitches: [], pick: null, outline: null, seg: {}, locks: {}, notes: {}, cast: [], locations: [], props: [], rosterAdded: false, cost: { total: 0, calls: [] } };
 }
 F.newDraft = function () { F.draft = newDraft(); F.step = 1; useArt(F.draft); F.save(); F.render(); };
 F.selectDraft = function (id) { if (F.drafts[id]) { F.draft = F.drafts[id]; F.step = F.draft.outline ? 2 : 1; useArt(F.draft); F.render(); } };
@@ -14147,6 +14264,7 @@ F.importFiles = async function (input) {
     try {
       const d = JSON.parse(await f.text()); if (!d || !d.id || !d.outline || !Array.isArray(d.outline.beatChart)) throw new Error('not a Forge draft');
       const old = F.drafts[d.id]; if (old && old.play) d.play = old.play;   // keep the session progress when a draft is re-imported
+      if (old && (old.props || []).length) { const fresh = d.props || []; d.props = fresh.map(n => { const o = old.props.find(x => x.key === n.key); return o ? Object.assign({}, n, { pub: o.pub }) : n; }).concat(old.props.filter(o => !fresh.some(n => n.key === o.key))); }   // and the props (published flags, ones added by hand)
       d.updated = Date.now(); F.drafts[d.id] = d; last = d; n++;
       try { if (FB()) await db.ref(fbPath('drafts/' + d.id)).set(clean(d)); } catch (e) { /* local copy is enough */ }
     } catch (e) { showToast('Could not read ' + f.name + ': ' + e.message, 5000); }
@@ -14501,7 +14619,7 @@ F.applyDelta = function (i) {
 };
 
 // ── busy / guard ────────────────────────────────────────────────────────────────────────
-function setBusy(t) { F.busy = t; const el = $('forge-busy'); if (el) { el.style.display = t ? 'flex' : 'none'; const m = $('forge-busy-text'); if (m) m.textContent = t; } }
+function setBusy(t) { F.busy = t; const ps = $('props-status'); if (ps) ps.textContent = t || ''; const el = $('forge-busy'); if (el) { el.style.display = t ? 'flex' : 'none'; const m = $('forge-busy-text'); if (m) m.textContent = t; } }
 async function guard(label, fn) {
   if (F.busy) { showToast('Still working: ' + F.busy); return; }
   F.abort = false; setBusy(label); F.render(true);
@@ -14815,6 +14933,247 @@ function step6(d) {
     ${calls.length ? `<table style="width:100%;font-size:10px;margin-top:6px;border-collapse:collapse">${calls.map(c => `<tr style="color:var(--text2)"><td>${E(c.label)}</td><td>${E(c.model)}</td><td style="text-align:right">${c.in}+${c.cached}c → ${c.out}</td><td style="text-align:right">$${c.usd.toFixed(4)}</td></tr>`).join('')}</table>` : ''}</div>`;
 }
 
+// ── props & vistas: gallery, art, publishing to the players ────────────────────────────────────
+(function css3() {
+  if ($('forge-css3')) return; const s = document.createElement('style'); s.id = 'forge-css3';
+  s.textContent = `.fg-pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-top:10px}
+  .fg-pcard{background:var(--surface);border:1px solid var(--border2);display:flex;flex-direction:column}
+  .fg-pcard.shown{border-color:var(--green-bright)}
+  .fg-pimg{aspect-ratio:4/3;background:#0b0f16 center/contain no-repeat;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px;font-size:11px;line-height:1.5;color:var(--text3);cursor:pointer;overflow:hidden}
+  .fg-pbody{padding:8px 10px 10px;display:flex;flex-direction:column;gap:5px;flex:1}
+  .fg-pmini{display:flex;gap:8px;align-items:center;border:1px solid var(--border2);background:var(--bg);padding:5px;min-width:200px}
+  .fg-pmini .t{width:54px;height:40px;background:#0b0f16 center/contain no-repeat;flex:none}
+  .fg-chip{padding:3px 9px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer;font-family:var(--font)}
+  .fg-chip.on{background:var(--cyan-dim);color:var(--cyan);border-color:var(--cyan)}`;
+  document.head.appendChild(s);
+})();
+
+const PROP_KINDS = { vista: ['Vista', '🌆'], poster: ['Poster', '🪧'], document: ['Document', '📜'], handout: ['Handout', '📄'], screen: ['Screen', '📺'], object: ['Object', '🎒'] };
+const PROP_SIZE = { vista: '1536x1024', screen: '1536x1024', poster: '1024x1536', document: '1024x1536', handout: '1024x1536', object: '1024x1024' };
+const PROP_STYLE = {
+  vista: ' Cinematic wide establishing shot of the place, cyberpunk noir illustration, dramatic neon rim lighting, rain and haze, detailed digital art. No watermark.',
+  poster: ' Printed poster look, vertical, cyberpunk city setting, bold graphic design. No watermark.',
+  document: ' A photographed paper document lying on a rain-wet table under neon light, legible official layout, shallow depth of field. No watermark.',
+  handout: ' A photographed paper handout, notes in handwriting, cyberpunk noir lighting, shallow depth of field. No watermark.',
+  screen: ' A glossy screen graphic in a cyberpunk setting, clean interface design. No watermark.',
+  object: ' Close-up product-style shot of the object, shallow depth of field, cyberpunk noir lighting, detailed. No watermark.',
+};
+const propsOf = (d) => (d.props = d.props || []);
+const findProp = (d, key) => propsOf(d).find(p => p.key === key);
+const propId = (d, p) => (d.id.replace(/^fm_/, '') + '_' + p.key).replace(/[^A-Za-z0-9_]/g, '_').slice(0, 72);
+const pkey = (s) => String(s || '').toLowerCase().replace(/\.[a-z0-9]+$/, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+const needsImage = (p) => !F.art.props[p.key] && !(p.text && !p.prompt);
+function fallbackPrompt(p) { return (PROP_KINDS[p.kind] ? PROP_KINDS[p.kind][0] : 'Prop') + ': ' + p.title + '. ' + (p.caption || '') + (p.text ? ' Text on it: ' + String(p.text).slice(0, 280) : '') + (PROP_STYLE[p.kind] || ''); }
+function beatNos(d, p) { const a = d.outline ? d.outline.beatChart : []; return (p.beats || []).map(id => a.findIndex(b => b.id === id) + 1).filter(n => n > 0).join(', '); }
+
+// ── images ──────────────────────────────────────────────────────────────────────────────────────
+async function toPropImgs(src) {
+  const im = await loadImg(src); const W = im.naturalWidth, H = im.naturalHeight;
+  const mk = (max, q) => { const k = Math.min(1, max / Math.max(W, H)); const c = document.createElement('canvas'); c.width = Math.round(W * k); c.height = Math.round(H * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); return c.toDataURL('image/jpeg', q); };
+  return { thumb: mk(260, 0.78), full: mk(1100, 0.86) };
+}
+const fileToDataUrl = (f) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('Could not read ' + f.name)); r.readAsDataURL(f); });
+async function genImageEdit(prompt, size, refs, label) {   // the same call the double-click launcher uses: reference portraits so a poster shows the real candidate
+  const key = F.openaiKey(); if (!key) throw new Error('No OpenAI key — paste it in the Build step.');
+  if (F.abort) throw new Error('Stopped.');
+  const form = new FormData(); form.append('model', F.settings.imgModel); form.append('prompt', prompt); form.append('n', '1'); form.append('size', size); form.append('quality', F.settings.imgQuality); form.append('output_format', 'png');
+  for (let i = 0; i < refs.length; i++) { const blob = await (await fetch(refs[i])).blob(); form.append('image[]', blob, 'reference' + i + (blob.type.includes('png') ? '.png' : '.jpg')); }
+  let res; try { res = await fetch('https://api.openai.com/v1/images/edits', { method: 'POST', headers: { Authorization: 'Bearer ' + key }, body: form }); }
+  catch (e) { throw new Error('The browser could not reach the image API (' + e.message + ').'); }
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error((data && data.error && data.error.message) || ('Image API HTTP ' + res.status));
+  const dd = data && data.data && data.data[0]; if (!dd || !dd.b64_json) throw new Error('The image API returned no image.');
+  addUsd(label, F.settings.imgModel, (IMG_PRICE[F.settings.imgQuality] || 0.006) * 1.3);
+  return 'data:image/png;base64,' + dd.b64_json;
+}
+function refImage(d, k) {   // a portrait to base a poster on: one painted here, else the roster character's portrait
+  const own = F.art.portraits[k]; if (own) return own.full;
+  const c = d.cast.find(x => x.key === k); const r = c && rosterChar(d, c.name);
+  try { if (r) { ensurePortraitListener(r.id); return portraitsFull[r.id] || portraits[r.id] || null; } } catch (e) { /* ignore */ }
+  return null;
+}
+
+// ── publishing (GM only): record in campaign/props, picture in portraits/prop_<id> ───────────────
+async function publishProp(d, p, shown) {
+  if (!FB()) throw new Error('Not connected to the database.');
+  const id = propId(d, p), im = F.art.props[p.key], cur = state.props && state.props[id];
+  const rec = { mission: d.title, title: p.title, kind: p.kind, caption: p.caption || '', order: propsOf(d).indexOf(p), img: !!im, shown: shown === undefined ? !!(cur && cur.shown) : shown, ts: Date.now() };
+  if (p.text) rec.text = p.text;
+  if (im) await db.ref('portraits/prop_' + id).set(JSON.stringify({ crop: im.thumb, full: im.full }));
+  await db.ref(dbPath() + '/props/' + id).set(rec);
+  p.pub = true; return id;
+}
+F.propShow = async function (key) {
+  const d = F.draft, p = d && findProp(d, key); if (!p) return;
+  if (!F.art.props[key] && !p.text && !(state.props && state.props[propId(d, p)] && state.props[propId(d, p)].img)) { showToast('Paint or upload the picture first — otherwise the players would see an empty card.', 4000); return; }
+  try {
+    const id = await publishProp(d, p, true);
+    await db.ref(dbPath() + '/propReveal').set({ id, ts: Date.now() });
+    F.save(); showToast('Shown to the players: ' + p.title);
+  } catch (e) { showToast('Could not show it: ' + e.message, 5000); }
+  F.refreshGallery(); if (F.step === 5) F.render(true);
+};
+F.propHide = async function (key) {
+  const d = F.draft, p = d && findProp(d, key); if (!p || !FB()) return;
+  try { await db.ref(dbPath() + '/props/' + propId(d, p) + '/shown').set(false); showToast('Removed from the players\' folder.'); } catch (e) { showToast('Could not hide it: ' + e.message, 4000); }
+  F.refreshGallery();
+};
+F.propPreview = function (key) {   // GM-only look at the full picture (nothing is sent to the players)
+  const d = F.draft, p = d && findProp(d, key); if (!p) return; const im = F.art.props[key];
+  const src = im ? im.full : propImgSrc(propId(d, p), true);
+  const el = $('prop-reveal-overlay'); if (!el) return;
+  el.innerHTML = `<div class="reveal-portrait" style="border-color:var(--gold-bright)">${src ? `<img class="reveal-portrait-img" style="max-width:min(92vw,900px);max-height:66vh" src="${src}">` : `<div class="prop-paper">${E(p.text || p.caption || p.title)}</div>`}</div><div class="reveal-name" style="color:var(--gold-bright);font-size:20px">${E(p.title)}</div><div class="reveal-hint">GM PREVIEW — NOT SHOWN TO THE PLAYERS · TAP TO CLOSE</div>`;
+  el.classList.add('show');
+};
+
+// ── art for a prop ────────────────────────────────────────────────────────────────────────────────
+F.genProp = async function (key, quiet) {
+  const d = F.draft, p = d && findProp(d, key); if (!p) return;
+  const run = async () => {
+    const prompt = p.prompt || fallbackPrompt(p), size = p.size || PROP_SIZE[p.kind] || '1024x1024';
+    const refs = (p.refs || []).map(k => refImage(d, k)).filter(Boolean);
+    if ((p.refs || []).length && !refs.length) showToast('No portrait found for ' + p.refs.join(', ') + ' — painted without a reference face.', 4500);
+    const png = refs.length ? await genImageEdit(prompt, size, refs, 'prop ' + key) : await genImage(prompt, size, 'prop ' + key);
+    F.art.props[key] = await toPropImgs(png); F.saveArt();
+    if (p.pub && FB()) { try { await publishProp(d, p); } catch (e) { /* the players keep the old picture until the next SHOW */ } }
+    F.save();
+  };
+  quiet ? await run() : await guard('Painting "' + p.title + '" …', run);
+  F.refreshGallery();
+};
+F.propGenAll = async function () {
+  const d = F.draft; if (!d) return; const todo = propsOf(d).filter(needsImage);
+  if (!todo.length) { showToast('Every prop already has its picture.'); return; }
+  const est = todo.length * (IMG_PRICE[F.settings.imgQuality] || 0.006) * 1.15;
+  if (!confirm('Paint ' + todo.length + ' picture(s)? About $' + est.toFixed(2) + ' (' + F.settings.imgQuality + ' quality). Props that need a reference face use the roster portraits.')) return;
+  const failed = [];
+  await guard('Painting props …', async () => {
+    for (let i = 0; i < todo.length; i++) {
+      if (F.abort) break; const p = todo[i]; setBusy('Painting ' + (i + 1) + '/' + todo.length + ': ' + p.title);
+      try { await F.genProp(p.key, true); } catch (e) { if (/Stopped|Cancelled/.test(e.message)) throw e; failed.push(p.title + ' (' + e.message + ')'); }
+      F.refreshGallery();
+    }
+  });
+  if (failed.length) showToast(failed.length + ' failed: ' + failed.slice(0, 2).join(' · '), 7000);
+  F.refreshGallery();
+};
+// pictures you already have (e.g. the props folder of a mission): matched to props by file name
+F.propUploadMany = async function (input) {
+  const d = F.draft; const files = [...(input.files || [])]; input.value = ''; if (!d || !files.length) return;
+  let ok = 0; const miss = [];
+  for (const f of files) {
+    const k = pkey(f.name); const p = findProp(d, k) || propsOf(d).find(x => pkey(x.title) === k);
+    if (!p) { miss.push(f.name); continue; }
+    try { F.art.props[p.key] = await toPropImgs(await fileToDataUrl(f)); ok++; if (p.pub && FB()) await publishProp(d, p).catch(() => {}); } catch (e) { miss.push(f.name); }
+  }
+  F.saveArt(); F.save(); F.refreshGallery(); showToast(ok + ' picture(s) added' + (miss.length ? ' · no prop named like: ' + miss.slice(0, 4).join(', ') : '') + '.', 5000);
+};
+F.propUploadOne = async function (input) {
+  const d = F.draft, p = d && findProp(d, F._upKey); const f = (input.files || [])[0]; input.value = ''; if (!p || !f) return;
+  try { F.art.props[p.key] = await toPropImgs(await fileToDataUrl(f)); F.saveArt(); if (p.pub && FB()) await publishProp(d, p).catch(() => {}); F.save(); showToast('Picture set for "' + p.title + '".'); } catch (e) { showToast(e.message, 4000); }
+  F.refreshGallery();
+};
+F.propPickFile = function (key) { F._upKey = key; const el = $('fg-up-one'); if (el) el.click(); };
+
+// ── editing ───────────────────────────────────────────────────────────────────────────────────────
+F.propEdit = function (key, field, v) {
+  const d = F.draft, p = d && findProp(d, key); if (!p) return;
+  p[field] = v; F.save();
+  if (p.pub && FB() && ['title', 'caption', 'text', 'kind'].includes(field)) { db.ref(dbPath() + '/props/' + propId(d, p)).update({ [field]: field === 'text' && !v ? null : v }).catch(() => {}); }
+  if (field === 'kind') F.refreshGallery();
+};
+F.propAdd = function () {
+  const d = F.draft; if (!d) return; let n = 1; while (findProp(d, 'prop_' + n)) n++;
+  propsOf(d).push({ key: 'prop_' + n, kind: 'handout', title: 'New prop', caption: '', text: '', prompt: '', gm: '', beats: [], refs: [], source: 'manual' });
+  F.save(); F.refreshGallery(); showToast('Added — open ✎ EDIT on the new card.');
+};
+F.propDelete = async function (key) {
+  const d = F.draft, p = d && findProp(d, key); if (!p || !confirm('Delete the prop "' + p.title + '"?')) return;
+  d.props = d.props.filter(x => x !== p); delete F.art.props[key]; F.saveArt(); F.save();
+  if (p.pub && FB()) { try { await db.ref(dbPath() + '/props/' + propId(d, p)).set(null); await db.ref('portraits/prop_' + propId(d, p)).set(null); } catch (e) { /* ignore */ } }
+  F.refreshGallery();
+};
+
+// ── AI proposal for missions that have no props yet (cheap model, one call) ─────────────────────
+F.proposeProps = async function () {
+  const d = F.draft; if (!d || !d.outline) return;
+  await guard('Proposing props …', async () => {
+    const beats = d.outline.beatChart.map(b => ({ id: b.id, title: b.title, location: b.location, summary: ((d.seg[b.id] || {}).purpose || b.summary || '').slice(0, 200) }));
+    const r = await F.claude({ tier: 'mid', stage: 'props', label: 'props', effort: 'low', maxTokens: 4500,
+      user: `MISSION: ${d.title} — ${d.outline.logline}\nBEATS: ${JSON.stringify(beats)}\nPLACES: ${JSON.stringify(d.locations.map(l => l.name))}\nCAST KEYS: ${JSON.stringify(d.cast.map(c => ({ key: c.key, name: c.name })))}\nEXISTING PROPS: ${JSON.stringify(propsOf(d).map(p => p.title))}\n\nTASK: propose 5-8 table props the GM shows the players as pictures — worldbuilding made visible. Mix: ONE vista (establishing view) for each of the 2-3 most atmospheric places; the paper handouts / documents / screens the clues need (give the exact readable text, max 70 words, in the language of the mission text); posters, billboards or objects the story names. Use only what the story needs, no stats, no spoilers in the caption (captions are what the PLAYERS read when it is shown). Each prompt is ONE English paragraph of purely visual description (no style words needed). Link each prop to the beats where it is used (ids) and, if a poster/screen shows a cast member, list their cast key in refs.\nReturn JSON: {"props":[{"key":"snake_case","kind":"vista|poster|document|handout|screen|object","title":"","caption":"one line the players see","text":"only for documents/handouts, else empty","prompt":"visual paragraph","beats":["b2"],"refs":[]}]}` });
+    const list = Array.isArray(r) ? r : ((r && r.props) || []);
+    let n = 0; list.forEach(x => { if (!x || !x.title) return; const key = pkey(x.key || x.title) || 'prop'; if (findProp(d, key) || propsOf(d).some(p => p.title.toLowerCase() === String(x.title).toLowerCase())) return; propsOf(d).push({ key, kind: PROP_KINDS[x.kind] ? x.kind : 'handout', title: String(x.title).slice(0, 80), caption: x.caption || '', text: x.text || '', prompt: x.prompt || '', gm: '', beats: (x.beats || []).filter(b => d.outline.beatChart.some(c => c.id === b)), refs: (x.refs || []).filter(k => d.cast.some(c => c.key === k)), source: 'ai' }); n++; });
+    if (!n) throw new Error('No new props came back — try again.');
+    F.save(); showToast(n + ' props proposed — paint them or edit first.');
+  });
+  F.refreshGallery();
+};
+
+// ── slideshow (vistas one after another) ──────────────────────────────────────────────────────────
+F.slideStart = function () {
+  const d = F.draft; const g = F.gal; const list = propsOf(d).filter(p => (g.kind === 'all' || p.kind === g.kind) && (F.art.props[p.key] || p.text));
+  if (!list.length) { showToast('Nothing with a picture in this filter yet.'); return; }
+  g.slide = { keys: list.map(p => p.key), i: 0 }; F.propShow(g.slide.keys[0]);
+};
+F.slideGo = function (n) { const s = F.gal.slide; if (!s) return; s.i = clamp(s.i + n, 0, s.keys.length - 1); F.propShow(s.keys[s.i]); };
+F.slideStop = function () { F.gal.slide = null; F.refreshGallery(); };
+
+// ── the gallery window ────────────────────────────────────────────────────────────────────────────
+F.gal = { kind: 'all', slide: null };
+F.openGallery = async function () {
+  await F.ensureLoaded();
+  const pick = Object.values(F.drafts).find(x => x.outline && x.title === state.currentMission) || (F.draft && F.draft.outline ? F.draft : null) || Object.values(F.drafts).find(x => x.outline && propsOf(x).length) || Object.values(F.drafts).find(x => x.outline);
+  if (!pick) { showToast('No finished mission in the Forge yet.'); return; }
+  if (!F.draft || F.draft.id !== pick.id) { F.draft = pick; F.step = F.step || 1; await useArt(pick); }
+  openModal('props-modal'); F.refreshGallery();
+};
+F.galPick = async function (id) { if (!F.drafts[id]) return; F.draft = F.drafts[id]; F.gal.slide = null; await useArt(F.draft); F.refreshGallery(); F.render(true); };
+F.galKind = function (k) { F.gal.kind = k; F.refreshGallery(); };
+function propCard(d, p, i) {
+  const id = propId(d, p), im = F.art.props[p.key], pubRec = state.props && state.props[id], shown = !!(pubRec && pubRec.shown);
+  const src = im ? im.thumb : (pubRec && pubRec.img ? propImgSrc(id, false) : '');
+  const kn = PROP_KINDS[p.kind] || ['Prop', '•'], nos = beatNos(d, p);
+  return `<div class="fg-pcard ${shown ? 'shown' : ''}"><div class="fg-pimg" ${src ? `style="background-image:url('${src}')"` : ''} onclick="Forge.propPreview('${p.key}')" title="Preview (only you see it)">${src ? '' : E((p.text || p.caption || 'no picture yet').slice(0, 110))}</div>
+    <div class="fg-pbody"><div class="fg-row" style="justify-content:space-between;gap:4px"><strong style="font-size:12px;line-height:1.3">${E(p.title)}</strong><span class="fg-badge" style="color:var(--text3);font-size:8px">${kn[1]} ${E(kn[0])}</span></div>
+    ${p.caption ? `<div class="fg-sm" style="font-size:10px">${E(p.caption)}</div>` : ''}<div class="fg-sm" style="font-size:10px;color:var(--text3)">${nos ? 'Beats ' + E(nos) : 'not linked to a beat'}${(p.refs || []).length ? ' · face: ' + E(p.refs.join(', ')) : ''}${shown ? ' · <span style="color:var(--green-bright)">● SHOWN</span>' : ''}</div>
+    <div class="fg-row" style="gap:4px;margin-top:auto"><button class="btn btn-primary btn-small" onclick="Forge.propShow('${p.key}')">📢 SHOW</button><button class="btn btn-ghost btn-small" onclick="Forge.genProp('${p.key}')" title="${im ? 'Paint it again' : 'Paint the picture'}">${im ? '↻ REGENERATE' : '✦ GENERATE'}</button><button class="btn btn-ghost btn-small" onclick="Forge.propPickFile('${p.key}')" title="Use a picture file from your PC">⬆</button>${shown ? `<button class="btn btn-ghost btn-small" onclick="Forge.propHide('${p.key}')" title="Take it out of the players' folder">HIDE</button>` : ''}</div>
+    <details class="fg-d" style="margin:2px 0 0;padding:4px 8px"><summary>✎ edit</summary>
+      <span class="fg-lbl">Title</span><input class="fg-in" value="${bq(p.title)}" onchange="Forge.propEdit('${p.key}','title',this.value)">
+      <span class="fg-lbl">Type</span><select class="fg-in" onchange="Forge.propEdit('${p.key}','kind',this.value)">${Object.entries(PROP_KINDS).map(([k, v]) => `<option value="${k}" ${p.kind === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select>
+      <span class="fg-lbl">Caption the players read</span><input class="fg-in" value="${bq(p.caption || '')}" onchange="Forge.propEdit('${p.key}','caption',this.value)">
+      <span class="fg-lbl">Readable text (documents) — shown on paper if there is no picture</span><textarea class="fg-in" onchange="Forge.propEdit('${p.key}','text',this.value)">${E(p.text || '')}</textarea>
+      <span class="fg-lbl">Image prompt</span><textarea class="fg-in" onchange="Forge.propEdit('${p.key}','prompt',this.value)">${E(p.prompt || '')}</textarea>
+      ${p.gm ? `<div class="fg-sm" style="margin-top:6px;color:var(--gold-bright)">GM: ${E(p.gm)}</div>` : ''}<button class="btn btn-danger btn-small" style="margin-top:6px" onclick="Forge.propDelete('${p.key}')">DELETE PROP</button></details></div></div>`;
+}
+F.refreshGallery = function () {
+  const modal = $('props-modal'); if (!modal || !modal.classList.contains('open')) return;
+  const body = $('props-modal-body'), foot = $('props-modal-footer'); const d = F.draft; if (!body) return;
+  const top = body.scrollTop;
+  if (!d || !d.outline) { body.innerHTML = '<div class="fg-sm">No mission selected.</div>'; return; }
+  const all = propsOf(d), g = F.gal, list = all.filter(p => g.kind === 'all' || p.kind === g.kind);
+  const missing = all.filter(needsImage).length;
+  const drafts = Object.values(F.drafts).filter(x => x.outline).sort((a, b) => (a.title === state.currentMission ? -1 : b.title === state.currentMission ? 1 : a.title.localeCompare(b.title)));
+  $('props-modal-title').textContent = 'PROPS & VISTAS';
+  body.innerHTML = `<div class="fg-row" style="margin-bottom:6px"><select class="fg-in" style="flex:1;min-width:200px;width:auto" onchange="Forge.galPick(this.value)">${drafts.map(x => `<option value="${x.id}" ${x.id === d.id ? 'selected' : ''}>${E(x.title)}${x.title === state.currentMission ? ' — current mission' : ''} (${propsOf(x).length})</option>`).join('')}</select>
+    <button class="btn btn-ghost btn-small" onclick="Forge.propAdd()">＋ ADD PROP</button><button class="btn btn-ghost btn-small" onclick="Forge.proposeProps()" title="One cheap request: vistas, handouts and posters this story needs">✦ PROPOSE PROPS (~$0.02)</button>
+    <button class="btn btn-ghost btn-small" onclick="document.getElementById('fg-up-many').click()" title="Pick picture files — they are matched to props by file name">⬆ UPLOAD PICTURES</button><button class="btn btn-primary btn-small" onclick="Forge.propGenAll()" ${missing ? '' : 'disabled'}>✦ PAINT ${missing} MISSING (~$${(missing * (IMG_PRICE[F.settings.imgQuality] || 0.006) * 1.15).toFixed(2)})</button>
+    <input id="fg-up-many" type="file" accept="image/*" multiple style="display:none" onchange="Forge.propUploadMany(this)"><input id="fg-up-one" type="file" accept="image/*" style="display:none" onchange="Forge.propUploadOne(this)"></div>
+    <div class="fg-row" style="margin-bottom:4px"><button class="fg-chip ${g.kind === 'all' ? 'on' : ''}" onclick="Forge.galKind('all')">All ${all.length}</button>${Object.entries(PROP_KINDS).map(([k, v]) => { const n = all.filter(p => p.kind === k).length; return n ? `<button class="fg-chip ${g.kind === k ? 'on' : ''}" onclick="Forge.galKind('${k}')">${v[1]} ${v[0]}s ${n}</button>` : ''; }).join('')}<span style="flex:1"></span><span id="props-status" class="fg-sm" style="color:var(--cyan)">${E(F.busy || '')}</span><button class="btn btn-ghost btn-small" onclick="Forge.slideStart()" title="Show them one after another, with ◀ ▶">▶ SLIDESHOW</button></div>
+    ${list.length ? `<div class="fg-pgrid">${list.map((p, i) => propCard(d, p, i)).join('')}</div>` : `<div class="fg-card fg-sm" style="margin-top:10px">No props ${g.kind === 'all' ? 'for this mission yet' : 'of this type'}. Press <strong>PROPOSE PROPS</strong> (the AI reads the story and suggests vistas, handouts and posters) or <strong>ADD PROP</strong>.</div>`}`;
+  body.scrollTop = top;
+  const s = g.slide;
+  foot.innerHTML = s ? `<span class="fg-sm" style="flex:1">Showing ${s.i + 1} / ${s.keys.length}: ${E((findProp(d, s.keys[s.i]) || {}).title || '')}</span><button class="btn btn-ghost btn-small" onclick="Forge.slideGo(-1)" ${s.i === 0 ? 'disabled' : ''}>◀ BACK</button><button class="btn btn-primary btn-small" onclick="Forge.slideGo(1)" ${s.i >= s.keys.length - 1 ? 'disabled' : ''}>NEXT ▶</button><button class="btn btn-ghost btn-small" onclick="Forge.slideStop()">■ STOP</button>` : `<span class="fg-sm" style="flex:1;color:var(--text3)">📢 SHOW sends the picture full-screen to every player and keeps it in their Handouts tab. 👁 Click a picture to preview it privately.</span><button class="btn btn-primary btn-small" onclick="closeModal('props-modal')">CLOSE</button>`;
+};
+
+// a strip of the props of one beat, for the Playbook
+function propStripHtml(d, b) {
+  const list = propsOf(d).filter(p => (p.beats || []).includes(b.id)); if (!list.length) return '';
+  return '<div class="fg-h">Props for this scene</div><div class="fg-row" style="align-items:stretch">' + list.map(p => {
+    const id = propId(d, p), im = F.art.props[p.key], rec = state.props && state.props[id], src = im ? im.thumb : (rec && rec.img ? propImgSrc(id, false) : ''), shown = !!(rec && rec.shown);
+    return `<div class="fg-pmini"><div class="t" style="cursor:pointer;${src ? `background-image:url('${src}')` : ''}" onclick="Forge.propPreview('${p.key}')"></div><div><strong style="font-size:11px">${E(p.title)}</strong><div class="fg-sm" style="font-size:9px;color:var(--text3)">${E((PROP_KINDS[p.kind] || ['Prop'])[0])}${shown ? ' · <span style="color:var(--green-bright)">shown</span>' : ''}${!im && !p.text ? ' · no picture' : ''}</div><div class="fg-row" style="gap:4px;margin-top:3px"><button class="btn btn-primary btn-small" style="font-size:9px;padding:2px 7px" onclick="Forge.propShow('${p.key}')">📢 SHOW</button>${!im && !p.text ? `<button class="btn btn-ghost btn-small" style="font-size:9px;padding:2px 7px" onclick="Forge.genProp('${p.key}')">✦ PAINT</button>` : ''}</div></div></div>`;
+  }).join('') + '</div>';
+}
+
 // step 5: the playbook (read-only table view of the finished mission) ────────────────────────
 (function css2() {
   if ($('forge-css2')) return; const s = document.createElement('style'); s.id = 'forge-css2';
@@ -14915,7 +15274,7 @@ function step5(d) {
   if (!o) return `<div class="fg-card fg-sm">Build the beat chart first (step 2) — the playbook is the clean reading view of the finished mission.</div>`;
   const a = o.beatChart, p = pb(d), cur = clamp(p.idx || 0, 0, a.length - 1), b = a[cur], s = d.seg[b.id];
   const doneMin = a.filter(x => p.done[x.id]).reduce((t, x) => t + (+x.minutes || 30), 0), totalMin = a.reduce((t, x) => t + (+x.minutes || 30), 0);
-  let h = `<div class="fg-card"><div class="fg-row" style="justify-content:space-between"><strong style="font-size:17px">${E(d.title)}</strong><span class="fg-row"><button class="btn btn-ghost btn-small" onclick="Forge.printSheet()">PRINT GM SHEET</button><button class="btn btn-ghost btn-small" onclick="Forge.go(2)">✎ EDIT</button></span></div>
+  let h = `<div class="fg-card"><div class="fg-row" style="justify-content:space-between"><strong style="font-size:17px">${E(d.title)}</strong><span class="fg-row"><button class="btn btn-primary btn-small" onclick="Forge.openGallery()">🖼 PROPS${propsOf(d).length ? ' (' + propsOf(d).length + ')' : ''}</button><button class="btn btn-ghost btn-small" onclick="Forge.printSheet()">PRINT GM SHEET</button><button class="btn btn-ghost btn-small" onclick="Forge.go(2)">✎ EDIT</button></span></div>
     <div class="fg-read" style="margin-top:4px">${E(o.logline)}</div>
     <div class="fg-sm" style="color:var(--text3);margin-top:4px">${E(o.toneArc || '')} · ${d.imported ? 'from the runbook' : E(REL[d.brief.relevance].label)}${o.payout && o.payout.perPersonED ? ' · pay ' + E(o.payout.perPersonED) + ' ED each' + (o.payout.notes ? ' — ' + E(o.payout.notes) : '') : ''} · ≈ ${(totalMin / 60).toFixed(1)} h</div>
     ${(o.clocks || []).length ? `<div class="fg-sm" style="margin-top:4px">${o.clocks.map(c => '⏱ <strong>' + E(c.name) + '</strong> (' + E(c.ticks) + '): ' + E(c.effect)).join(' &nbsp;·&nbsp; ')}</div>` : ''}
@@ -14940,6 +15299,7 @@ function step5(d) {
       <div>${people.length ? `<div class="fg-h" style="margin-top:0">Cast</div>${people.map(x => npcRow(d, x)).join('')}` : ''}${hostiles.length ? `<div class="fg-h">Hostiles</div><div class="fg-li" style="border-color:var(--red-bright)">${E(hostiles.join(', '))}</div>` : ''}</div></div>`;
     h += `${s.samurai ? `<div class="fg-h">Samurai slot</div><div class="fg-li" style="border-color:var(--gold-bright)">${E(s.samurai)}</div>` : ''}<details class="fg-d"><summary>If it goes sideways</summary>${s.failForward ? `<div class="fg-h">Fail forward</div><div class="fg-li">${E(s.failForward)}</div>` : ''}${s.planB ? `<div class="fg-h">Plan B</div><div class="fg-li">${E(s.planB)}</div>` : ''}${(s.exits || []).length ? `<div class="fg-h">Exits</div>${liList(s.exits)}` : ''}</details>`;
   }
+  h += propStripHtml(d, b);
   const loc = locOf(d, b), m = loc && F.art.maps[loc.key], pres = presetsOf(d, b), scs = scenesOf(d, b);
   const short = (t) => String(t).replace(/^.*? — /, '').slice(0, 42);
   h += `<div class="fg-row" style="margin-top:10px">${m ? `<img class="fg-thumb" src="${m.url}" title="${bq(loc.name)}">` : ''}${pres.map(x => `<button class="btn btn-primary btn-small" onclick="Forge.playLoad(${cur},'${x[0]}')" title="${bq(x[1].name)}">⚔ ${pres.length > 1 ? E(short(x[1].name)) : 'LOAD THIS ENCOUNTER'}</button>`).join('')}${scs.map(x => `<button class="btn btn-ghost btn-small" onclick="Forge.playScene(${cur},'${x.id}')" title="${bq(x.loc.name)}">🗺 ${E(short(x.loc.name))}</button>`).join('')}<span style="flex:1"></span><button class="btn ${p.done[b.id] ? 'btn-ghost' : 'btn-primary'} btn-small" onclick="Forge.playDone('${b.id}')">${p.done[b.id] ? '✓ PLAYED (undo)' : '✓ MARK AS PLAYED'}</button></div>
