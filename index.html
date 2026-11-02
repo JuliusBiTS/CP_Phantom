@@ -187,7 +187,7 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
   background: linear-gradient(90deg, transparent, var(--cyan-dim), transparent);
 }
 .topbar-brand { font-size: 10px; letter-spacing: 0.4em; color: var(--text3); white-space: nowrap; }
-.topbar-title { font-family: var(--font-display); font-size: 14px; font-weight: 800; color: var(--text); flex: 1; letter-spacing: 0.04em; text-transform: uppercase; }
+.topbar-title { font-family: var(--font-display); font-size: 14px; font-weight: 800; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0.04em; text-transform: uppercase; }
 .topbar-avatar {
   width: 32px; height: 32px;
   border-radius: 50%;
@@ -619,6 +619,7 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
 .flink-used { background: transparent; color: var(--text3); border: 1px solid var(--border); text-decoration: line-through; }
 .status-chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .status-chip { font-family: var(--font-display); font-weight: 700; font-size: 10px; padding: 4px 8px; letter-spacing: 0.06em; border: 1px solid; box-shadow: 0 0 8px -2px currentColor; }
+.status-cover { background: rgba(110,150,200,0.12); color: #9fc4ee; border-color: #5f8fbf; cursor: pointer; }
 .status-bleed { background: var(--red-glow); color: #ff8899; border-color: var(--red-bright); }
 .status-burn { background: rgba(255,100,0,0.1); color: #ffaa66; border-color: #ff6600; }
 .status-malfunction { background: rgba(136,0,204,0.15); color: var(--purple-bright); border-color: var(--purple); }
@@ -664,6 +665,7 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
   padding: 10px 14px;
   display: flex;
   align-items: center;
+  flex-wrap: wrap; /* on a phone the COMBAT / ABILITIES / ITEMS buttons drop to a second line instead of running off the screen */
   gap: 10px;
   cursor: pointer;
   transition: border-color 0.12s, box-shadow 0.15s;
@@ -673,7 +675,7 @@ h2 { font-family: var(--font-display); font-weight: 800; font-size: 10px; letter
    so a dying character is unmissable while scrolling the roster instead
    of only being visible once their card is opened. */
 .char-item.critical-row { animation: dying-pulse 1.6s ease-in-out infinite; }
-.char-item-name { flex: 1; font-family: var(--font-display); font-size: 14px; font-weight: 700; }
+.char-item-name { flex: 1 1 130px; min-width: 0; font-family: var(--font-display); font-size: 14px; font-weight: 700; }
 .char-item-sub { font-family: var(--font); font-size: 10px; color: var(--text2); }
 .char-item-hp { font-size: 13px; font-weight: 700; }
 .roster-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
@@ -1926,13 +1928,23 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
           <select id="dmg-calc-attacker" style="flex:1" onchange="onDmgCalcAttackerChange()">
             <option value="">Attacker...</option>
           </select>
-          <select id="dmg-calc-weapon" style="flex:1" onchange="onDmgCalcChange()">
+          <select id="dmg-calc-weapon" style="flex:1" onchange="onDmgCalcWeaponChange()">
             <option value="">Weapon...</option>
           </select>
         </div>
         <div id="dmg-calc-pw" style="font-size:11px;color:var(--cyan);margin-bottom:2px"></div>
         <div id="dmg-calc-distance" style="font-size:10px;margin-bottom:2px"></div>
         <div id="dmg-calc-situational" style="font-size:10px;color:var(--text2);margin-bottom:6px"></div>
+        <div id="dmg-calc-cover" style="display:none;margin-bottom:6px;padding:6px 8px;border:1px solid var(--border);background:var(--surface)">
+          <div style="font-size:10px;color:var(--text3);letter-spacing:0.1em;margin-bottom:3px">TARGET IN COVER?</div>
+          <select id="dmg-cover-select" style="width:100%;font-size:11px" onchange="onDmgCalcChange()"></select>
+          <div id="dmg-cover-flags" style="display:none;margin-top:4px;font-size:10px;line-height:1.7">
+            <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;font-size:11px;color:var(--text2)"><input type="checkbox" id="dmg-cover-ignore" style="width:auto;flex:0 0 auto;margin:3px 0 0" onchange="onDmgCalcChange()"><span>Target is exposed or flanked, or a rule ignores cover (Breacher, Durch die Deckung …) — the hit goes to the target</span></label>
+            <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;font-size:11px;color:var(--text2)"><input type="checkbox" id="dmg-cover-explosive" style="width:auto;flex:0 0 auto;margin:3px 0 0" onchange="onDmgCalcChange()"><span>Explosive — also hits the target if the blast beats the cover's HP</span></label>
+          </div>
+          <div id="dmg-cover-note" style="font-size:10px;color:var(--text2);margin-top:3px;line-height:1.5"></div>
+        </div>
+        <div id="dmg-calc-onhit" style="display:none;margin-bottom:6px;padding:6px 8px;border:1px solid var(--border);background:var(--surface)"></div>
         <div class="inline-row" style="gap:6px;align-items:center">
           <span style="font-size:10px;color:var(--text3);white-space:nowrap;letter-spacing:0.08em">ROLL RESULT</span>
           <input type="number" id="dmg-calc-roll" placeholder="0" style="width:64px" oninput="onDmgCalcChange()">
@@ -4647,6 +4659,18 @@ function openScenesModal() {
   openModal('scenes-modal');
 }
 const MAX_SCENES = 50;
+// Mission folders in the Scenes panel collapse like the roster/preset ones: the
+// current mission and the folder of the live scene open by default, the rest
+// stay closed until clicked (the click sticks for this session).
+let sceneGroupOpen = {};
+function sceneGroupIsOpen(m) {
+  if (m in sceneGroupOpen) return sceneGroupOpen[m];
+  return m === state.currentMission || m === (state.scenes?.[state.activeSceneId]?.mission || '');
+}
+function toggleSceneGroup(m) {
+  sceneGroupOpen[m] = !sceneGroupIsOpen(m);
+  renderScenesModal();
+}
 function renderScenesModal() {
   const el = document.getElementById('scenes-list');
   if (!el) return;
@@ -4678,7 +4702,13 @@ function renderScenesModal() {
   const showHeads = keys.length > 1 || (keys.length === 1 && keys[0] !== '');
   const html = keys.map(m => {
     const list = groups[m].sort((a, b) => (a[1].order ?? 1e9) - (b[1].order ?? 1e9) || String(a[1].name).localeCompare(String(b[1].name)));
-    return (showHeads ? `<div class="scene-group-head">${m ? '📁 ' + esc(m) : 'Unsorted'}<span>${list.length}</span></div>` : '') + list.map(row).join('');
+    if (!showHeads) return list.map(row).join('');
+    const isOpen = sceneGroupIsOpen(m);
+    return `<div class="mission-group-header ${isOpen ? 'open' : ''}" data-mission="${esc(m)}" onclick="toggleSceneGroup(this.dataset.mission)">
+      <span class="chevron">▶</span>
+      <span>${m ? '📁 ' + esc(m) : 'Unsorted'}</span>
+      <span class="mission-group-count">${list.length}</span>
+    </div>${isOpen ? `<div class="mission-group-body">${list.map(row).join('')}</div>` : ''}`;
   }).join('');
   const missions = [...new Set(entries.map(e => e[1].mission).filter(Boolean))];
   el.innerHTML = (entries.length ? html : '<div style="color:var(--text3);font-size:11px">No scenes yet.</div>') +
@@ -5418,7 +5448,8 @@ function renderCombatantCard(id, isActive) {
   const flinkUsed = c.flink_used;
   const effects = c.status_effects || [];
   const armorBody = c.armor_body;
-  const statusHtml = effects.map(e => `<span class="status-chip status-${e.type}">${esc(e.name)} ${e.rounds > 0 ? e.rounds+'r' : ''}</span>`).join('');
+  const statusHtml = effects.map(e => `<span class="status-chip status-${e.type}">${esc(e.name)} ${e.rounds > 0 ? e.rounds+'r' : ''}</span>`).join('')
+    + (c.cover ? `<span class="status-chip status-cover" title="In cover — click to adjust or remove" onclick="event.stopPropagation(); editCover('${id}')">🛡 ${esc(c.cover.name)} ${c.cover.hp}/${c.cover.hp_max}</span>` : '');
   const detailId = `detail-${id}`;
   const staCur = c.stamina_current ?? c.stamina_max ?? 0;
   const staMax = c.stamina_max ?? 0;
@@ -5607,7 +5638,7 @@ function charItemRow(id, c) {
   return `
   <div class="char-item ${hpPct <= 25 ? 'critical-row' : ''}" style="border-left-color:${color}" onclick="openCharModal('${id}')">
     ${avatar}
-    <div style="flex:1">
+    <div style="flex:1 1 130px;min-width:0">
       <div class="char-item-name">${esc(c.name)}</div>
       <div class="char-item-sub">${c.isDrone ? 'DRN' : (c.isVehicle ? 'VEH' : (c.isCompanion ? 'COM' : (c.isAlly ? 'ALLY' : (c.isNPC ? 'NPC' : 'PC'))))}${c.pin ? ' · PIN set' : ''} · INI ${c.initiative ?? 0}</div>
     </div>
@@ -6276,6 +6307,7 @@ async function endCombat() {
   // the round/turn tracker and PC-only combat state. Nothing is deleted.
   const updates = { 'combat': { active: false, round: 1, currentTurn: 0, order: [], initRolls: {} } };
   for (const [id, c] of Object.entries(state.characters)) {
+    if (c.cover) updates['characters/' + id + '/cover'] = null; // battlefield cover doesn't outlive the fight
     if (!c.isNPC || c.isAlly || c.isCompanion) {
       updates['characters/' + id + '/flink_used'] = false;
       updates['characters/' + id + '/status_effects'] = [];
@@ -6800,6 +6832,118 @@ function mainWeaponIndex(attackerId) {
 // tell the player what to roll, type the roll result, and get
 // roll+bonus-targetSP (min 1) to push into the keypad above. Doesn't touch
 // dmgKey/applyDmg at all — it's purely a pre-fill convenience.
+// ── COVER (rulebook v12 ch. 18) + ON-HIT EFFECTS in the damage / attack window ──
+// Cover is binary in v12: no PW malus, but a fully covered target can't be hit
+// directly — the attack hits the COVER instead, which has HP by material
+// (Thick/Thin). Overflow damage is lost; explosives also hit the target when
+// the blast beats the cover's HP. Cover is stored on the target as
+// { name, hp, hp_max } and cleared when combat ends.
+const COVER_MATERIALS = [
+  { key: 'steel',    name: 'Steel',             thick: 50, thin: 25 },
+  { key: 'stone',    name: 'Stone',             thick: 40, thin: 20 },
+  { key: 'glass',    name: 'Bulletproof glass', thick: 30, thin: 15 },
+  { key: 'concrete', name: 'Concrete',          thick: 25, thin: 10 },
+  { key: 'wood',     name: 'Wood',              thick: 20, thin: 5 },
+  { key: 'plastic',  name: 'Plastic / foam',    thick: 15, thin: 0 }, // thin = no cover at all
+];
+let dmgOnHitItems = []; // [{ label, note, spec }] — the on-hit effects offered for the current attacker + weapon
+
+// What the cover controls currently say, or null when they are not in play
+// (no attacker picked, healing, no target). `ignore` = target is exposed /
+// flanked / a rule ignores cover, so the hit goes to the target after all.
+function getDmgCoverState(target) {
+  const row = document.getElementById('dmg-calc-cover');
+  if (!target || !row || row.style.display === 'none') return null;
+  const v = document.getElementById('dmg-cover-select').value;
+  const ignore = document.getElementById('dmg-cover-ignore').checked;
+  const explosive = document.getElementById('dmg-cover-explosive').checked;
+  if (v === 'none') return target.cover ? { cover: null, remove: true, ignore, explosive } : null;
+  if (v === 'keep') return target.cover ? { cover: { ...target.cover }, changed: false, ignore, explosive } : null;
+  const [key, thick] = v.split(':');
+  const m = COVER_MATERIALS.find(x => x.key === key);
+  const hp = m ? m[thick] : 0;
+  if (!hp) return null;
+  return { cover: { name: `${m.name} (${thick === 'thick' ? 'Thick' : 'Thin'})`, hp, hp_max: hp }, changed: true, ignore, explosive };
+}
+// Rebuilds the cover dropdown for the current target (existing cover is
+// pre-selected so a second shot at the same barricade keeps chewing on it).
+function refreshDmgCoverUI() {
+  const sel = document.getElementById('dmg-cover-select'); if (!sel) return;
+  const t = state.characters[dmgTargetId];
+  const opts = ['<option value="none">No cover</option>'];
+  if (t?.cover) opts.push(`<option value="keep">Existing: ${esc(t.cover.name)} — ${t.cover.hp}/${t.cover.hp_max} HP</option>`);
+  COVER_MATERIALS.forEach(m => ['thick', 'thin'].forEach(th => { if (m[th] > 0) opts.push(`<option value="${m.key}:${th}">${esc(m.name)} — ${th} (${m[th]} HP)</option>`); }));
+  sel.innerHTML = opts.join('');
+  sel.value = t?.cover ? 'keep' : 'none';
+  document.getElementById('dmg-cover-ignore').checked = false;
+  document.getElementById('dmg-cover-explosive').checked = false;
+}
+// Shows/hides the cover row (needs a target AND an attacker — manual HP
+// changes without an attacker never touch cover) and explains what will happen.
+function updateDmgCoverNote() {
+  const row = document.getElementById('dmg-calc-cover'); if (!row) return;
+  const t = state.characters[dmgTargetId];
+  const attackerId = document.getElementById('dmg-calc-attacker').value;
+  const show = !!(t && attackerId && !dmgHealMode);
+  row.style.display = show ? 'block' : 'none';
+  if (!show) return;
+  const v = document.getElementById('dmg-cover-select').value;
+  document.getElementById('dmg-cover-flags').style.display = v === 'none' ? 'none' : 'block';
+  const cv = getDmgCoverState(t);
+  let note = '';
+  if (cv?.cover && !cv.ignore) note = `Fully covered — can't be targeted directly. The hit goes to the cover (${cv.cover.hp}/${cv.cover.hp_max} HP); damage beyond its HP is lost.`
+    + (cv.explosive ? ` Blast: if the damage beats ${cv.cover.hp} HP the target is hit too (armor applies).` : '');
+  else if (cv?.cover && cv.ignore) note = 'Cover bypassed — the target takes the hit normally.';
+  else if (cv?.remove) note = 'The existing cover will be removed.';
+  document.getElementById('dmg-cover-note').textContent = note;
+}
+
+// On-hit effects that come from the WEAPON itself (the talent/technique ones
+// already exist in computeStatusGrantSources). Rulebook: Serrated Edge = Bleed
+// on Crit Success; Shock Element = loses the secondary action next round;
+// Flamethrower hits set the target burning (Mild Fire, 2 HP/round).
+function computeWeaponHitSources(weapon) {
+  if (!weapon) return [];
+  const out = [];
+  const mods = (weapon.attachments || []).map(a => String(a?.name || a).toLowerCase());
+  if (mods.includes('serrated edge')) out.push({ label: 'Serrated Edge', note: 'on Crit Success', options: [{ type: 'bleed', name: 'Bleed (Serrated Edge)', rounds: -1 }] });
+  if (mods.includes('shock element')) out.push({ label: 'Shock Element', note: 'on Crit Success', options: [{ type: 'custom', name: 'Shocked — no secondary action', rounds: 1 }] });
+  if (/flame\s?thrower|napalm|flame gun/i.test(weapon.name || '')) out.push({ label: weapon.name, note: 'Mild Fire, 2 HP/round until put out', options: [{ type: 'burn', name: 'Burn (Flamethrower)', rounds: -1 }] });
+  return out;
+}
+// Lists everything the attacker's weapon / talents / techniques can inflict.
+// Ticked ones are applied to the TARGET (never the attacker) with the damage.
+function refreshDmgOnHit() {
+  const box = document.getElementById('dmg-calc-onhit'); if (!box) return;
+  dmgOnHitItems = [];
+  const attacker = state.characters[document.getElementById('dmg-calc-attacker').value];
+  const weapon = attacker?.weapons?.[document.getElementById('dmg-calc-weapon').value];
+  if (attacker && !dmgHealMode) {
+    [...computeStatusGrantSources(attacker), ...computeWeaponHitSources(weapon)].forEach(s =>
+      s.options.forEach(o => dmgOnHitItems.push({ label: s.label, note: s.note || '', spec: o })));
+  }
+  if (!dmgOnHitItems.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'block';
+  box.innerHTML = `<div style="font-size:10px;color:var(--text3);letter-spacing:0.1em;margin-bottom:3px">ON HIT — tick what triggered, it lands on the target</div>`
+    + dmgOnHitItems.map((it, i) => `<label style="display:flex;gap:6px;align-items:flex-start;line-height:1.6;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;font-size:11px;color:var(--text2)"><input type="checkbox" id="dmg-onhit-${i}" style="width:auto;flex:0 0 auto;margin:3px 0 0"><span>${esc(it.spec.name)} <span style="color:var(--text3)">— ${esc(it.label)}${it.note ? ' · ' + esc(it.note) : ''}</span></span></label>`).join('');
+}
+function onDmgCalcWeaponChange() {
+  refreshDmgOnHit();
+  onDmgCalcChange();
+}
+
+// Remove / adjust the cover on a combatant from its card chip.
+async function editCover(id) {
+  const c = state.characters[id]; if (!c?.cover) return;
+  const raw = prompt(`${c.name}'s cover: ${c.cover.name}\nHP now ${c.cover.hp}/${c.cover.hp_max}. Enter new HP (0 removes the cover):`, String(c.cover.hp));
+  if (raw === null) return;
+  const n = parseInt(raw);
+  if (!Number.isFinite(n)) return;
+  const path = 'characters/' + id + '/cover';
+  if (n <= 0) await dbUpdate(logTo({ [path]: null }, `${c.name}'s cover (${c.cover.name}) removed`));
+  else await dbUpdate(logTo({ [path]: { ...c.cover, hp: Math.min(n, c.cover.hp_max) } }, `${c.name}'s cover (${c.cover.name}) set to ${Math.min(n, c.cover.hp_max)}/${c.cover.hp_max}`));
+}
+
 function populateDmgCalc() {
   const section = document.getElementById('dmg-calc-section');
   const targetRow = document.getElementById('dmg-calc-target-row');
@@ -6847,11 +6991,13 @@ function populateDmgCalc() {
   const turnId = order[state.combat?.currentTurn || 0];
   const preId = dmgAttackMode ? dmgFixedAttackerId : (turnId && turnId !== dmgTargetId && alive(turnId) ? turnId : '');
   if (preId) attackerSel.value = preId;
+  refreshDmgCoverUI();
   onDmgCalcAttackerChange();
 }
 function onDmgCalcTargetChange() {
   dmgTargetId = document.getElementById('dmg-calc-target').value || null;
   updateDmgModalTitle();
+  refreshDmgCoverUI();
   onDmgCalcChange();
 }
 function onDmgCalcAttackerChange() {
@@ -6861,6 +7007,7 @@ function onDmgCalcAttackerChange() {
   weaponSel.innerHTML = '<option value="">Weapon...</option>' + weapons.map((w,i) => `<option value="${i}">${esc(w.name)}</option>`).join('');
   const main = mainWeaponIndex(attackerId);
   if (main >= 0) weaponSel.value = String(main);
+  refreshDmgOnHit();
   onDmgCalcChange();
 }
 function onDmgCalcChange() {
@@ -6873,6 +7020,7 @@ function onDmgCalcChange() {
   const distEl = document.getElementById('dmg-calc-distance');
   const sitEl = document.getElementById('dmg-calc-situational');
   const resultEl = document.getElementById('dmg-calc-result');
+  updateDmgCoverNote();
   if (!attacker || !weapon) {
     pwEl.textContent = ''; distEl.textContent = ''; sitEl.textContent = ''; resultEl.textContent = '—'; resultEl.dataset.value = '';
     return;
@@ -6916,9 +7064,17 @@ function onDmgCalcChange() {
     resultEl.textContent = 'pick a target';
     resultEl.dataset.value = '';
   } else if (roll > 0) {
-    const dmg = Math.max(1, roll + effectiveBonus - targetSP);
-    resultEl.textContent = `${dmg} dmg (${roll}+${effectiveBonus}-${targetSP})`;
-    resultEl.dataset.value = dmg;
+    const cv = getDmgCoverState(target);
+    if (cv?.cover && !cv.ignore) {
+      // the cover soaks the shot: weapon damage vs the cover's HP, no armor involved
+      const dmgC = Math.max(1, roll + effectiveBonus);
+      resultEl.textContent = `${dmgC} to cover (${roll}+${effectiveBonus})${cv.explosive && dmgC > cv.cover.hp ? ` · target takes ${Math.max(1, dmgC - targetSP)}` : ''}`;
+      resultEl.dataset.value = dmgC;
+    } else {
+      const dmg = Math.max(1, roll + effectiveBonus - targetSP);
+      resultEl.textContent = `${dmg} dmg (${roll}+${effectiveBonus}-${targetSP})`;
+      resultEl.dataset.value = dmg;
+    }
   } else {
     resultEl.textContent = '—';
     resultEl.dataset.value = '';
@@ -6946,26 +7102,64 @@ async function applyDmg(sign) {
   const id = dmgTargetId;
   const c = state.characters[id]; if (!c) return;
   const delta = sign > 0 ? val : -val;
-  const newHp = Math.min(c.hp_max, Math.max(-(c.stats?.grit || 0), (c.hp_current ?? c.hp_max) + delta));
-  const updates = { ['characters/' + id + '/hp_current']: newHp };
-  // Both the armor ablation and the magazine spend below key off whoever's
-  // dealing this damage (the damage calculator's attacker/weapon, if
-  // selected) — resolved once up front since both need it.
+  // Armor ablation, the magazine spend, cover and on-hit effects all key off
+  // whoever's dealing this damage (the calculator's attacker/weapon, if
+  // selected) — resolved once up front since they all need it.
   const attackerId = document.getElementById('dmg-calc-attacker')?.value;
   const attacker = attackerId ? state.characters[attackerId] : null;
   const weaponIdx = document.getElementById('dmg-calc-weapon')?.value;
   const weapon = attacker?.weapons?.[weaponIdx];
+  const updates = {};
+  // Cover (rulebook v12 ch. 18): a covered target can't be hit directly, so the
+  // damage goes to the cover's HP instead — no HP loss, armor ablation or
+  // on-hit effects for the target. Explosives that beat the cover's HP hit
+  // both. `ignore` (exposed / flanked / a rule that ignores cover) skips all of it.
+  let coverMsg = '';
+  let targetHit = true;
+  let hpDelta = delta;
+  const cv = (sign < 0 && attacker) ? getDmgCoverState(c) : null;
+  if (cv) {
+    const cpath = 'characters/' + id + '/cover';
+    if (cv.remove) updates[cpath] = null;
+    else if (cv.cover && cv.ignore) { if (cv.changed) updates[cpath] = cv.cover; }
+    else if (cv.cover) {
+      const left = Math.max(0, cv.cover.hp - val);
+      const blast = cv.explosive && val > cv.cover.hp;
+      updates[cpath] = left > 0 ? { ...cv.cover, hp: left } : null;
+      // the keypad holds the raw damage (roll + bonus) when cover is in play; a
+      // blast that gets through hurts the target like any hit, so armor applies
+      if (blast) hpDelta = -Math.max(1, val - (c.armor_body?.sp_temp ?? c.armor_body?.sp_base ?? 0));
+      coverMsg = `${val} dmg to ${cv.cover.name} cover (${cv.cover.hp} → ${left}${left === 0 ? ', destroyed' : ''})${blast ? ' · blast hits the target too' : ''}`;
+      targetHit = blast;
+    }
+  }
+  const curHp = c.hp_current ?? c.hp_max;
+  const newHp = targetHit ? Math.min(c.hp_max, Math.max(-(c.stats?.grit || 0), curHp + hpDelta)) : curHp;
+  if (targetHit) updates['characters/' + id + '/hp_current'] = newHp;
   // Armor ablates 1 Temporary SP per hit taken, same as the GM was doing
   // by hand with the -1/+1 armor buttons — bumped up if the attacker has
   // an armor-ablation talent (Armor Breaker, Ruestungsbrecher). Only on
-  // actual damage (the − DAMAGE button passes sign=-1), never on healing.
+  // actual damage (the − DAMAGE button passes sign=-1), never on healing,
+  // and never when the cover took the hit.
   let ablationMsg = '';
-  if (sign < 0 && c.armor_body?.sp_temp > 0) {
+  if (sign < 0 && targetHit && c.armor_body?.sp_temp > 0) {
     const slotType = weapon ? matchWeaponName(weapon.name)?.slotType : undefined;
     const ablation = 1 + (attacker ? getActiveTalentMods(attacker, 'armorAblation', slotType).total : 0);
     const newSpTemp = Math.max(0, c.armor_body.sp_temp - ablation);
     updates['characters/' + id + '/armor_body/sp_temp'] = newSpTemp;
     ablationMsg = ` · Armor SP -${ablation} → ${newSpTemp}`;
+  }
+  // On-hit effects the GM ticked (Serrated Edge bleed, flamethrower burn,
+  // talent/technique effects) go onto the TARGET's status effects.
+  let hitMsg = '';
+  if (sign < 0 && attacker && targetHit) {
+    const picked = dmgOnHitItems.filter((it, i) => document.getElementById('dmg-onhit-' + i)?.checked);
+    if (picked.length) {
+      let tmp = { status_effects: c.status_effects || [] };
+      picked.forEach(it => { tmp = { status_effects: applyAutoStatusEffect(tmp, it.spec) }; });
+      updates['characters/' + id + '/status_effects'] = tmp.status_effects;
+      hitMsg = ' · ' + picked.map(it => it.spec.name).join(', ');
+    }
   }
   // Spends 1 magazine tick off the ATTACKER's weapon (never the target's) —
   // the GM was doing this by hand every hit too. Only for actual damage,
@@ -6973,6 +7167,7 @@ async function applyDmg(sign) {
   // computeLiveWeaponStats' magMax). A normal shot is always 1 tick here;
   // Autofire/Suppressive Fire's 2-tick cost stays a manual -2 click on the
   // weapon row, same as today, since the calculator has no autofire signal.
+  // The shot is spent whether it hit the cover or the target.
   let magMsg = '';
   if (sign < 0 && attacker && weapon) {
     const live = computeLiveWeaponStats(getStatsSourceChar(attacker), weapon);
@@ -6984,12 +7179,18 @@ async function applyDmg(sign) {
       magMsg = ` · ${attacker.name}'s ${weapon.name} mag -1 → ${newMag}/${live.magMax}`;
     }
   }
-  const curHp = c.hp_current ?? c.hp_max;
   const who = (attacker && sign < 0) ? `${attacker.name} → ${c.name}${weapon ? ' (' + weapon.name + ')' : ''}` : c.name;
-  logTo(updates, `${who}: ${fmtSigned(newHp - curHp)} HP → ${newHp}/${c.hp_max}${ablationMsg}${newHp <= 0 && curHp > 0 ? ' — DOWN' + (isPlayerCharacter(c) ? ' (death save)' : '') : ''}`);
+  if (!targetHit) {
+    logTo(updates, `${who}: ${coverMsg}`);
+    await dbUpdate(updates);
+    closeModal('dmg-modal');
+    showToast(`${c.name} is covered — ${coverMsg}${magMsg}`);
+    return;
+  }
+  logTo(updates, `${who}: ${fmtSigned(newHp - curHp)} HP → ${newHp}/${c.hp_max}${ablationMsg}${coverMsg ? ' · ' + coverMsg : ''}${hitMsg}${newHp <= 0 && curHp > 0 ? ' — DOWN' + (isPlayerCharacter(c) ? ' (death save)' : '') : ''}`);
   await dbUpdate(updates);
   closeModal('dmg-modal');
-  showToast(`${c.name}: ${delta > 0 ? '+' : ''}${delta} HP → ${newHp}${ablationMsg}${magMsg}`);
+  showToast(`${c.name}: ${hpDelta > 0 ? '+' : ''}${hpDelta} HP → ${newHp}${ablationMsg}${hitMsg}${magMsg}`);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -9635,7 +9836,8 @@ async function previewMissionPack(pack, fileName) {
     ${probeHtml}${warnHtml}
     ${scenesHtml}
     ${(existChars || existScenes) ? `<div style="margin-top:8px;font-size:11px;line-height:1.6"><strong style="color:var(--gold-bright)">This mission was imported before</strong> (${existScenes} scenes, ${existChars} characters).
-      <label style="display:flex;gap:8px;align-items:center;margin-top:4px;cursor:pointer"><input type="radio" name="mission-mode" value="update" checked> Update them in place (their current HP etc. reset to the pack)</label>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:4px;cursor:pointer"><input type="radio" name="mission-mode" value="update" checked> Update them in place (their current HP etc. reset to the pack; the mission's encounter presets are replaced)</label>
+      ${(state.scenes?.[state.activeSceneId]?.importKey || '').startsWith(pack.id + ':') ? `<div style="color:var(--gold-bright);font-size:10px;margin:2px 0 4px 22px">Scene "${esc(state.scenes[state.activeSceneId].name)}" is open right now, so it can't be updated in place — it will be added as a copy. Switch to another scene first if you don't want that.</div>` : ''}
       <label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="radio" name="mission-mode" value="copy"> Import as new copies alongside</label></div>` : ''}
     <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:11px;cursor:pointer"><input type="checkbox" id="mission-set-current" checked> Make this the current mission</label>
     <label style="display:flex;gap:8px;align-items:center;margin-top:4px;font-size:11px;cursor:pointer"><input type="checkbox" id="mission-backup" checked> Back up the campaign first (recommended)</label>
@@ -9733,7 +9935,16 @@ async function runMissionImport() {
       if (inline) rec.mapImageData = s.image; else rec.imageStored = true;
       updates['scenes/' + sid] = rec;
     });
-    // 4. presets
+    // 4. presets. In update mode the pack's earlier presets are replaced (same
+    // mission, same id prefix — matched on the mission too, since the prefix is
+    // only the first 12 letters of the pack id), otherwise a re-import would
+    // stack a second full set of every encounter.
+    if (mode === 'update') {
+      const prefix = 'enc_' + pack.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) + '_';
+      Object.entries(state.encounterPresets || {}).forEach(([pid, p]) => {
+        if (pid.startsWith(prefix) && p && presetMission(p) === pack.mission) updates['encounterPresets/' + pid] = null;
+      });
+    }
     (pack.presets || []).forEach((p, i) => {
       const pid = 'enc_' + pack.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) + '_' + i + '_' + Math.random().toString(36).slice(2, 4);
       updates['encounterPresets/' + pid] = {
@@ -10153,7 +10364,7 @@ const LOOT_TABLES = {
     { text: 'Blackmarket Deck + 6 Hacks komplett', type: 'cyberware', cyberwareOptions: [], cyberdeck: 'Blackmarket', extraItem: '+ 6 Hacks (GM\'s choice, add via the Netrunning screen)' },
     { text: 'Prototype Weapon (Excellent, alle Slots belegt, DM wählt Typ)', type: 'text' },
     { text: '40000-55000 ed Bargeld', type: 'cash', cashMin: 40000, cashMax: 55000 },
-    { text: 'Cyberware: Full Cyberarm (beidseitig) + Mantis Blades', type: 'cyberware', cyberwareOptions: ['Full Cyberarm (beidseitig)', 'Mantis Blades'] },
+    { text: 'Cyberware: Full Cyberarm (beidseitig) + Mantis Blades', type: 'cyberware', cyberwareOptions: ['Full Cyberarm', 'Full Cyberarm', 'Mantis Blades'] },
     { text: 'Militärische Geheiminfos (Plotmaterial + 10000 ed Verkaufswert)', type: 'cash', cashMin: 10000, cashMax: 10000, extraItem: 'Militärische Geheiminfos (Plot-Material)' },
     { text: 'Cyberware: Titanium Bones + Muscle & Bone Lace + Subdermal Armor', type: 'cyberware', cyberwareOptions: ['Titanium Bones', 'Muscle & Bone Lace', 'Subdermal Armor'] },
     { text: '55000-70000 ed oder Corporate Kontozugang', type: 'cash', cashMin: 55000, cashMax: 70000, extraItem: 'Alternative: Corporate Kontozugang statt Bargeld' },
