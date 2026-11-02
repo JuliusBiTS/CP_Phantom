@@ -3711,6 +3711,33 @@ function applySpottedHighlights(interactive) {
   });
 }
 
+// Re-rendering the map replaces its whole markup, and the fresh <img> has no
+// height until it is decoded — for that moment the page is shorter, the browser
+// clamps the scroll position and the view jumps to the top (every eye toggle,
+// every revealed device). So: remember every scrolled ancestor + the window,
+// pin the container's old height, and put it all back once the image is in.
+function holdScroll(el) {
+  const spots = [];
+  for (let n = el; n; n = n.parentElement) if (n.scrollTop > 0) spots.push([n, n.scrollTop]);
+  const h = el.offsetHeight;
+  if (h) el.style.minHeight = h + 'px';
+  return { spots, y: window.scrollY, el };
+}
+function releaseScroll(k) {
+  const restore = () => {
+    k.spots.forEach(([n, t]) => { if (Math.abs(n.scrollTop - t) > 1) n.scrollTop = t; });
+    if (Math.abs(window.scrollY - k.y) > 1) window.scrollTo(0, k.y);
+  };
+  restore();
+  const free = () => { k.el.style.minHeight = ''; restore(); };
+  const img = k.el.querySelector('img');
+  if (img && !img.complete) {
+    img.addEventListener('load', free, { once: true });
+    img.addEventListener('error', free, { once: true });
+    setTimeout(free, 1500);
+  } else free();
+}
+
 function renderMapView() {
   const el = document.getElementById('combat-map-view');
   if (!el) return;
@@ -3724,6 +3751,7 @@ function renderMapView() {
       </div>`;
     return;
   }
+  const scrollHold = holdScroll(el);
   el.innerHTML = `
     <div id="map-container" style="position:relative;width:100%;overflow:hidden;border:1px solid var(--border2);background:#000;${mapTool ? 'cursor:crosshair;' : ''}" onpointerdown="onMapContainerPointerDown(event)">
       <img src="${imgSrc('map', mapImage)}" style="display:block;width:100%;height:auto;user-select:none;pointer-events:none" draggable="false">
@@ -3771,6 +3799,7 @@ function renderMapView() {
       <span style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text3)">VISION RADIUS <input type="number" min="1" step="1" value="${state.fogVisionRadius ?? 15}" style="width:55px" onchange="setFogVisionRadius(this.value)"> m</span>
       <span style="font-size:9px;color:var(--text3)">${state.mapScaleMetersWidth ? '' : '(set the map scale above for an accurate radius)'}</span>
     </div>` : ''}`;
+  releaseScroll(scrollHold);
   applySpottedHighlights(true);
 }
 
