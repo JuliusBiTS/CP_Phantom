@@ -10208,7 +10208,7 @@ CYBERWARE CATALOG (optional, pick 0-3 names where sensible; other cyberware name
 
 FLINK: GRUNT NPCs never have Flink. BOSS NPCs always have Flink. For THREAT, decide based on the character concept.
 
-IMAGE PROMPT: Write "imagePrompt" as a single self-contained paragraph a GM can paste directly into an image generator (Midjourney/DALL-E/Stable Diffusion) with zero editing. Describe ONLY visual, static appearance — build, face, skin/hair/eyes, exact clothing and colors, visible cyberware and where it's mounted, pose/expression, and end with an art-style clause (e.g. "cyberpunk noir illustration, dramatic neon rim lighting, detailed digital art, portrait framing"). Do NOT include stats, tactics, backstory, or anything not visible in a single still image. Must stay consistent with the character's tier, weapons, and cyberware listed elsewhere in the same JSON.
+IMAGE PROMPT: Write "imagePrompt" as a single self-contained paragraph a GM can paste directly into an image generator (Midjourney/DALL-E/Stable Diffusion) with zero editing. Describe ONLY visual, static appearance — build, face, skin/hair/eyes, exact clothing and colors, visible cyberware and where it's mounted, pose/expression, then name ONE specific light source and ONE colour palette that suits this character (e.g. sodium-orange streetlight, flat fluorescent tubes, red emergency light, holo-screen glow, rust-and-teal), include one or two concrete worn details (scuffed leather, grime at the cuffs, a faint scar), and end with a SHORT medium clause that VARIES from character to character (e.g. "35mm film-still look", "ink and gouache illustration", "risograph print", "press photo with on-camera flash", "gritty digital painting") plus "portrait framing". Never use generic filler like "cinematic", "dramatic", "epic", "ultra-detailed" or "detailed digital art" — two characters must never end with the same style clause. Do NOT include stats, tactics, backstory, or anything not visible in a single still image. Must stay consistent with the character's tier, weapons, and cyberware listed elsewhere in the same JSON.
 
 NAMES: Night City is a melting pot — mix heritages widely (Latino, Japanese, Korean, Filipino, Nigerian, Polish, Brazilian, Armenian, Irish, Samoan, Lebanese ...); street handles and nicknames are welcome. Do NOT reuse the same surname across NPCs and avoid the overused defaults (Voss, Chen, Kowalski, Reyes, Kane, Cole, Vance, Reed, Mercer, Stone, Hale, Sato, Tanaka, Nakamura). When generating several NPCs in one request, every one gets a different surname.
 
@@ -14170,7 +14170,7 @@ const PORTRAIT_STYLE = ' Framing: three-quarter shot, vertical 3:4, the head and
 // ── persistent state ────────────────────────────────────────────────────────────────────
 F.drafts = {}; F.draft = null; F.step = 1; F.loaded = false; F.abort = false; F.busy = '';
 F.meta = { bible: '', known: [], hidden: [] };
-F.settings = { cap: 1.5, imgModel: 'gpt-image-2.5-sunburst', imgQuality: 'low' };
+F.settings = { cap: 1.5, imgModel: 'gpt-image-2.5-sunburst', imgQuality: 'low', propTextMedium: false };
 F.session = { usd: 0, calls: 0 };
 const blankArt = () => ({ maps: {}, portraits: {}, placements: {}, props: {} });
 F.art = blankArt();   // art of the CURRENT draft; kept in memory and mirrored to IndexedDB (large images)
@@ -14491,7 +14491,7 @@ async function castOnly(d) {
   const weapons = Object.keys(WEAPON_TABLE).filter(n => (WEAPON_TABLE[n].slotType || '') !== 'shield').join(', ');
   let used = []; try { used = Object.values(state.characters || {}).map(x => x && x.name).filter(Boolean).slice(0, 80); } catch (e) { /* ignore */ }
   const r = await F.claude({ tier: 'cheap', stage: 'cast', label: 'cast', effort: 'low', maxTokens: 9000,
-    user: `MISSION: ${d.title} — ${d.outline.logline}\nSEGMENTS: ${JSON.stringify(segs)}\nALREADY USED NAMES (do not reuse these surnames): ${used.join(', ') || '—'}\n\nTASK: list every NPC the GM must run (named people, hostile squads as individual members, key civilians). Do NOT include the player characters. Combatants must use these weapon names exactly: ${weapons}. Armor must be one of: ${Object.keys(ARMOR_CATALOG).join(', ')}. Tiers: GRUNT (fodder), THREAT (named operatives), BOSS (climax). Archetypes: ${ARCHS.join(', ')}. Hostile segments may contain at most 3 hostile members. Use "ally" for friendly/neutral people, "enemy" for anyone who may turn on the crew. Maximum 12 NPCs, every NPC with a different surname. Keep every field short.\nReturn JSON: {"cast":[{"key":"snake_case","name":"","fac":"enemy|ally","tier":"GRUNT|THREAT|BOSS","archetype":"","weapons":[""],"armor":"","cyberware":["free text, optional"],"role":"one line","want":"","secret":"","keyLine":"","tactics":"how they fight / behave","gm":"GM-only notes","flavor":"2 noir sentences","imagePrompt":"ONE paragraph, visual only: age, build, face, hair, exact clothing and colours, weapon/cyberware, pose, expression, background; no stats","segments":["b2"],"visibleAtStart":false}]}` });
+    user: `MISSION: ${d.title} — ${d.outline.logline}\nSEGMENTS: ${JSON.stringify(segs)}\nALREADY USED NAMES (do not reuse these surnames): ${used.join(', ') || '—'}\n\nTASK: list every NPC the GM must run (named people, hostile squads as individual members, key civilians). Do NOT include the player characters. Combatants must use these weapon names exactly: ${weapons}. Armor must be one of: ${Object.keys(ARMOR_CATALOG).join(', ')}. Tiers: GRUNT (fodder), THREAT (named operatives), BOSS (climax). Archetypes: ${ARCHS.join(', ')}. Hostile segments may contain at most 3 hostile members. Use "ally" for friendly/neutral people, "enemy" for anyone who may turn on the crew. Maximum 12 NPCs, every NPC with a different surname. Keep every field short.\nReturn JSON: {"cast":[{"key":"snake_case","name":"","fac":"enemy|ally","tier":"GRUNT|THREAT|BOSS","archetype":"","weapons":[""],"armor":"","cyberware":["free text, optional"],"role":"one line","want":"","secret":"","keyLine":"","tactics":"how they fight / behave","gm":"GM-only notes","flavor":"2 noir sentences","imagePrompt":"ONE paragraph, visual only: age, build, face, hair, exact clothing and colours, weapon/cyberware, pose, expression, concrete worn details; NO style words (no cinematic, dramatic, detailed digital art, no art-style clause — the tool adds medium, light and palette); no stats","segments":["b2"],"visibleAtStart":false}]}` });
   const list = Array.isArray(r) ? r : (r && r.cast);
   if (!Array.isArray(list) || !list.length) throw new Error('No cast came back — try again.');
   d.cast = list.map(x => sanitizeCast(x)); F.save();
@@ -14543,7 +14543,7 @@ function fightMembers(d, b) {
 // the cast member as a character record using the tool's OWN generator (all numbers come from the tool)
 function castToCharacter(c, mission) {
   const input = { name: c.name, tier: c.tier, archetype: c.archetype, faction: c.fac, armor: { name: c.armor }, weapons: (c.weapons || []).map(n => ({ name: n })), cyberware: c.cyberware || [], flink: false,
-    tactics: [c.tactics, c.keyLine ? 'Key line: ' + c.keyLine : ''].filter(Boolean).join('\n'), loot: [], gmNote: [c.role, c.want ? 'Wants: ' + c.want : '', c.secret ? 'Secret: ' + c.secret : '', c.gm].filter(Boolean).join('\n'), flavor: c.flavor || '', imagePrompt: (c.imagePrompt || '') + PORTRAIT_STYLE };
+    tactics: [c.tactics, c.keyLine ? 'Key line: ' + c.keyLine : ''].filter(Boolean).join('\n'), loot: [], gmNote: [c.role, c.want ? 'Wants: ' + c.want : '', c.secret ? 'Secret: ' + c.secret : '', c.gm].filter(Boolean).join('\n'), flavor: c.flavor || '', imagePrompt: portraitPrompt(c) };
   const ch = genResultToCharacter(processGeneratedEnemy(input));
   ch.mission = mission; ch.isAlly = c.fac === 'ally'; ch.isNPC = true;
   return ch;
@@ -14606,8 +14606,6 @@ F.artSheet = function () {
   return L.join('\n');
 };
 F.downloadArtSheet = function () { download(slug(F.draft.title) + ' - map & art requests.md', F.artSheet(), 'text/markdown'); };
-function mapPrompt(l) { return `${l.mapPrompt} ${MAP_STYLE}\nMust contain: ${(l.mustContain || []).join('; ')}. Must NOT contain: people, text, grid, labels, UI.`; }
-function portraitPrompt(c) { return (c.imagePrompt || (c.name + ', a Night City figure.')) + PORTRAIT_STYLE; }
 F._mapPrompt = mapPrompt; F._portraitPrompt = portraitPrompt;
 
 // campaign state: accept the deltas of a played plot mission
@@ -14634,16 +14632,17 @@ const OPENAI_KEY = 'cp_openai_key';
 F.openaiKey = () => { try { return localStorage.getItem(OPENAI_KEY) || ''; } catch (e) { return ''; } };
 F.setOpenaiKey = function (v) { try { v && v.trim() ? localStorage.setItem(OPENAI_KEY, v.trim()) : localStorage.removeItem(OPENAI_KEY); } catch (e) { showToast('This browser blocked saving the key.'); } showToast(v && v.trim() ? 'OpenAI key saved in this browser.' : 'OpenAI key removed.'); F.render(true); };
 function addUsd(label, model, usd) { F.session.usd += usd; if (F.draft) { F.draft.cost.total = +(F.draft.cost.total + usd).toFixed(5); F.draft.cost.calls.push({ label, model, in: 0, cached: 0, out: 0, usd: +usd.toFixed(5) }); } updateMeter(); }
-async function genImage(prompt, size, label) {
+async function genImage(prompt, size, label, quality) {
+  const qual = quality || F.settings.imgQuality;
   const key = F.openaiKey(); if (!key) throw new Error('No OpenAI key — paste it in the Build step.');
   if (F.abort) throw new Error('Stopped.');
   let res;
-  try { res = await fetch('https://api.openai.com/v1/images/generations', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify({ model: F.settings.imgModel, prompt, n: 1, size, quality: F.settings.imgQuality, output_format: 'png' }) }); }
+  try { res = await fetch('https://api.openai.com/v1/images/generations', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify({ model: F.settings.imgModel, prompt, n: 1, size, quality: qual, output_format: 'png' }) }); }
   catch (e) { throw new Error('The browser could not reach the image API (' + e.message + '). Use "Download art request sheet" and the double-click launcher instead.'); }
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error((data && data.error && data.error.message) || ('Image API HTTP ' + res.status));
   const dd = data && data.data && data.data[0]; if (!dd || !dd.b64_json) throw new Error('The image API returned no image.');
-  addUsd(label, F.settings.imgModel, IMG_PRICE[F.settings.imgQuality] || 0.006);
+  addUsd(label, F.settings.imgModel, IMG_PRICE[qual] || 0.006);
   return 'data:image/png;base64,' + dd.b64_json;
 }
 function loadImg(src) { return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('Could not decode the image.')); im.src = src; }); }
@@ -14668,12 +14667,12 @@ async function gridJpeg(src) {   // the map with a labelled 10% grid, so the mod
 
 F.makeMap = async function (i, quiet) {
   const d = F.draft, l = d.locations[i]; if (!l) return;
-  const run = async () => { const png = await genImage(mapPrompt(l), '1536x1024', 'map ' + l.key); F.art.maps[l.key] = (await toMapJpeg(png)); delete F.art.placements[l.key]; F.saveArt(); };
+  const run = async () => { if (F.art.maps[l.key]) { l.lookSeed = (l.lookSeed || 0) + 1; F.save(); } const png = await genImage(mapPrompt(l), '1536x1024', 'map ' + l.key); F.art.maps[l.key] = (await toMapJpeg(png)); delete F.art.placements[l.key]; F.saveArt(); };
   quiet ? await run() : await guard('Painting the map "' + l.name + '" …', run);
 };
 F.makePortrait = async function (i, quiet) {
   const d = F.draft, c = d.cast[i]; if (!c) return;
-  const run = async () => { const png = await genImage(portraitPrompt(c), '1024x1536', 'portrait ' + c.key); F.art.portraits[c.key] = await toPortrait(png); F.saveArt(); };
+  const run = async () => { if (F.art.portraits[c.key]) { c.lookSeed = (c.lookSeed || 0) + 1; F.save(); } const png = await genImage(portraitPrompt(c), '1024x1536', 'portrait ' + c.key); F.art.portraits[c.key] = await toPortrait(png); F.saveArt(); };
   quiet ? await run() : await guard('Painting ' + c.name + ' …', run);
 };
 const DEVICE_LIST = () => Object.entries(SECURITY_DEVICE_CATALOG).map(([k, v]) => k + ' [' + v.category + (v.detectionShape ? ', ' + v.detectionShape : '') + ']').join(' · ');
@@ -14933,6 +14932,241 @@ function step6(d) {
     ${calls.length ? `<table style="width:100%;font-size:10px;margin-top:6px;border-collapse:collapse">${calls.map(c => `<tr style="color:var(--text2)"><td>${E(c.label)}</td><td>${E(c.model)}</td><td style="text-align:right">${c.in}+${c.cached}c → ${c.out}</td><td style="text-align:right">$${c.usd.toFixed(4)}</td></tr>`).join('')}</table>` : ''}</div>`;
 }
 
+// ── looks: every picture gets its own medium, light and palette (seeded, so reproducible; a new seed = a new look) ──
+// Built from the OpenAI image-prompting guidance: structured lines (use → subject → details → exact text → constraints),
+// concrete materials and wear instead of polish words, camera/print-process language, short quoted text exactly once.
+function hashStr(s) { let h = 2166136261; s = String(s); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const pickOf = (arr, r) => arr[Math.floor(r() * arr.length)];
+const BANNED = /\b(cinematic|dramatic|epic|masterpiece|ultra[- ]?detailed|highly detailed|hyper[- ]?detailed|8k|4k|trending on artstation|award[- ]winning|stunning|breathtaking)\b[,]?\s*/gi;
+function scrub(s) { return String(s || '').replace(BANNED, '').replace(/\s{2,}/g, ' ').replace(/\s+([,.;])/g, '$1').trim(); }
+function stripStyle(s) {   // the old fixed art-style clause that made every portrait alike
+  s = String(s || '').replace(/,?\s*(?:cyberpunk\s+)?noir illustration/gi, '').replace(/,?\s*dramatic neon rim lighting/gi, '').replace(/,?\s*detailed digital art/gi, '').replace(/,?\s*portrait framing/gi, '');
+  return s.split(/(?<=[.!?])\s+/).filter(x => !/^\s*Framing:/i.test(x)).join(' ').replace(/\s{2,}/g, ' ').replace(/[,;]\s*([.!?])/g, '$1').trim();
+}
+const SETTING_LINE = 'Setting: Night City, 2045 — a cyberpunk megacity under a smog-red sky: rain, neon, chrome implants, makeshift tech, corporate gloss against street grime. Use it as the atmosphere around the subject.';
+
+// portraits: one cyberpunk world, many looks
+const PORTRAIT_MEDIA = [
+  'moody 35mm neo-noir sci-fi film still, fine grain, shallow depth of field, soft focus at the edges',
+  'gritty retro-futurist digital painting with visible brushwork and muted, desaturated colours',
+  'ink and gouache cyberpunk comic illustration with halftone shading and a hand-made feel',
+  'two-colour risograph cyberpunk gig-poster print with slightly misregistered layers and paper texture',
+  'press photograph from a dystopian near-future, on-camera flash, hard shadows, a little motion blur',
+  'bold-ink cyberpunk comic-book panel with flat colour fills',
+  'charcoal and ink concept sketch for a cyberpunk film, with a few touches of neon colour',
+  'grainy instant-camera snapshot in a dystopian megacity, washed-out colours, soft vignette',
+];
+const LIGHTS = [
+  'a single sodium-orange streetlight from above and to the left',
+  'flat greenish fluorescent tubes directly overhead',
+  'a neon sign spilling magenta light from the right',
+  'red emergency lighting from one side',
+  'cold grey daylight filtering through smog from a window on the left',
+  'a warm desk lamp from below and to the right',
+  'the blue glow of a holo-screen in front of the face',
+  'car headlights behind the subject, leaving a thin rim of white light',
+  'low amber light from a fire barrel',
+];
+const PALETTES = [
+  'rust, bone and deep teal', 'olive drab, sand and gunmetal', 'crimson, black and bone white', 'dusty ochre, faded denim blue and warm brown',
+  'violet, cyan and charcoal', 'clean white, pale blue and steel grey', 'mustard yellow, oxblood and soot', 'sea-green, copper and wet black',
+];
+const FACTION_PALETTES = [
+  [/militech|soldier|spec ops|army|argus/i, 'olive drab, sand and gunmetal'], [/arasaka/i, 'black, crimson and bone white'],
+  [/nomad|camp|desert|dust/i, 'dusty ochre, faded denim blue and warm brown'], [/valentino|saint|pistolero/i, 'warm gold, deep red and weathered street-wall pastels'],
+  [/netrunner|hacker|runner/i, 'violet, cyan and charcoal'], [/zetatech|biotechnica|corp|executive|counsel|liaison|agent/i, 'clean white, pale blue and steel grey'],
+  [/medic|clinic|doctor|surgeon/i, 'surgical green, white and blood-red accents'], [/veinbreaker|ripper|bent saint/i, 'copper, chrome and wet black'],
+];
+const ANGLES = ['three-quarter view, looking just past the camera', 'straight-on, direct eye contact', 'a slight low angle, chin raised', 'head turned, glancing back at the camera', 'a slight high angle, eyes lifted toward the camera', 'shoulders angled away, face turned toward the viewer'];
+const FLAWS = ['real skin texture with pores and uneven tone', 'creased, sweat-stained clothing', 'a slightly asymmetrical face with a faint old scar or blemish', 'grime and smudges at the collar and cuffs', 'frayed seams, scuffed leather and faded patches', 'rain-damp hair with a few stray strands across the face', 'chipped paint and scratches on any metal or cyberware', 'cracked lips and tired eyes'];
+function paletteFor(text, r) { for (const [re, pal] of FACTION_PALETTES) if (re.test(text)) return pal; return pickOf(PALETTES, r); }
+
+function portraitPrompt(c) {
+  const r = rng(hashStr(c.key + ':' + (c.lookSeed || 0)));
+  const idx = (typeof F !== 'undefined' && F.draft && F.draft.cast) ? Math.max(0, F.draft.cast.indexOf(c)) : 0, h = hashStr(c.key), sd = c.lookSeed || 0;   // stepping through the lists keeps neighbours in a cast different
+  const media = PORTRAIT_MEDIA[(h + idx * 3 + sd) % PORTRAIT_MEDIA.length], light = LIGHTS[(h + idx * 4 + sd * 2) % LIGHTS.length], angle = pickOf(ANGLES, r), f1 = pickOf(FLAWS, r); let f2 = pickOf(FLAWS, r); if (f2 === f1) f2 = pickOf(FLAWS, r);
+  let subject = scrub(stripStyle(c.imagePrompt || (c.name + ', a Night City figure.')));
+  subject = subject.replace(/[,;:\s]+$/, ''); if (!/[.!?]$/.test(subject)) subject += '.';
+  const pal = paletteFor([c.name, c.role, c.fac, subject].join(' '), r);
+  return `Use: character portrait for a tabletop RPG, vertical 3:4.\nSubject: ${subject}\nLook: ${media}.\nLight: ${light}. Colour palette: ${pal}.\nFraming: head and shoulders, ${angle}; the face is centred horizontally in the upper third of the frame.\nDetails: ${f1}; ${f2}. Natural and unglamorised, not retouched.\n${SETTING_LINE}\nConstraints: no text, no watermark, no logos.`;
+}
+
+// maps stay top-down and readable; only the light changes from place to place
+const MAP_BASE = 'Top-down orthographic tactical battle map, straight overhead view with the roof removed, no perspective tilt, 16:9 landscape, the entire location visible edge to edge. Realistic painted concept-art rendering with rich material detail. Walls, doorways and door openings clearly readable; furniture and props at believable human scale. No characters or people, no text, no lettering, no labels, no UI, no grid, no watermark.';
+const MAP_LIGHTS = {
+  interior: ['Lighting: dark and moody with neon accents in teal, magenta and amber, polished surfaces reflecting them.', 'Lighting: harsh greenish fluorescent tubes, dusty air, deep shadows under furniture.', 'Lighting: red emergency lamps and a few cold white work lights, the rest in darkness.', 'Lighting: warm tungsten lamps against cold blue spill from the windows.'],
+  exterior: ['Lighting: night rain, cold sodium-orange street light, deep blue shadows, wet reflective ground.', 'Lighting: neon signs in teal and magenta reflecting in puddles.', 'Lighting: pale grey pre-dawn light, thin fog, a few warm lit windows.', 'Lighting: a red-tinted smog dusk, long soft shadows.'],
+};
+function mapPrompt(l) {
+  const r = rng(hashStr(l.key + ':' + (l.lookSeed || 0))); const set = MAP_LIGHTS[/rooftop|exterior|vehicle|street|plaza/i.test(l.type || l.name || '') ? 'exterior' : 'interior'];
+  return `${scrub(l.mapPrompt)}\n${MAP_BASE}\n${pickOf(set, r)}\nMust contain: ${(l.mustContain || []).join('; ')}. Must NOT contain: people, text, grid, labels, UI.`;
+}
+
+// props: the look depends on what the thing is — a poster is a printed object, a vista is a photograph
+const PROP_USE = { vista: 'an establishing view of a place for a tabletop RPG scene', poster: 'an in-world printed poster or advertisement', screen: 'an in-world screen graphic', object: 'a close view of an in-world object shown to the players', handout: 'an in-world paper handout', document: 'an in-world official document' };
+const PROP_LOOKS = {
+  poster: ['an offset-printed political poster wheat-pasted on a concrete wall, rain streaks, a torn corner, older posters peeling underneath', 'a screen-printed poster in two spot colours, slightly misregistered, stuck on a rusted metal shutter',
+    'a holographic advertising panel flickering on a grimy wall, glitching scanlines, a cracked corner of the housing', 'a photocopied flyer with toner streaks and a taped corner on a lamp post', 'a glossy backlit lightbox advertisement in a bus shelter, reflections and fingerprints on the glass', 'a huge painted-look wall poster on a brick facade, drips and weathering, seen from street level', 'a poster pasted over a rough plywood hoarding, bubbles in the paper, graffiti tags at the edges'],
+  billboard: ['a huge illuminated billboard seen from street level at night through rain, wet-street reflections', 'a rooftop billboard against a smog-red dusk sky, flickering one panel', 'a giant building-side advertisement lit from below, rain haze in the beams'],
+  vista: ['wide 24mm night photograph of the megacity, towering arcology blocks and holographic advertising in the haze, light trails on wet asphalt', 'high-angle view from a rooftop at dusk, haze and a smog glow on the horizon', 'street-level 35mm film still with halation around the lights and visible grain', 'grey pre-dawn light, thin fog, a few lit windows, sodium lamps still on', 'overcast midday under a red-tinted smog sky, flat light, dust in the air', 'a rain-soaked evening seen through a dirty windscreen, wipers mid-sweep'],
+  object: ['macro close-up on a worn workbench, one hard desk lamp, shallow depth of field', 'a phone-flash snapshot of the object on a wet kerb, slightly off-centre', 'an evidence-style flat lay on a grey table with a small scale ruler, even overhead light', 'held in a gloved hand, the background a blur of street neon'],
+  screen: ['a photographed screen in a dark room, slight glare and moiré, a smudge on the glass', 'a flat full-frame interface graphic with faint scanlines and colour fringing', 'a screen mounted on a grimy wall, seen at an angle, the room reflected in it'],
+  handout: ['a photographed paper handout under a single desk lamp, text too small to read', 'a crumpled paper handout on a metal table, one corner stained'], document: ['a photographed official document under a single desk lamp, text too small to read', 'a creased document on a clipboard, harsh flash'],
+};
+const PROP_FLAWS = ['worn edges and fingerprints', 'dust, grime and a few scratches', 'creases and a faded section', 'water stains and peeling layers', 'chipped paint and rust', 'uneven ink, slightly crooked'];
+function quotedText(s) { const out = []; String(s || '').replace(/["“„]([^"”“]{2,80})["”“]/g, (m, t) => { if (!out.includes(t)) out.push(t); return m; }); return out.slice(0, 3); }
+function buildPropPrompt(d, p) {
+  const r = rng(hashStr(d.id + ':' + p.key + ':' + (p.lookSeed || 0))); const k = p.kind;
+  const base = scrub(p.prompt || (p.title + '. ' + (p.caption || '')));
+  const set = (k === 'poster' && /billboard|lightbox|hoarding/i.test(p.key + ' ' + p.title + ' ' + base)) ? PROP_LOOKS.billboard : (PROP_LOOKS[k] || PROP_LOOKS.object);
+  const texts = quotedText(base), hasLight = /light|lit\b|glow|sunrise|dawn|dusk|neon|lamp/i.test(base), hasCol = /colou?rs?\b|palette|blue|red\b|orange|cyan|white|black|gold|green|grey|gray|yellow/i.test(base);
+  const lines = ['Use: ' + (PROP_USE[k] || PROP_USE.object) + '.', 'Subject: ' + base, 'Look: ' + pickOf(set, r) + '.'];
+  if (!hasLight) lines.push('Light: ' + pickOf(LIGHTS, r) + '.');
+  if (!hasCol) lines.push('Colour accents: ' + pickOf(PALETTES, r) + '.');
+  lines.push('Details: ' + pickOf(PROP_FLAWS, r) + '; lived-in, not pristine.');
+  if (texts.length) lines.push('Text, verbatim and exactly once, spelled exactly as written: ' + texts.map(t => '"' + t + '"').join(' / ') + '.');
+  lines.push(SETTING_LINE);
+  lines.push(texts.length ? 'Constraints: no text other than the quoted lines, no watermark, no logos other than any named.' : 'Constraints: no text, no watermark, no logos.');
+  return lines.join('\n');
+}
+
+
+// ── documents drawn on a canvas: the real text, always legible, and made to look like Night City 2045 ─────────
+// e-paper forms with holo-foil strips and datamatrix codes, corporate datapads, thermal receipts, dot-matrix
+// printouts, news-feed cards, screens with chromatic glitch, and the odd greasy napkin. A new seed = a new sheet.
+const DOC_STYLES = { form: 'City / agency form', datapad: 'Datapad (contract, dossier)', receipt: 'Thermal receipt / ledger', printout: 'Dot-matrix printout', newsfeed: 'News-feed card', memo: 'Corporate memo', note: 'Handwritten note', ticker: 'Screen / ticker' };
+function docStyleOf(p) {
+  if (p.docStyle && DOC_STYLES[p.docStyle]) return p.docStyle;
+  const s = (p.title + ' ' + p.key).toLowerCase();
+  if (p.kind === 'screen' || /ticker|feed\b|bildschirm|screen|broadcast|projection/.test(s)) return 'ticker';
+  if (/vertrag|contract|agreement|erkl(ä|ae)rung|lease|deed|treaty|dossier|file\b|akte/.test(s)) return 'datapad';
+  if (/r(ä|ae)umung|bescheid|notice|ank(ü|ue)ndigung|permit|order|warrant|summons|licen[sc]e|citation|form\b/.test(s)) return 'form';
+  if (/ausdruck|printout|log\b|manifest/.test(s)) return 'printout';
+  if (/geldspur|ledger|receipt|beleg|payment|transaction|statement|invoice|rechnung|spur\b|trace/.test(s)) return 'receipt';
+  if (/meldung|report|clipping|article|news|zeitung|bericht|headline|schlagzeile/.test(s)) return 'newsfeed';
+  if (/grundriss|note|notiz|napkin|serviette|handwritten|sketch|letter|brief\b/.test(s)) return 'note';
+  return 'memo';
+}
+function wrapLines(ctx, text, maxW) {
+  const out = []; String(text).split('\n').forEach(par => { if (!par.trim()) { out.push(''); return; } let line = ''; par.split(' ').forEach(w => { const t = line ? line + ' ' + w : w; if (ctx.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t; }); out.push(line); });
+  return out;
+}
+function fitText(ctx, text, fontFn, maxW, maxH, sizes, lh) {   // biggest size where everything fits
+  for (const sz of sizes) { ctx.font = fontFn(sz); const lines = wrapLines(ctx, text, maxW); if (lines.length * sz * lh <= maxH) return { sz, lines }; }
+  const sz = sizes[sizes.length - 1]; ctx.font = fontFn(sz); return { sz, lines: wrapLines(ctx, text, maxW) };
+}
+const CORP_COLS = ['#19b8b0', '#2f7bff', '#f2a41f', '#e0357f', '#e2463c', '#47c97b'];
+function serialOf(r) { const h = () => Math.floor(r() * 16).toString(16).toUpperCase(); return 'NC-45-' + h() + h() + h() + h() + '-' + Math.floor(1000 + r() * 8999); }
+function speckle(ctx, W, H, r, n, rgb, a) { for (let i = 0; i < n; i++) { ctx.fillStyle = `rgba(${rgb},${(r() * a).toFixed(3)})`; ctx.fillRect(r() * W, r() * H, 1 + r() * 2, 1 + r() * 2); } }
+function vignette(ctx, W, H, dark) { const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(0,0,0,${dark})`); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); }
+function paperWear(ctx, W, H, r, dark) {   // folds and a coffee ring: only for things that are actually paper
+  vignette(ctx, W, H, dark);
+  [1 / 3, 2 / 3].forEach(f => { const y = H * f + (r() - 0.5) * 12; ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(0, y, W, 2); ctx.fillStyle = 'rgba(0,0,0,0.10)'; ctx.fillRect(0, y + 2, W, 3); });
+  if (r() > 0.5) { const x = W * (0.55 + r() * 0.35), y = H * (0.6 + r() * 0.3), rad = 40 + r() * 28; ctx.strokeStyle = 'rgba(92,58,24,0.16)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(x, y, rad, 0.2, 5.8); ctx.stroke(); }
+}
+function screenWear(ctx, W, H, r) {   // greasy smudges and a diagonal glare on glass
+  for (let i = 0; i < 4; i++) { ctx.strokeStyle = 'rgba(255,255,255,0.045)'; ctx.lineWidth = 14 + r() * 20; ctx.beginPath(); ctx.arc(r() * W, r() * H, 40 + r() * 120, r() * 6, r() * 6 + 2); ctx.stroke(); }
+  const g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, 'rgba(255,255,255,0.06)'); g.addColorStop(0.35, 'rgba(255,255,255,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+function scanlines(ctx, W, H, a) { for (let y = 0; y < H; y += 4) { ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.fillRect(0, y, W, 1); } }
+function glitch(ctx, c, r, n) { const W = c.width, H = c.height; for (let i = 0; i < n; i++) { const y = Math.floor(r() * H), h = 2 + Math.floor(r() * 7), dx = (r() - 0.5) * 14; ctx.drawImage(c, 0, y, W, h, dx, y, W, h); } }
+function sealMark(ctx, x, y, rad, r, col) { ctx.save(); ctx.translate(x, y); ctx.rotate((r() - 0.5) * 0.5); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.globalAlpha = 0.72; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, 0, rad, 0, 6.3); ctx.stroke(); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, rad * 0.78, 0, 6.3); ctx.stroke(); for (let i = 0; i < 5; i++) { const a = -1.57 + i * 1.2566; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * rad * 0.6, Math.sin(a) * rad * 0.6); ctx.lineWidth = 3; ctx.stroke(); } ctx.restore(); }
+function scribble(ctx, x, y, w, r, col) { ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(x, y); let cx = x; for (let i = 0; i < 6; i++) { const nx = cx + w / 6; ctx.quadraticCurveTo(cx + w / 12, y - 14 - r() * 18, nx, y + (r() - 0.5) * 12); cx = nx; } ctx.stroke(); }
+function emblem(ctx, x, y, s, r, col) {   // an invented corporate / agency mark, different every time
+  ctx.save(); ctx.translate(x, y); ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = s * 0.08; const k = Math.floor(r() * 4);
+  if (k === 0) { ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3 - Math.PI / 6; ctx.lineTo(Math.cos(a) * s / 2, Math.sin(a) * s / 2); } ctx.closePath(); ctx.stroke(); ctx.beginPath(); ctx.arc(0, 0, s * 0.17, 0, 6.3); ctx.fill(); }
+  else if (k === 1) { ctx.beginPath(); ctx.moveTo(0, -s / 2); ctx.lineTo(s / 2, s / 2); ctx.lineTo(-s / 2, s / 2); ctx.closePath(); ctx.stroke(); ctx.fillRect(-s * 0.05, -s * 0.05, s * 0.1, s * 0.3); }
+  else if (k === 2) { ctx.beginPath(); ctx.arc(0, 0, s / 2, 0, 6.3); ctx.stroke(); for (let i = -1; i <= 1; i++) ctx.fillRect(-s * 0.36, i * s * 0.17 - s * 0.04, s * 0.72, s * 0.08); }
+  else { ctx.strokeRect(-s / 2, -s / 2, s, s); ctx.beginPath(); ctx.moveTo(-s / 2, s / 2); ctx.lineTo(s / 2, -s / 2); ctx.stroke(); ctx.fillRect(-s * 0.12, -s * 0.12, s * 0.24, s * 0.24); }
+  ctx.restore();
+}
+function barcode(ctx, x, y, w, h, r, col) { ctx.fillStyle = col; let cx = x; while (cx < x + w) { const bw = 1 + Math.floor(r() * 4); if (r() > 0.4) ctx.fillRect(cx, y, bw, h); cx += bw + 1 + Math.floor(r() * 3); } }
+function dataMatrix(ctx, x, y, s, r, col) { const n = 21, c = s / n; ctx.fillStyle = col; for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const finder = i === 0 || j === 0 || (i === n - 1 && j % 2 === 0) || (j === n - 1 && i % 2 === 0); if (finder || r() > 0.52) ctx.fillRect(x + j * c, y + i * c, c - 0.5, c - 0.5); } }
+function holoStrip(ctx, x, y, w, h, r) {   // security foil: a rainbow gradient with diagonal glints
+  const g = ctx.createLinearGradient(x, y, x + w, y + h); const hue = r() * 360; for (let i = 0; i <= 6; i++) g.addColorStop(i / 6, `hsla(${(hue + i * 55) % 360},85%,62%,0.6)`);
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.fillStyle = g; ctx.fillRect(x, y, w, h); ctx.fillStyle = 'rgba(255,255,255,0.22)'; for (let i = -h; i < w + h; i += 18) { ctx.beginPath(); ctx.moveTo(x + i, y); ctx.lineTo(x + i + 7, y); ctx.lineTo(x + i + 7 - h * 0.6, y + h); ctx.lineTo(x + i - h * 0.6, y + h); ctx.closePath(); ctx.fill(); } ctx.restore();
+}
+function thumbprint(ctx, x, y, s, col) { ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 2; for (let i = 1; i <= 7; i++) { ctx.beginPath(); ctx.ellipse(x, y, s * 0.075 * i, s * 0.105 * i, 0, 3.6, 8.4); ctx.stroke(); } ctx.restore(); }
+function roundRect(ctx, x, y, w, h, rad) { ctx.beginPath(); ctx.moveTo(x + rad, y); ctx.arcTo(x + w, y, x + w, y + h, rad); ctx.arcTo(x + w, y + h, x, y + h, rad); ctx.arcTo(x, y + h, x, y, rad); ctx.arcTo(x, y, x + w, y, rad); ctx.closePath(); }
+function cityline(ctx, x, y, w, h, r, acc) {   // a night skyline for the news card
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#2a0f33'); g.addColorStop(0.6, '#0e2433'); g.addColorStop(1, '#05080c'); ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  for (let i = 0; i < 18; i++) { const bw = 30 + r() * 70, bh = h * (0.25 + r() * 0.6), bx = x + r() * w; ctx.fillStyle = `rgba(8,12,18,${0.7 + r() * 0.3})`; ctx.fillRect(bx, y + h - bh, bw, bh); for (let k = 0; k < 14; k++) { if (r() > 0.55) { ctx.fillStyle = r() > 0.5 ? 'rgba(255,200,90,0.85)' : 'rgba(80,230,255,0.8)'; ctx.fillRect(bx + 5 + r() * (bw - 12), y + h - bh + 8 + r() * (bh - 16), 4, 6); } } }
+  ctx.fillStyle = acc; ctx.globalAlpha = 0.35; ctx.fillRect(x, y + h * 0.55, w, 3); ctx.globalAlpha = 1; ctx.strokeStyle = 'rgba(180,220,255,0.18)'; ctx.lineWidth = 1; for (let i = 0; i < 90; i++) { const rx = x + r() * w, ry = y + r() * h; ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(rx - 6, ry + 18); ctx.stroke(); }
+  ctx.restore();
+}
+
+function renderDocCanvas(p, seed) {
+  const style = docStyleOf(p), r = rng(hashStr(p.key + ':' + seed + ':doc')), acc = pickOf(CORP_COLS, r);
+  const landscape = style === 'ticker', W = landscape ? 1280 : 880, H = landscape ? 760 : 1244;
+  const c = document.createElement('canvas'); c.width = W; c.height = H; const ctx = c.getContext('2d');
+  const title = String(p.title || '').replace(/\s*\([^)]*\)\s*$/, ''), text = String(p.text || '').trim(), serial = serialOf(r);
+  const M = 70, innerW = W - 2 * M, x0 = 26, y0 = 26, pw = W - 52, ph = H - 52;
+  const SANS = (s) => s + 'px "Segoe UI","Helvetica Neue",Arial,sans-serif', MONO = (s) => s + 'px "Consolas","Courier New",monospace';
+
+  if (style === 'ticker') {   // a wall screen: chromatic-aberration text, scanlines, glitch
+    ctx.fillStyle = '#04070b'; ctx.fillRect(0, 0, W, H); const ink = pickOf(['#7dffb5', '#ffb347', '#63d8ff', '#ff8fb0'], r);
+    const draw = (dx, col, a) => { ctx.globalAlpha = a; ctx.fillStyle = col; ctx.font = 'bold 30px "Consolas","Courier New",monospace'; ctx.fillText('▌ ' + title.toUpperCase(), 54 + dx, 70); ctx.fillRect(54 + dx, 90, W - 108, 3); const fit = fitText(ctx, text, MONO, W - 130, H - 190, [36, 32, 30, 28, 26, 24, 22, 20, 18], 1.45); ctx.font = MONO(fit.sz); fit.lines.forEach((l, i) => ctx.fillText(l, 64 + dx, 150 + i * fit.sz * 1.45)); };
+    ctx.shadowColor = ink; ctx.shadowBlur = 10; draw(-2.5, '#ff2d6f', 0.5); draw(2.5, '#2df0ff', 0.5); ctx.shadowBlur = 8; draw(0, ink, 0.95); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    scanlines(ctx, W, H, 0.04); glitch(ctx, c, r, 4); screenWear(ctx, W, H, r); vignette(ctx, W, H, 0.55); ctx.strokeStyle = '#161d26'; ctx.lineWidth = 28; ctx.strokeRect(0, 0, W, H); ctx.strokeStyle = acc; ctx.globalAlpha = 0.6; ctx.lineWidth = 2; ctx.strokeRect(22, 22, W - 44, H - 44); ctx.globalAlpha = 1; return c;
+  }
+  if (style === 'datapad') {   // a corporate data-slate: dark glass, neon line, biometric signatures
+    ctx.fillStyle = '#07080b'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#0c1016'; roundRect(ctx, 24, 24, W - 48, H - 48, 44); ctx.fill(); ctx.strokeStyle = '#222c38'; ctx.lineWidth = 3; ctx.stroke();
+    const sx = 54, sy = 62, sw = W - 108, sh = H - 124; const g = ctx.createLinearGradient(0, sy, 0, sy + sh); g.addColorStop(0, '#0e1c2a'); g.addColorStop(1, '#09111b'); ctx.fillStyle = g; roundRect(ctx, sx, sy, sw, sh, 22); ctx.fill();
+    ctx.fillStyle = 'rgba(210,235,245,0.55)'; for (let i = 0; i < 4; i++) ctx.fillRect(sx + sw - 130 + i * 9, sy + 34 - i * 4, 6, 6 + i * 4); ctx.strokeStyle = 'rgba(210,235,245,0.6)'; ctx.lineWidth = 2; ctx.strokeRect(sx + sw - 80, sy + 24, 38, 18); ctx.fillStyle = acc; ctx.fillRect(sx + sw - 77, sy + 27, 24, 12);
+    emblem(ctx, sx + 78, sy + 118, 66, r, acc); ctx.fillStyle = acc; ctx.font = 'bold 28px "Consolas","Courier New",monospace'; ctx.fillText(title.toUpperCase().slice(0, 28), sx + 130, sy + 112); ctx.fillStyle = 'rgba(200,225,235,0.5)'; ctx.font = MONO(15); ctx.fillText(serial, sx + 130, sy + 142);
+    ctx.shadowColor = acc; ctx.shadowBlur = 12; ctx.fillStyle = acc; ctx.fillRect(sx + 40, sy + 176, sw - 80, 3); ctx.shadowBlur = 0;
+    const fit = fitText(ctx, text, SANS, sw - 120, sh - 520, [34, 31, 29, 27, 25, 23, 21, 19, 17], 1.55); ctx.fillStyle = '#d6edf5'; ctx.font = SANS(fit.sz); fit.lines.forEach((l, i) => { if (l) ctx.fillText(l, sx + 60, sy + 240 + i * fit.sz * 1.55); });
+    [0, 1].forEach(i => { const bx = sx + 70 + i * 310, by = sy + sh - 260; ctx.strokeStyle = acc; ctx.lineWidth = 2; ctx.strokeRect(bx, by, 250, 170); ctx.globalAlpha = 0.85; thumbprint(ctx, bx + 125, by + 90, 130, acc); ctx.globalAlpha = 1; ctx.fillStyle = 'rgba(200,225,235,0.45)'; ctx.fillRect(bx, by + 190, 250, 3); });
+    scanlines(ctx, W, H, 0.03); screenWear(ctx, W, H, r); glitch(ctx, c, r, 1); ctx.shadowColor = acc; ctx.shadowBlur = 18; ctx.strokeStyle = acc; ctx.globalAlpha = 0.5; ctx.lineWidth = 2; roundRect(ctx, sx, sy, sw, sh, 22); ctx.stroke(); ctx.globalAlpha = 1; ctx.shadowBlur = 0; return c;
+  }
+  if (style === 'newsfeed') {   // a phone / wall news card: network bar, skyline still, headline
+    ctx.fillStyle = '#05070a'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#0b0f15'; roundRect(ctx, 24, 24, W - 48, H - 48, 40); ctx.fill();
+    ctx.fillStyle = acc; ctx.save(); roundRect(ctx, 24, 24, W - 48, 104, 40); ctx.clip(); ctx.fillRect(24, 24, W - 48, 104); ctx.restore(); emblem(ctx, 86, 76, 44, r, '#0b0f15'); ctx.fillStyle = '#e53935'; ctx.beginPath(); ctx.arc(W - 90, 76, 11, 0, 6.3); ctx.fill(); ctx.fillStyle = '#0b0f15'; for (let i = 0; i < 3; i++) ctx.fillRect(W - 168 + i * 18, 62 + (i === 1 ? 0 : 6), 10, 28 - (i === 1 ? 0 : 12));
+    cityline(ctx, 54, 158, W - 108, 330, r, acc);
+    ctx.fillStyle = '#f2f6f8'; ctx.font = 'bold 44px "Segoe UI","Helvetica Neue",Arial,sans-serif'; const hl = wrapLines(ctx, title, W - 128); hl.slice(0, 3).forEach((l, i) => ctx.fillText(l, 64, 560 + i * 54)); const by = 560 + Math.min(3, hl.length) * 54 + 10;
+    ctx.fillStyle = acc; ctx.font = MONO(16); ctx.fillText('▸ ' + serial, 64, by); const fit = fitText(ctx, text, SANS, W - 140, H - by - 190, [27, 25, 23, 21, 19, 17], 1.5); ctx.fillStyle = '#c4ced6'; ctx.font = SANS(fit.sz); fit.lines.forEach((l, i) => { if (l) ctx.fillText(l, 64, by + 52 + i * fit.sz * 1.5); });
+    ctx.fillStyle = acc; ctx.globalAlpha = 0.18; ctx.fillRect(54, H - 130, W - 108, 56); ctx.globalAlpha = 1; ctx.fillStyle = acc; ctx.font = 'bold 20px "Consolas","Courier New",monospace'; ctx.fillText(('◆ ' + title.toUpperCase() + '  ').repeat(4).slice(0, 62), 70, H - 94);
+    scanlines(ctx, W, H, 0.025); screenWear(ctx, W, H, r); glitch(ctx, c, r, 1); return c;
+  }
+  // everything below is printed matter on a table
+  const tilt = (r() - 0.5) * 0.012; ctx.fillStyle = '#26282b'; ctx.fillRect(0, 0, W, H); ctx.save(); ctx.translate(W / 2, H / 2); ctx.rotate(tilt); ctx.translate(-W / 2, -H / 2);
+  if (style === 'receipt') {   // narrow thermal paper with torn ends
+    const rw = 560, rx = (W - rw) / 2; ctx.fillStyle = '#ecebe5'; ctx.beginPath(); ctx.moveTo(rx, 30); for (let x = rx; x <= rx + rw; x += 14) ctx.lineTo(x, 30 + (Math.floor((x - rx) / 14) % 2 ? 8 : 0)); ctx.lineTo(rx + rw, H - 38); for (let x = rx + rw; x >= rx; x -= 14) ctx.lineTo(x, H - 38 + (Math.floor((x - rx) / 14) % 2 ? 8 : 0)); ctx.closePath(); ctx.fill(); speckle(ctx, W, H, r, 1500, '90,90,80', 0.1);
+    ctx.fillStyle = '#1a1a18'; emblem(ctx, W / 2, 110, 54, r, '#1a1a18'); ctx.textAlign = 'center'; ctx.font = 'bold 26px "Consolas","Courier New",monospace'; wrapLines(ctx, title.toUpperCase(), rw - 80).slice(0, 2).forEach((l, i) => ctx.fillText(l, W / 2, 190 + i * 32)); ctx.textAlign = 'left';
+    ctx.fillRect(rx + 40, 250, rw - 80, 2); const fit = fitText(ctx, text, MONO, rw - 90, H - 520, [26, 24, 22, 20, 18, 16], 1.5); ctx.font = MONO(fit.sz); ctx.fillStyle = '#23231f'; fit.lines.forEach((l, i) => { if (l) ctx.fillText(l, rx + 45, 292 + i * fit.sz * 1.5); });
+    ctx.fillStyle = '#1a1a18'; barcode(ctx, rx + 60, H - 210, rw - 120, 80, r, '#1a1a18'); ctx.font = MONO(15); ctx.textAlign = 'center'; ctx.fillText(serial, W / 2, H - 112); ctx.textAlign = 'left'; const fg = ctx.createLinearGradient(0, H - 330, 0, H); fg.addColorStop(0, 'rgba(236,235,229,0)'); fg.addColorStop(1, 'rgba(236,235,229,0.55)'); ctx.fillStyle = fg; ctx.fillRect(rx, H - 330, rw, 292);
+  } else {
+    const base = { form: '#e5e8ec', printout: '#e8ede1', memo: '#eef0f1', note: '#f0ead6' }[style] || '#eeeeea';
+    ctx.fillStyle = base; ctx.fillRect(x0, y0, pw, ph); speckle(ctx, W, H, r, 2200, '80,80,90', 0.1);
+    if (style === 'form') {
+      ctx.fillStyle = '#10161e'; ctx.fillRect(x0, y0, pw, 130); emblem(ctx, x0 + 80, y0 + 65, 64, r, acc); ctx.fillStyle = '#e9eef2'; ctx.font = 'bold 30px "Arial Narrow",Arial,sans-serif'; ctx.fillText(title.toUpperCase().slice(0, 28), x0 + 140, y0 + 62); ctx.fillStyle = acc; ctx.font = MONO(16); ctx.fillText(serial, x0 + 140, y0 + 98); ctx.fillRect(x0, y0 + 130, pw, 8);
+      const fit = fitText(ctx, text, SANS, innerW - 90, ph - 430, [34, 31, 29, 27, 25, 23, 21, 19, 17, 15], 1.55); ctx.fillStyle = '#12161b'; ctx.font = SANS(fit.sz); fit.lines.forEach((l, i) => { if (l) ctx.fillText(l, M, y0 + 200 + i * fit.sz * 1.55); });
+      holoStrip(ctx, x0 + pw - 58, y0 + 170, 30, ph - 360, r); barcode(ctx, M, y0 + ph - 120, 300, 52, r, '#12161b'); ctx.fillStyle = '#12161b'; ctx.font = MONO(14); ctx.fillText(serial, M, y0 + ph - 44); dataMatrix(ctx, x0 + pw - 210, y0 + ph - 150, 92, r, '#12161b');
+      ctx.save(); ctx.translate(x0 + pw - 380, y0 + ph - 150); ctx.rotate(-0.18); ctx.strokeStyle = '#d6452f'; ctx.fillStyle = '#d6452f'; ctx.globalAlpha = 0.8; ctx.lineWidth = 5; ctx.strokeRect(0, 0, 150, 62); ctx.fillRect(10, 14, 90, 8); ctx.fillRect(10, 30, 120, 8); ctx.fillRect(10, 46, 60, 6); ctx.restore(); scribble(ctx, M + 330, y0 + ph - 74, 180, r, '#1a2f6b');
+    } else if (style === 'printout') {
+      for (let y = y0 + 130, i = 0; y < y0 + ph; y += 56, i++) { if (i % 2 === 0) { ctx.fillStyle = 'rgba(120,170,150,0.17)'; ctx.fillRect(x0, y, pw, 56); } }
+      ctx.fillStyle = 'rgba(0,0,0,0.5)'; for (let y = y0 + 30; y < y0 + ph; y += 52) { ctx.beginPath(); ctx.arc(x0 + 20, y, 8, 0, 6.3); ctx.fill(); ctx.beginPath(); ctx.arc(x0 + pw - 20, y, 8, 0, 6.3); ctx.fill(); }
+      ctx.fillStyle = '#17302f'; ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 1.4; emblem(ctx, x0 + pw - 100, y0 + 70, 46, r, '#17302f'); ctx.font = 'bold 26px "Consolas","Courier New",monospace'; ctx.fillText('*** ' + title.toUpperCase().slice(0, 30) + ' ***', M + 20, y0 + 90);
+      const fit = fitText(ctx, text, MONO, innerW - 40, ph - 330, [30, 28, 26, 24, 22, 20, 18, 16, 14], 1.55); ctx.font = MONO(fit.sz); ctx.fillStyle = '#1b1d1c'; fit.lines.forEach((l, i) => { if (l) ctx.fillText(l, M + 20, y0 + 150 + i * fit.sz * 1.55); }); ctx.shadowBlur = 0; barcode(ctx, M + 20, y0 + ph - 110, 260, 44, r, '#1b1d1c'); ctx.font = MONO(14); ctx.fillText(serial, M + 20, y0 + ph - 48);
+    } else if (style === 'note') {
+      for (let y = y0 + 150; y < y0 + ph - 40; y += 46) { ctx.fillStyle = 'rgba(70,110,170,0.28)'; ctx.fillRect(x0, y, pw, 2); } ctx.fillStyle = 'rgba(190,60,60,0.45)'; ctx.fillRect(x0 + 96, y0, 2, ph);
+      const hand = (s) => s + 'px "Segoe Print","Bradley Hand","Lucida Handwriting","Comic Sans MS",cursive'; ctx.fillStyle = pickOf(['#16264a', '#1d2a55', '#222'], r);
+      const fit = fitText(ctx, text, hand, innerW - 70, ph - 230, [36, 33, 30, 28, 26, 24, 22, 20, 18], 1.55); ctx.font = hand(fit.sz + 4); ctx.fillText(title.slice(0, 34), M + 40, y0 + 100); ctx.font = hand(fit.sz);
+      fit.lines.forEach((l, i) => { if (!l) return; ctx.save(); ctx.translate(M + 40, y0 + 175 + i * (fit.sz * 1.55)); ctx.rotate((r() - 0.5) * 0.012); ctx.fillText(l, 0, (r() - 0.5) * 3); ctx.restore(); });
+      ctx.fillStyle = 'rgba(210,120,40,0.18)'; ctx.beginPath(); ctx.ellipse(x0 + pw - 150, y0 + ph - 160, 60 + r() * 30, 40 + r() * 20, r() * 3, 0, 6.3); ctx.fill();   // noodle-bar grease
+      [[x0 + 40, y0 - 8, -0.25], [x0 + pw - 150, y0 - 8, 0.22]].forEach(([tx, ty, ang]) => { ctx.save(); ctx.translate(tx, ty); ctx.rotate(ang); ctx.fillStyle = 'rgba(230,205,110,0.55)'; ctx.fillRect(0, 0, 110, 38); ctx.restore(); });
+    } else {   // corporate memo on e-paper
+      ctx.fillStyle = acc; ctx.fillRect(x0, y0, pw, 14); emblem(ctx, x0 + 78, y0 + 86, 60, r, '#10161e'); ctx.fillStyle = '#10161e'; ctx.font = 'bold 34px "Segoe UI",Arial,sans-serif'; ctx.fillText(title.slice(0, 32), x0 + 130, y0 + 98); ctx.fillStyle = '#10161e'; ctx.fillRect(M, y0 + 146, innerW, 3); ctx.fillStyle = acc; for (let i = 0; i < 3; i++) ctx.fillRect(x0 + pw - 140 + i * 36, y0 + 60, 26, 26);
+      const fit = fitText(ctx, text, SANS, innerW, ph - 400, [34, 31, 29, 27, 25, 23, 21, 19, 17, 15], 1.6); ctx.fillStyle = '#14181d'; ctx.font = SANS(fit.sz); fit.lines.forEach((l, i) => { if (l) ctx.fillText(l, M, y0 + 215 + i * fit.sz * 1.6); });
+      barcode(ctx, M, y0 + ph - 110, 280, 48, r, '#14181d'); ctx.fillStyle = '#14181d'; ctx.font = MONO(14); ctx.fillText(serial, M, y0 + ph - 44); holoStrip(ctx, x0 + pw - 150, y0 + ph - 120, 90, 56, r);
+    }
+    paperWear(ctx, W, H, r, 0.3);
+  }
+  ctx.restore(); return c;
+}
+
 // ── props & vistas: gallery, art, publishing to the players ────────────────────────────────────
 (function css3() {
   if ($('forge-css3')) return; const s = document.createElement('style'); s.id = 'forge-css3';
@@ -14950,20 +15184,14 @@ function step6(d) {
 
 const PROP_KINDS = { vista: ['Vista', '🌆'], poster: ['Poster', '🪧'], document: ['Document', '📜'], handout: ['Handout', '📄'], screen: ['Screen', '📺'], object: ['Object', '🎒'] };
 const PROP_SIZE = { vista: '1536x1024', screen: '1536x1024', poster: '1024x1536', document: '1024x1536', handout: '1024x1536', object: '1024x1024' };
-const PROP_STYLE = {
-  vista: ' Cinematic wide establishing shot of the place, cyberpunk noir illustration, dramatic neon rim lighting, rain and haze, detailed digital art. No watermark.',
-  poster: ' Printed poster look, vertical, cyberpunk city setting, bold graphic design. No watermark.',
-  document: ' A photographed paper document lying on a rain-wet table under neon light, legible official layout, shallow depth of field. No watermark.',
-  handout: ' A photographed paper handout, notes in handwriting, cyberpunk noir lighting, shallow depth of field. No watermark.',
-  screen: ' A glossy screen graphic in a cyberpunk setting, clean interface design. No watermark.',
-  object: ' Close-up product-style shot of the object, shallow depth of field, cyberpunk noir lighting, detailed. No watermark.',
-};
 const propsOf = (d) => (d.props = d.props || []);
 const findProp = (d, key) => propsOf(d).find(p => p.key === key);
 const propId = (d, p) => (d.id.replace(/^fm_/, '') + '_' + p.key).replace(/[^A-Za-z0-9_]/g, '_').slice(0, 72);
 const pkey = (s) => String(s || '').toLowerCase().replace(/\.[a-z0-9]+$/, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-const needsImage = (p) => !F.art.props[p.key] && !(p.text && !p.prompt);
-function fallbackPrompt(p) { return (PROP_KINDS[p.kind] ? PROP_KINDS[p.kind][0] : 'Prop') + ': ' + p.title + '. ' + (p.caption || '') + (p.text ? ' Text on it: ' + String(p.text).slice(0, 280) : '') + (PROP_STYLE[p.kind] || ''); }
+const localDoc = (p) => !!p.text && ['document', 'handout', 'screen'].includes(p.kind);   // text props are drawn on a canvas (legible, free), not painted by the AI
+const textQuality = (p) => (F.settings.propTextMedium && !localDoc(p) && quotedText(p.prompt || '').length) ? 'medium' : undefined;   // printed slogans come out cleaner at medium
+const propPrice = (p) => (IMG_PRICE[textQuality(p) || F.settings.imgQuality] || 0.006);
+const needsImage = (p) => !localDoc(p) && !F.art.props[p.key];
 function beatNos(d, p) { const a = d.outline ? d.outline.beatChart : []; return (p.beats || []).map(id => a.findIndex(b => b.id === id) + 1).filter(n => n > 0).join(', '); }
 
 // ── images ──────────────────────────────────────────────────────────────────────────────────────
@@ -14973,17 +15201,24 @@ async function toPropImgs(src) {
   return { thumb: mk(260, 0.78), full: mk(1100, 0.86) };
 }
 const fileToDataUrl = (f) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('Could not read ' + f.name)); r.readAsDataURL(f); });
-async function genImageEdit(prompt, size, refs, label) {   // the same call the double-click launcher uses: reference portraits so a poster shows the real candidate
+async function genImageEdit(prompt, size, refs, label, quality) {
+  const qual = quality || F.settings.imgQuality;   // the same call the double-click launcher uses: reference portraits so a poster shows the real candidate
   const key = F.openaiKey(); if (!key) throw new Error('No OpenAI key — paste it in the Build step.');
   if (F.abort) throw new Error('Stopped.');
-  const form = new FormData(); form.append('model', F.settings.imgModel); form.append('prompt', prompt); form.append('n', '1'); form.append('size', size); form.append('quality', F.settings.imgQuality); form.append('output_format', 'png');
-  for (let i = 0; i < refs.length; i++) { const blob = await (await fetch(refs[i])).blob(); form.append('image[]', blob, 'reference' + i + (blob.type.includes('png') ? '.png' : '.jpg')); }
-  let res; try { res = await fetch('https://api.openai.com/v1/images/edits', { method: 'POST', headers: { Authorization: 'Bearer ' + key }, body: form }); }
-  catch (e) { throw new Error('The browser could not reach the image API (' + e.message + ').'); }
-  const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error((data && data.error && data.error.message) || ('Image API HTTP ' + res.status));
-  const dd = data && data.data && data.data[0]; if (!dd || !dd.b64_json) throw new Error('The image API returned no image.');
-  addUsd(label, F.settings.imgModel, (IMG_PRICE[F.settings.imgQuality] || 0.006) * 1.3);
+  const blobs = []; for (const r of refs) blobs.push(await (await fetch(r)).blob());
+  const send = async (fidelity) => {
+    const form = new FormData(); form.append('model', F.settings.imgModel); form.append('prompt', prompt); form.append('n', '1'); form.append('size', size); form.append('quality', qual); form.append('output_format', 'png');
+    if (fidelity) form.append('input_fidelity', 'high');
+    blobs.forEach((b, i) => form.append('image[]', b, 'reference' + i + (b.type.includes('png') ? '.png' : '.jpg')));
+    let res; try { res = await fetch('https://api.openai.com/v1/images/edits', { method: 'POST', headers: { Authorization: 'Bearer ' + key }, body: form }); }
+    catch (e) { throw new Error('The browser could not reach the image API (' + e.message + ').'); }
+    return { res, data: await res.json().catch(() => null) };
+  };
+  let r = await send(true);   // high input fidelity keeps the face; models that do not accept the parameter get the call again without it
+  if (!r.res.ok && /input_fidelity|unknown parameter|unsupported parameter/i.test(JSON.stringify(r.data || {}))) r = await send(false);
+  if (!r.res.ok) throw new Error((r.data && r.data.error && r.data.error.message) || ('Image API HTTP ' + r.res.status));
+  const dd = r.data && r.data.data && r.data.data[0]; if (!dd || !dd.b64_json) throw new Error('The image API returned no image.');
+  addUsd(label, F.settings.imgModel, (IMG_PRICE[qual] || 0.006) * 1.3);
   return 'data:image/png;base64,' + dd.b64_json;
 }
 function refImage(d, k) {   // a portrait to base a poster on: one painted here, else the roster character's portrait
@@ -15007,6 +15242,7 @@ F.propShow = async function (key) {
   const d = F.draft, p = d && findProp(d, key); if (!p) return;
   if (!F.art.props[key] && !p.text && !(state.props && state.props[propId(d, p)] && state.props[propId(d, p)].img)) { showToast('Paint or upload the picture first — otherwise the players would see an empty card.', 4000); return; }
   try {
+    await ensureDocArt(d, p);
     const id = await publishProp(d, p, true);
     await db.ref(dbPath() + '/propReveal').set({ id, ts: Date.now() });
     F.save(); showToast('Shown to the players: ' + p.title);
@@ -15030,10 +15266,17 @@ F.propPreview = function (key) {   // GM-only look at the full picture (nothing 
 F.genProp = async function (key, quiet) {
   const d = F.draft, p = d && findProp(d, key); if (!p) return;
   const run = async () => {
-    const prompt = p.prompt || fallbackPrompt(p), size = p.size || PROP_SIZE[p.kind] || '1024x1024';
-    const refs = (p.refs || []).map(k => refImage(d, k)).filter(Boolean);
+    const had = F.art.props[key]; if (had && !had.local) { p.lookSeed = (p.lookSeed || 0) + 1; }   // painting it again means a new look, not the same picture
+    const size = p.size || PROP_SIZE[p.kind] || '1024x1024';
+    const refKeys = (p.refs || []).filter(k => refImage(d, k)), refs = refKeys.map(k => refImage(d, k));
     if ((p.refs || []).length && !refs.length) showToast('No portrait found for ' + p.refs.join(', ') + ' — painted without a reference face.', 4500);
-    const png = refs.length ? await genImageEdit(prompt, size, refs, 'prop ' + key) : await genImage(prompt, size, 'prop ' + key);
+    let prompt = buildPropPrompt(d, p);
+    if (refs.length) {
+      const who = refKeys.map(k => { const c = d.cast.find(x => x.key === k); return c ? c.name : k; });
+      prompt = who.map((n, i) => 'Image ' + (i + 1) + ': identity reference portrait of ' + n + '.').join(' ') + '\n' + prompt + '\nIdentity: the person shown must be exactly ' + (who.length > 1 ? 'the people' : 'the person') + ' in the reference portrait' + (who.length > 1 ? 's' : '') + ' — keep face, facial features, hair and proportions unchanged; change only clothing, pose, setting and lighting as described. Do not add other people unless described.';
+    }
+    const qual = textQuality(p);
+    const png = refs.length ? await genImageEdit(prompt, size, refs, 'prop ' + key, qual) : await genImage(prompt, size, 'prop ' + key, qual);
     F.art.props[key] = await toPropImgs(png); F.saveArt();
     if (p.pub && FB()) { try { await publishProp(d, p); } catch (e) { /* the players keep the old picture until the next SHOW */ } }
     F.save();
@@ -15041,10 +15284,26 @@ F.genProp = async function (key, quiet) {
   quiet ? await run() : await guard('Painting "' + p.title + '" …', run);
   F.refreshGallery();
 };
+// documents: drawn here with the real text; the sheet changes with the look seed and the paper style
+const docSig = (p) => hashStr([p.title, p.text, docStyleOf(p), p.lookSeed || 0].join('|'));
+async function renderDoc(d, p) { const im = await toPropImgs(renderDocCanvas(p, p.lookSeed || 0).toDataURL('image/jpeg', 0.92)); im.local = true; im.sig = docSig(p); F.art.props[p.key] = im; }
+async function ensureDocArt(d, p) { if (!localDoc(p)) return; const cur = F.art.props[p.key]; if (cur && !cur.local) return; if (cur && cur.sig === docSig(p)) return; await renderDoc(d, p); }
+let docBusy = false;
+async function autoDocs(d) {
+  if (docBusy) return; const todo = propsOf(d).filter(p => localDoc(p) && (() => { const cur = F.art.props[p.key]; return !cur || (cur.local && cur.sig !== docSig(p)); })());
+  if (!todo.length) return; docBusy = true;
+  try { for (const p of todo) { await renderDoc(d, p); if (p.pub && FB()) await publishProp(d, p).catch(() => {}); } F.saveArt(); } catch (e) { console.error('Forge docs', e); docBusy = false; return; }
+  docBusy = false; F.refreshGallery();
+}
+F.docLook = async function (key) {
+  const d = F.draft, p = d && findProp(d, key); if (!p) return;
+  p.lookSeed = (p.lookSeed || 0) + 1; await renderDoc(d, p); F.saveArt(); if (p.pub && FB()) await publishProp(d, p).catch(() => {}); F.save(); F.refreshGallery();
+};
+F.setPropQ = function (v) { F.settings.propTextMedium = !!v; persistSettings(); F.refreshGallery(); };
 F.propGenAll = async function () {
   const d = F.draft; if (!d) return; const todo = propsOf(d).filter(needsImage);
   if (!todo.length) { showToast('Every prop already has its picture.'); return; }
-  const est = todo.length * (IMG_PRICE[F.settings.imgQuality] || 0.006) * 1.15;
+  const est = todo.reduce((t, p) => t + propPrice(p), 0) * 1.15;
   if (!confirm('Paint ' + todo.length + ' picture(s)? About $' + est.toFixed(2) + ' (' + F.settings.imgQuality + ' quality). Props that need a reference face use the roster portraits.')) return;
   const failed = [];
   await guard('Painting props …', async () => {
@@ -15080,7 +15339,7 @@ F.propEdit = function (key, field, v) {
   const d = F.draft, p = d && findProp(d, key); if (!p) return;
   p[field] = v; F.save();
   if (p.pub && FB() && ['title', 'caption', 'text', 'kind'].includes(field)) { db.ref(dbPath() + '/props/' + propId(d, p)).update({ [field]: field === 'text' && !v ? null : v }).catch(() => {}); }
-  if (field === 'kind') F.refreshGallery();
+  if (['kind', 'docStyle', 'text', 'title'].includes(field)) F.refreshGallery();
 };
 F.propAdd = function () {
   const d = F.draft; if (!d) return; let n = 1; while (findProp(d, 'prop_' + n)) n++;
@@ -15100,7 +15359,7 @@ F.proposeProps = async function () {
   await guard('Proposing props …', async () => {
     const beats = d.outline.beatChart.map(b => ({ id: b.id, title: b.title, location: b.location, summary: ((d.seg[b.id] || {}).purpose || b.summary || '').slice(0, 200) }));
     const r = await F.claude({ tier: 'mid', stage: 'props', label: 'props', effort: 'low', maxTokens: 4500,
-      user: `MISSION: ${d.title} — ${d.outline.logline}\nBEATS: ${JSON.stringify(beats)}\nPLACES: ${JSON.stringify(d.locations.map(l => l.name))}\nCAST KEYS: ${JSON.stringify(d.cast.map(c => ({ key: c.key, name: c.name })))}\nEXISTING PROPS: ${JSON.stringify(propsOf(d).map(p => p.title))}\n\nTASK: propose 5-8 table props the GM shows the players as pictures — worldbuilding made visible. Mix: ONE vista (establishing view) for each of the 2-3 most atmospheric places; the paper handouts / documents / screens the clues need (give the exact readable text, max 70 words, in the language of the mission text); posters, billboards or objects the story names. Use only what the story needs, no stats, no spoilers in the caption (captions are what the PLAYERS read when it is shown). Each prompt is ONE English paragraph of purely visual description (no style words needed). Link each prop to the beats where it is used (ids) and, if a poster/screen shows a cast member, list their cast key in refs.\nReturn JSON: {"props":[{"key":"snake_case","kind":"vista|poster|document|handout|screen|object","title":"","caption":"one line the players see","text":"only for documents/handouts, else empty","prompt":"visual paragraph","beats":["b2"],"refs":[]}]}` });
+      user: `MISSION: ${d.title} — ${d.outline.logline}\nBEATS: ${JSON.stringify(beats)}\nPLACES: ${JSON.stringify(d.locations.map(l => l.name))}\nCAST KEYS: ${JSON.stringify(d.cast.map(c => ({ key: c.key, name: c.name })))}\nEXISTING PROPS: ${JSON.stringify(propsOf(d).map(p => p.title))}\n\nTASK: propose 5-8 table props the GM shows the players as pictures — worldbuilding made visible. Mix: ONE vista (establishing view) for each of the 2-3 most atmospheric places; the paper handouts / documents / screens the clues need (give the exact readable text, max 70 words, in the language of the mission text); posters, billboards or objects the story names. Use only what the story needs, no stats, no spoilers in the caption (captions are what the PLAYERS read when it is shown). Each prompt is ONE English paragraph of purely visual description: concrete materials, wear, what is where; no style words (no cinematic, dramatic, detailed digital art — the tool adds medium, light and palette). If readable words appear in the picture, put them in "double quotes" (at most two short strings, in the mission language). Documents and handouts that carry a longer text get an empty prompt (the tool draws them itself). Link each prop to the beats where it is used (ids) and, if a poster/screen shows a cast member, list their cast key in refs.\nReturn JSON: {"props":[{"key":"snake_case","kind":"vista|poster|document|handout|screen|object","title":"","caption":"one line the players see","text":"only for documents/handouts, else empty","prompt":"visual paragraph","beats":["b2"],"refs":[]}]}` });
     const list = Array.isArray(r) ? r : ((r && r.props) || []);
     let n = 0; list.forEach(x => { if (!x || !x.title) return; const key = pkey(x.key || x.title) || 'prop'; if (findProp(d, key) || propsOf(d).some(p => p.title.toLowerCase() === String(x.title).toLowerCase())) return; propsOf(d).push({ key, kind: PROP_KINDS[x.kind] ? x.kind : 'handout', title: String(x.title).slice(0, 80), caption: x.caption || '', text: x.text || '', prompt: x.prompt || '', gm: '', beats: (x.beats || []).filter(b => d.outline.beatChart.some(c => c.id === b)), refs: (x.refs || []).filter(k => d.cast.some(c => c.key === k)), source: 'ai' }); n++; });
     if (!n) throw new Error('No new props came back — try again.');
@@ -15136,19 +15395,20 @@ function propCard(d, p, i) {
   return `<div class="fg-pcard ${shown ? 'shown' : ''}"><div class="fg-pimg" ${src ? `style="background-image:url('${src}')"` : ''} onclick="Forge.propPreview('${p.key}')" title="Preview (only you see it)">${src ? '' : E((p.text || p.caption || 'no picture yet').slice(0, 110))}</div>
     <div class="fg-pbody"><div class="fg-row" style="justify-content:space-between;gap:4px"><strong style="font-size:12px;line-height:1.3">${E(p.title)}</strong><span class="fg-badge" style="color:var(--text3);font-size:8px">${kn[1]} ${E(kn[0])}</span></div>
     ${p.caption ? `<div class="fg-sm" style="font-size:10px">${E(p.caption)}</div>` : ''}<div class="fg-sm" style="font-size:10px;color:var(--text3)">${nos ? 'Beats ' + E(nos) : 'not linked to a beat'}${(p.refs || []).length ? ' · face: ' + E(p.refs.join(', ')) : ''}${shown ? ' · <span style="color:var(--green-bright)">● SHOWN</span>' : ''}</div>
-    <div class="fg-row" style="gap:4px;margin-top:auto"><button class="btn btn-primary btn-small" onclick="Forge.propShow('${p.key}')">📢 SHOW</button><button class="btn btn-ghost btn-small" onclick="Forge.genProp('${p.key}')" title="${im ? 'Paint it again' : 'Paint the picture'}">${im ? '↻ REGENERATE' : '✦ GENERATE'}</button><button class="btn btn-ghost btn-small" onclick="Forge.propPickFile('${p.key}')" title="Use a picture file from your PC">⬆</button>${shown ? `<button class="btn btn-ghost btn-small" onclick="Forge.propHide('${p.key}')" title="Take it out of the players' folder">HIDE</button>` : ''}</div>
+    <div class="fg-row" style="gap:4px;margin-top:auto"><button class="btn btn-primary btn-small" onclick="Forge.propShow('${p.key}')">📢 SHOW</button>${localDoc(p) ? `<button class="btn btn-ghost btn-small" onclick="Forge.docLook('${p.key}')" title="Draw the document again on a different sheet (free)">↻ NEW LOOK</button><button class="btn btn-ghost btn-small" onclick="Forge.genProp('${p.key}')" title="An AI picture of the document — the text on it will not be readable">✦ AI</button>` : `<button class="btn btn-ghost btn-small" onclick="Forge.genProp('${p.key}')" title="${im && !im.local ? 'Paint it again with a new look' : 'Paint the picture'}">${im ? '↻ REGENERATE' : '✦ GENERATE'}</button>`}<button class="btn btn-ghost btn-small" onclick="Forge.propPickFile('${p.key}')" title="Use a picture file from your PC">⬆</button>${shown ? `<button class="btn btn-ghost btn-small" onclick="Forge.propHide('${p.key}')" title="Take it out of the players' folder">HIDE</button>` : ''}</div>
     <details class="fg-d" style="margin:2px 0 0;padding:4px 8px"><summary>✎ edit</summary>
       <span class="fg-lbl">Title</span><input class="fg-in" value="${bq(p.title)}" onchange="Forge.propEdit('${p.key}','title',this.value)">
       <span class="fg-lbl">Type</span><select class="fg-in" onchange="Forge.propEdit('${p.key}','kind',this.value)">${Object.entries(PROP_KINDS).map(([k, v]) => `<option value="${k}" ${p.kind === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select>
       <span class="fg-lbl">Caption the players read</span><input class="fg-in" value="${bq(p.caption || '')}" onchange="Forge.propEdit('${p.key}','caption',this.value)">
       <span class="fg-lbl">Readable text (documents) — shown on paper if there is no picture</span><textarea class="fg-in" onchange="Forge.propEdit('${p.key}','text',this.value)">${E(p.text || '')}</textarea>
-      <span class="fg-lbl">Image prompt</span><textarea class="fg-in" onchange="Forge.propEdit('${p.key}','prompt',this.value)">${E(p.prompt || '')}</textarea>
-      ${p.gm ? `<div class="fg-sm" style="margin-top:6px;color:var(--gold-bright)">GM: ${E(p.gm)}</div>` : ''}<button class="btn btn-danger btn-small" style="margin-top:6px" onclick="Forge.propDelete('${p.key}')">DELETE PROP</button></details></div></div>`;
+      ${localDoc(p) ? `<span class="fg-lbl">Paper style</span><select class="fg-in" onchange="Forge.propEdit('${p.key}','docStyle',this.value)"><option value="">Automatic (${E(DOC_STYLES[docStyleOf(p)])})</option>${Object.entries(DOC_STYLES).map(([k, v]) => `<option value="${k}" ${p.docStyle === k ? 'selected' : ''}>${v}</option>`).join('')}</select>` : ''}
+      <span class="fg-lbl">Image prompt (the tool adds look, light and palette)</span><textarea class="fg-in" onchange="Forge.propEdit('${p.key}','prompt',this.value)">${E(p.prompt || '')}</textarea>
+      ${localDoc(p) ? '' : `<details style="margin-top:6px"><summary class="fg-sm">what will be sent</summary><pre style="white-space:pre-wrap;font-size:10px;color:var(--text2);margin:4px 0">${E(buildPropPrompt(d, p))}</pre></details>`}${p.gm ? `<div class="fg-sm" style="margin-top:6px;color:var(--gold-bright)">GM: ${E(p.gm)}</div>` : ''}<button class="btn btn-danger btn-small" style="margin-top:6px" onclick="Forge.propDelete('${p.key}')">DELETE PROP</button></details></div></div>`;
 }
 F.refreshGallery = function () {
   const modal = $('props-modal'); if (!modal || !modal.classList.contains('open')) return;
   const body = $('props-modal-body'), foot = $('props-modal-footer'); const d = F.draft; if (!body) return;
-  const top = body.scrollTop;
+  const top = body.scrollTop; autoDocs(d);
   if (!d || !d.outline) { body.innerHTML = '<div class="fg-sm">No mission selected.</div>'; return; }
   const all = propsOf(d), g = F.gal, list = all.filter(p => g.kind === 'all' || p.kind === g.kind);
   const missing = all.filter(needsImage).length;
@@ -15156,7 +15416,8 @@ F.refreshGallery = function () {
   $('props-modal-title').textContent = 'PROPS & VISTAS';
   body.innerHTML = `<div class="fg-row" style="margin-bottom:6px"><select class="fg-in" style="flex:1;min-width:200px;width:auto" onchange="Forge.galPick(this.value)">${drafts.map(x => `<option value="${x.id}" ${x.id === d.id ? 'selected' : ''}>${E(x.title)}${x.title === state.currentMission ? ' — current mission' : ''} (${propsOf(x).length})</option>`).join('')}</select>
     <button class="btn btn-ghost btn-small" onclick="Forge.propAdd()">＋ ADD PROP</button><button class="btn btn-ghost btn-small" onclick="Forge.proposeProps()" title="One cheap request: vistas, handouts and posters this story needs">✦ PROPOSE PROPS (~$0.02)</button>
-    <button class="btn btn-ghost btn-small" onclick="document.getElementById('fg-up-many').click()" title="Pick picture files — they are matched to props by file name">⬆ UPLOAD PICTURES</button><button class="btn btn-primary btn-small" onclick="Forge.propGenAll()" ${missing ? '' : 'disabled'}>✦ PAINT ${missing} MISSING (~$${(missing * (IMG_PRICE[F.settings.imgQuality] || 0.006) * 1.15).toFixed(2)})</button>
+    <button class="btn btn-ghost btn-small" onclick="document.getElementById('fg-up-many').click()" title="Pick picture files — they are matched to props by file name">⬆ UPLOAD PICTURES</button><button class="btn btn-primary btn-small" onclick="Forge.propGenAll()" ${missing ? '' : 'disabled'}>✦ PAINT ${missing} MISSING (~$${(all.filter(needsImage).reduce((t, p) => t + propPrice(p), 0) * 1.15).toFixed(2)})</button>
+    <label class="fg-sm" style="display:flex;gap:5px;align-items:center;cursor:pointer" title="Posters and screens with printed slogans: medium quality renders letters more cleanly (about 7× the price of low). Documents are drawn by the tool and never need it."><input type="checkbox" ${F.settings.propTextMedium ? 'checked' : ''} onchange="Forge.setPropQ(this.checked)"> medium quality for pictures with printed text</label>
     <input id="fg-up-many" type="file" accept="image/*" multiple style="display:none" onchange="Forge.propUploadMany(this)"><input id="fg-up-one" type="file" accept="image/*" style="display:none" onchange="Forge.propUploadOne(this)"></div>
     <div class="fg-row" style="margin-bottom:4px"><button class="fg-chip ${g.kind === 'all' ? 'on' : ''}" onclick="Forge.galKind('all')">All ${all.length}</button>${Object.entries(PROP_KINDS).map(([k, v]) => { const n = all.filter(p => p.kind === k).length; return n ? `<button class="fg-chip ${g.kind === k ? 'on' : ''}" onclick="Forge.galKind('${k}')">${v[1]} ${v[0]}s ${n}</button>` : ''; }).join('')}<span style="flex:1"></span><span id="props-status" class="fg-sm" style="color:var(--cyan)">${E(F.busy || '')}</span><button class="btn btn-ghost btn-small" onclick="Forge.slideStart()" title="Show them one after another, with ◀ ▶">▶ SLIDESHOW</button></div>
     ${list.length ? `<div class="fg-pgrid">${list.map((p, i) => propCard(d, p, i)).join('')}</div>` : `<div class="fg-card fg-sm" style="margin-top:10px">No props ${g.kind === 'all' ? 'for this mission yet' : 'of this type'}. Press <strong>PROPOSE PROPS</strong> (the AI reads the story and suggests vistas, handouts and posters) or <strong>ADD PROP</strong>.</div>`}`;
