@@ -10094,6 +10094,8 @@ FLINK: GRUNT NPCs never have Flink. BOSS NPCs always have Flink. For THREAT, dec
 
 IMAGE PROMPT: Write "imagePrompt" as a single self-contained paragraph a GM can paste directly into an image generator (Midjourney/DALL-E/Stable Diffusion) with zero editing. Describe ONLY visual, static appearance — build, face, skin/hair/eyes, exact clothing and colors, visible cyberware and where it's mounted, pose/expression, and end with an art-style clause (e.g. "cyberpunk noir illustration, dramatic neon rim lighting, detailed digital art, portrait framing"). Do NOT include stats, tactics, backstory, or anything not visible in a single still image. Must stay consistent with the character's tier, weapons, and cyberware listed elsewhere in the same JSON.
 
+NAMES: Night City is a melting pot — mix heritages widely (Latino, Japanese, Korean, Filipino, Nigerian, Polish, Brazilian, Armenian, Irish, Samoan, Lebanese ...); street handles and nicknames are welcome. Do NOT reuse the same surname across NPCs and avoid the overused defaults (Voss, Chen, Kowalski, Reyes, Kane, Cole, Vance, Reed, Mercer, Stone, Hale, Sato, Tanaka, Nakamura). When generating several NPCs in one request, every one gets a different surname.
+
 SINGLE ENEMY JSON (respond ONLY with this, no backticks, no extra text):
 {"name":"string","tier":"GRUNT|THREAT|BOSS","archetype":"BRUISER|GUNNER|SNIPER|NETRUNNER|STEALTH|SUPPORT|HEAVY","flavor":"2-3 sentences noir","imagePrompt":"string, see IMAGE PROMPT rule above","armor":{"name":"string from ARMOR CATALOG"},"weapons":[{"name":"string from WEAPON CATALOG"}],"cyberware":["string, ideally from CYBERWARE CATALOG"],"flink":false,"tactics":"string","loot":["string"],"gmNote":null}
 
@@ -14034,6 +14036,7 @@ CLIFFHANGER KINDS: Ambush, Battle, Chase, Confrontation (verbal), Contest, Dogfi
 DEVELOPMENT KINDS: Advantage Revealed, Alliance, Betrayal, Clue, Foreshadowing, Framed, Gain Mastery, Hazardous Quest, Hesitation, Not What It Seems, Lie Revealed, Mistaken Identity, Monologue, Personal Stake, Puzzle, Rescuers, Retreat, Revealed Weakness, Revelation, Romance, Sabotage, Second Chance, Secret Meeting, Strange Bedfellows, Turnabout, Vengeance, Warning.
 CLIMAX KINDS: Final Battle, Final Revelation, Final Act (the heist plan executes). RESOLUTION KINDS: Antagonist Escapes / Killed / Toppled, Edgerunners Captured / Escape, Ending Cliffhanger, Greater Threat, Happy Ending, Pyrrhic Victory.
 ENCOUNTER SCALE: 1 Mook (GRUNT) = 1 crew member, 1 Lieutenant (THREAT) = 2, 1 Mini Boss (BOSS) = 3; better gear instead of more bodies. PAY per person: Easy 500 / Typical 1,000 / Dangerous 2,000 ED.
+NAMES: Night City is a melting pot — mix heritages (Latino, Japanese, Korean, Filipino, Nigerian, Polish, Brazilian, Armenian, Irish, Samoan, Lebanese …); street handles and nicknames are welcome. Every NPC gets a DIFFERENT surname; never reuse a surname within one mission or from the ALREADY USED list in the request. Avoid the overused defaults (Voss, Chen, Kowalski, Reyes, Kane, Cole, Vance, Reed, Mercer, Stone, Hale, Sato, Tanaka, Nakamura) — except for real canon characters.
 OUTPUT DISCIPLINE: answer with ONE JSON value only (no prose, no markdown fences). Be concrete and specific to Night City; no filler. Never invent stat numbers (the tool computes them). Keep every text field tight.`;
 const SYSTEM_STATIC = () => `You are the mission designer of a Cyberpunk RED-style campaign played with the homebrew "CP Phantom" rules.\n\n${F.meta.bible || BIBLE_DEFAULT}\n\n${METHOD}`;
 
@@ -14053,7 +14056,21 @@ F.drafts = {}; F.draft = null; F.step = 1; F.loaded = false; F.abort = false; F.
 F.meta = { bible: '', known: [], hidden: [] };
 F.settings = { cap: 1.5, imgModel: 'gpt-image-2.5-sunburst', imgQuality: 'low' };
 F.session = { usd: 0, calls: 0 };
-F.art = { maps: {}, portraits: {}, placements: {} };   // in memory only (large)
+const blankArt = () => ({ maps: {}, portraits: {}, placements: {} });
+F.art = blankArt();   // art of the CURRENT draft; kept in memory and mirrored to IndexedDB (large images)
+const artCache = {};
+function idb() { return new Promise((res, rej) => { try { const r = indexedDB.open('cp_forge', 1); r.onupgradeneeded = () => r.result.createObjectStore('art'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } }); }
+async function idbGet(k) { try { const d = await idb(); return await new Promise((res, rej) => { const q = d.transaction('art').objectStore('art').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); } catch (e) { return null; } }
+async function idbPut(k, v) { try { const d = await idb(); await new Promise((res, rej) => { const t = d.transaction('art', 'readwrite'); if (v == null) t.objectStore('art').delete(k); else t.objectStore('art').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); return true; } catch (e) { return false; } }
+let artTimer = null;
+F.saveArt = function () { const d = F.draft; if (!d) return; const id = d.id, snap = F.art; clearTimeout(artTimer); artTimer = setTimeout(async () => { if (!(await idbPut(id, snap))) setStatus('Could not store the pictures in this browser — import before reloading.'); }, 400); };
+async function useArt(d) {   // switch F.art to this draft's pictures (loading them from IndexedDB once)
+  if (!d) { F.art = blankArt(); return; }
+  if (artCache[d.id]) { F.art = artCache[d.id]; return; }
+  const mem = artCache[d.id] = blankArt(); F.art = mem;
+  const saved = await idbGet(d.id);
+  if (saved) { ['maps', 'portraits', 'placements'].forEach(k => Object.assign(mem[k], saved[k] || {}, mem[k])); if (F.draft && F.draft.id === d.id) F.render(); }
+}
 const KNOWN_DEFAULT = [
   'They stole a sealed cube (never opened) from a Militech convoy in the Badlands.',
   'Militech burned the Nomad camps hunting it; their camp fell; Bishop and Sparrow died. Vera sent them north to Night City and to a name: Wakako Okada.',
@@ -14068,7 +14085,8 @@ const HIDDEN_DEFAULT = [
   'Cynosure protects Varun and will later offer integration.',
 ];
 const LS_KEY = 'cp_forge_drafts_v1';
-const fbPath = (p) => dbPath() + '/forge/' + p;
+const FB = () => (typeof db !== 'undefined' && db) ? db : null;   // db is a top-level let of the main script (not on window)
+const fbPath = (p) => 'forge/' + p;   // ROOT level on purpose: everything under campaign/ is streamed to every player's phone, and drafts hold GM-only secrets
 function clean(o) { return JSON.parse(JSON.stringify(o, (k, v) => (v === undefined ? null : v))); }
 function lsLoad() { try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch (e) { return {}; } }
 function lsSave() { try { localStorage.setItem(LS_KEY, JSON.stringify(F.drafts)); } catch (e) { /* quota / private mode */ } }
@@ -14078,12 +14096,12 @@ F.save = function () {
   F.draft.updated = Date.now(); F.drafts[F.draft.id] = F.draft; lsSave();
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
-    try { if (window.db) await db.ref(fbPath('drafts/' + F.draft.id)).set(clean(F.draft)); setStatus('saved'); }
+    try { if (FB()) await db.ref(fbPath('drafts/' + F.draft.id)).set(clean(F.draft)); setStatus('saved'); }
     catch (e) { setStatus('Could not sync to Firebase (kept in this browser): ' + (e.message || e)); }
   }, 700);
 };
 F.saveMeta = async function () {
-  try { if (window.db) await db.ref(fbPath('meta')).set(clean(F.meta)); } catch (e) { setStatus('Could not sync campaign notes: ' + (e.message || e)); }
+  try { if (FB()) await db.ref(fbPath('meta')).set(clean(F.meta)); } catch (e) { setStatus('Could not sync campaign notes: ' + (e.message || e)); }
   try { localStorage.setItem('cp_forge_meta_v1', JSON.stringify(F.meta)); } catch (e) { /* ignore */ }
 };
 function setStatus(t) { const el = $('forge-status'); if (el) el.textContent = t === 'saved' ? '✓ saved' : t; }
@@ -14094,7 +14112,7 @@ F.onOpen = async function () {
     F.drafts = lsLoad();
     try { F.meta = Object.assign(F.meta, JSON.parse(localStorage.getItem('cp_forge_meta_v1') || '{}')); } catch (e) { /* ignore */ }
     try {
-      if (window.db && session.role === 'gm') {
+      if (FB() && session.role === 'gm') {
         const [d, m] = await Promise.all([db.ref(fbPath('drafts')).once('value'), db.ref(fbPath('meta')).once('value')]);
         if (d.exists()) Object.assign(F.drafts, d.val());
         if (m.exists()) F.meta = Object.assign(F.meta, m.val());
@@ -14103,7 +14121,7 @@ F.onOpen = async function () {
     if (!F.meta.known || !F.meta.known.length) F.meta.known = KNOWN_DEFAULT.slice();
     if (!F.meta.hidden || !F.meta.hidden.length) F.meta.hidden = HIDDEN_DEFAULT.slice();
     const ids = Object.keys(F.drafts).sort((a, b) => (F.drafts[b].updated || 0) - (F.drafts[a].updated || 0));
-    if (ids.length) { F.draft = F.drafts[ids[0]]; F.step = F.draft.outline ? 2 : 1; }
+    if (ids.length) { F.draft = F.drafts[ids[0]]; F.step = F.draft.outline ? 2 : 1; useArt(F.draft); }
     try { F.settings = Object.assign(F.settings, JSON.parse(localStorage.getItem('cp_forge_settings') || '{}')); } catch (e) { /* ignore */ }
   }
   F.render();
@@ -14115,18 +14133,18 @@ function newDraft() {
     brief: { text: '', relevance: 'gig', threads: [], reveal: 'none', hours: 4, varun: true, aiden: true, samurai: false, tier: 'typical', tone: '', region: '', must: '', ban: '', lang: 'English' },
     pitches: [], pick: null, outline: null, seg: {}, locks: {}, notes: {}, cast: [], locations: [], rosterAdded: false, cost: { total: 0, calls: [] } };
 }
-F.newDraft = function () { F.draft = newDraft(); F.step = 1; F.save(); F.render(); };
-F.selectDraft = function (id) { if (F.drafts[id]) { F.draft = F.drafts[id]; F.step = F.draft.outline ? 2 : 1; F.render(); } };
+F.newDraft = function () { F.draft = newDraft(); F.step = 1; useArt(F.draft); F.save(); F.render(); };
+F.selectDraft = function (id) { if (F.drafts[id]) { F.draft = F.drafts[id]; F.step = F.draft.outline ? 2 : 1; useArt(F.draft); F.render(); } };
 F.deleteDraft = async function () {
   if (!F.draft || !confirm('Delete this draft "' + F.draft.title + '"? (It cannot be undone.)')) return;
-  const id = F.draft.id; delete F.drafts[id]; lsSave();
-  try { if (window.db) await db.ref(fbPath('drafts/' + id)).set(null); } catch (e) { /* ignore */ }
-  const ids = Object.keys(F.drafts); F.draft = ids.length ? F.drafts[ids[0]] : null; F.render();
+  const id = F.draft.id; delete F.drafts[id]; delete artCache[id]; idbPut(id, null); lsSave();
+  try { if (FB()) await db.ref(fbPath('drafts/' + id)).set(null); } catch (e) { /* ignore */ }
+  const ids = Object.keys(F.drafts); F.draft = ids.length ? F.drafts[ids[0]] : null; useArt(F.draft); F.render();
 };
 F.duplicateDraft = function () {
   if (!F.draft) return;
   const c = clean(F.draft); c.id = uid('fm_'); c.title = F.draft.title + ' (copy)'; c.created = c.updated = Date.now(); c.cost = { total: 0, calls: [] }; c.rosterAdded = false;
-  F.drafts[c.id] = c; F.draft = c; F.save(); F.render();
+  F.drafts[c.id] = c; F.draft = c; useArt(c); F.save(); F.render();
 };
 
 // ── the Claude call: cached static prefix, cost accounting, cap, retry, JSON parsing ─────
@@ -14335,20 +14353,39 @@ function checksHtml() {
 
 // ── stage 4: cast & places ──────────────────────────────────────────────────────────────
 const ARCHS = ['BRUISER', 'GUNNER', 'SNIPER', 'NETRUNNER', 'STEALTH', 'SUPPORT', 'HEAVY'];
-async function castStage(d) {
-  {
-    const segs = d.outline.beatChart.map(b => ({ id: b.id, title: b.title, location: b.location, cast: (d.seg[b.id] || {}).cast || [], hostiles: (d.seg[b.id] || {}).hostiles || [], scene: ((d.seg[b.id] || {}).scene || b.summary).slice(0, 380) }));
-    const weapons = Object.keys(WEAPON_TABLE).filter(n => (WEAPON_TABLE[n].slotType || '') !== 'shield').join(', ');
-    const r = await F.claude({ tier: 'cheap', stage: 'cast', label: 'cast & places', effort: 'low', maxTokens: 7000,
-      user: `MISSION: ${d.title} — ${d.outline.logline}\nSEGMENTS: ${JSON.stringify(segs)}\n\nTASK: list every NPC the GM must run (named people, hostile squads as individual members, key civilians) and every distinct PLACE that needs a battle map. Do NOT include the player characters. Combatants must use these weapon names exactly: ${weapons}. Armor must be one of: ${Object.keys(ARMOR_CATALOG).join(', ')}. Tiers: GRUNT (fodder), THREAT (named operatives), BOSS (climax). Archetypes: ${ARCHS.join(', ')}. Hostile segments may contain at most 3 hostile members. Use "ally" for friendly/neutral people, "enemy" for anyone who may turn on the crew. Maximum 12 NPCs and 6 places.\nReturn JSON: {"cast":[{"key":"snake_case","name":"","fac":"enemy|ally","tier":"GRUNT|THREAT|BOSS","archetype":"","weapons":[""],"armor":"","cyberware":["free text, optional"],"role":"one line","want":"","secret":"","keyLine":"","tactics":"how they fight / behave","gm":"GM-only notes","flavor":"2 noir sentences","imagePrompt":"ONE paragraph, visual only: age, build, face, hair, exact clothing and colours, weapon/cyberware, pose, expression, background; no stats","segments":["b2"],"visibleAtStart":false}],"locations":[{"key":"snake_case","name":"","type":"interior|exterior|rooftop|vehicle|arena","scaleMeters":40,"mustContain":["every gameplay object WITH its position on the image, e.g. entrance bottom centre"],"mapPrompt":"one paragraph: the place, its layout with positions (top/bottom/left/right), key features; no style words","segments":["b2"]}]}` });
-    if (!r || !Array.isArray(r.cast)) throw new Error('No cast came back — try again.');
-    d.cast = r.cast.map(c => sanitizeCast(c)); d.locations = (r.locations || []).map(l => ({ key: slug(l.key || l.name), name: l.name || 'Location', type: l.type || 'interior', scaleMeters: clamp(l.scaleMeters || 40, 8, 300), mustContain: l.mustContain || [], mapPrompt: l.mapPrompt || '', segments: l.segments || [] }));
-    F.save();
-  }
+function segSummary(d) { return d.outline.beatChart.map(b => ({ id: b.id, title: b.title, location: b.location, cast: (d.seg[b.id] || {}).cast || [], hostiles: (d.seg[b.id] || {}).hostiles || [], scene: ((d.seg[b.id] || {}).scene || b.summary).slice(0, 380) })); }
+async function castOnly(d) {
+  const segs = segSummary(d);
+  const weapons = Object.keys(WEAPON_TABLE).filter(n => (WEAPON_TABLE[n].slotType || '') !== 'shield').join(', ');
+  let used = []; try { used = Object.values(state.characters || {}).map(x => x && x.name).filter(Boolean).slice(0, 80); } catch (e) { /* ignore */ }
+  const r = await F.claude({ tier: 'cheap', stage: 'cast', label: 'cast', effort: 'low', maxTokens: 9000,
+    user: `MISSION: ${d.title} — ${d.outline.logline}\nSEGMENTS: ${JSON.stringify(segs)}\nALREADY USED NAMES (do not reuse these surnames): ${used.join(', ') || '—'}\n\nTASK: list every NPC the GM must run (named people, hostile squads as individual members, key civilians). Do NOT include the player characters. Combatants must use these weapon names exactly: ${weapons}. Armor must be one of: ${Object.keys(ARMOR_CATALOG).join(', ')}. Tiers: GRUNT (fodder), THREAT (named operatives), BOSS (climax). Archetypes: ${ARCHS.join(', ')}. Hostile segments may contain at most 3 hostile members. Use "ally" for friendly/neutral people, "enemy" for anyone who may turn on the crew. Maximum 12 NPCs, every NPC with a different surname. Keep every field short.\nReturn JSON: {"cast":[{"key":"snake_case","name":"","fac":"enemy|ally","tier":"GRUNT|THREAT|BOSS","archetype":"","weapons":[""],"armor":"","cyberware":["free text, optional"],"role":"one line","want":"","secret":"","keyLine":"","tactics":"how they fight / behave","gm":"GM-only notes","flavor":"2 noir sentences","imagePrompt":"ONE paragraph, visual only: age, build, face, hair, exact clothing and colours, weapon/cyberware, pose, expression, background; no stats","segments":["b2"],"visibleAtStart":false}]}` });
+  const list = Array.isArray(r) ? r : (r && r.cast);
+  if (!Array.isArray(list) || !list.length) throw new Error('No cast came back — try again.');
+  d.cast = list.map(x => sanitizeCast(x)); F.save();
 }
+function sanitizeLoc(l) { return { key: slug(l.key || l.name), name: l.name || 'Location', type: l.type || 'interior', scaleMeters: clamp(l.scaleMeters || 40, 8, 300), mustContain: l.mustContain || [], mapPrompt: l.mapPrompt || '', segments: l.segments || [] }; }
+function fallbackLocations(d) {   // one place per distinct beat location, so a map can always be made
+  const by = {}; d.outline.beatChart.forEach(b => { const n = String(b.location || '').trim(); if (!n) return; (by[n.toLowerCase()] = by[n.toLowerCase()] || { name: n, beats: [] }).beats.push(b); });
+  return Object.values(by).slice(0, 6).map(g => sanitizeLoc({ name: g.name, type: 'interior', scaleMeters: 40, mustContain: ['entrance at the bottom centre'], mapPrompt: g.name + '. ' + ((d.seg[g.beats[0].id] || {}).scene || g.beats[0].summary || '').slice(0, 300), segments: g.beats.map(b => b.id) }));
+}
+async function placesOnly(d) {
+  const segs = segSummary(d);
+  let list = [];
+  try {
+    const r = await F.claude({ tier: 'cheap', stage: 'places', label: 'places', effort: 'low', maxTokens: 4500,
+      user: `MISSION: ${d.title} — ${d.outline.logline}\nSEGMENTS: ${JSON.stringify(segs)}\n\nTASK: list every distinct PLACE that needs a top-down battle map (merge beats that happen in the same or a very similar place; at most 6 places; every beat that happens somewhere physical belongs to exactly one place). Describe the layout concretely with positions (top/bottom/left/right) so the map matches what the segments need.\nReturn JSON: {"locations":[{"key":"snake_case","name":"","type":"interior|exterior|rooftop|vehicle|arena","scaleMeters":40,"mustContain":["every gameplay object WITH its position on the image, e.g. entrance bottom centre"],"mapPrompt":"one paragraph: the place, its layout with positions, key features; no style words","segments":["b2"]}]}` });
+    list = Array.isArray(r) ? r : ((r && r.locations) || []);
+  } catch (e) { if (/Cancelled|Stopped/.test(e.message)) throw e; }
+  d.locations = list.filter(l => l && (l.name || l.key)).slice(0, 6).map(sanitizeLoc);
+  if (!d.locations.length) d.locations = fallbackLocations(d);
+  if (!d.locations.length) throw new Error('No places could be worked out — add a location to the beats and try again.');
+  F.save();
+}
+async function castStage(d) { if (!d.cast.length) await castOnly(d); if (!d.locations.length) await placesOnly(d); }
 F.makeCast = async function () {
   const d = F.draft; if (!d.outline) return;
-  await guard('Casting NPCs and places …', async () => { await castStage(d); F.step = 3; });
+  await guard('Casting NPCs and places …', async () => { await castOnly(d); await placesOnly(d); F.step = 3; });
 };
 const slug = (s) => String(s || 'x').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24) || 'x';
 function sanitizeCast(c) {
@@ -14361,6 +14398,7 @@ function sanitizeCast(c) {
 F.editCast = function (i, field, v) { const c = F.draft.cast[i]; if (!c) return; if (field === 'weapons') c.weapons = String(v).split(',').map(s => s.trim()).filter(Boolean); else c[field] = v; F.save(); };
 F.editLoc = function (i, field, v) { const l = F.draft.locations[i]; if (!l) return; if (field === 'mustContain') l.mustContain = String(v).split('\n').map(s => s.trim()).filter(Boolean); else if (field === 'scaleMeters') l.scaleMeters = clamp(v, 8, 300); else l[field] = v; F.save(); };
 F.dropCast = function (i) { F.draft.cast.splice(i, 1); F.save(); F.render(); };
+F.makePlaces = async function () { const d = F.draft; if (!d || !d.outline) return; await guard('Working out the places …', async () => { await placesOnly(d); }); };
 F.dropLoc = function (i) { F.draft.locations.splice(i, 1); F.save(); F.render(); };
 
 // encounter preset members for a beat: only fight beats, only enemies, max 3 (house rule)
@@ -14391,8 +14429,9 @@ F.addToRoster = async function () {
       if (ids.length) { updates['encounterPresets/enc_forge_' + d.id.slice(-6) + '_' + bi] = { name: d.title + ' — ' + b.title, charIds: ids, sceneId: null, mission: d.title, ts: Date.now() + bi }; prev['encounterPresets/enc_forge_' + d.id.slice(-6) + '_' + bi] = null; np++; }
     });
     await dbUpdate(updates, 'Forge: added "' + d.title + '" cast', prev);
+    let np2 = 0; if (FB()) for (const c of d.cast) { const p = F.art.portraits[c.key]; if (p && idOf[c.key]) { try { await db.ref('portraits/' + idOf[c.key]).set(JSON.stringify({ crop: p.crop, full: p.full })); np2++; } catch (e) { /* keep going */ } } }
     d.rosterAdded = true; F.save(); renderCharList(); if (typeof renderPresets === 'function') renderPresets();
-    showToast(d.cast.length + ' NPCs and ' + np + ' encounter presets added (mission folder "' + d.title + '").');
+    showToast(d.cast.length + ' NPCs and ' + np + ' encounter presets added (mission folder "' + d.title + '")' + (np2 ? ', ' + np2 + ' with portraits.' : '. No portraits yet — paint them in the Build step first if you want them.'));
   });
 };
 
@@ -14497,12 +14536,12 @@ async function gridJpeg(src) {   // the map with a labelled 10% grid, so the mod
 
 F.makeMap = async function (i, quiet) {
   const d = F.draft, l = d.locations[i]; if (!l) return;
-  const run = async () => { const png = await genImage(mapPrompt(l), '1536x1024', 'map ' + l.key); F.art.maps[l.key] = (await toMapJpeg(png)); delete F.art.placements[l.key]; };
+  const run = async () => { const png = await genImage(mapPrompt(l), '1536x1024', 'map ' + l.key); F.art.maps[l.key] = (await toMapJpeg(png)); delete F.art.placements[l.key]; F.saveArt(); };
   quiet ? await run() : await guard('Painting the map "' + l.name + '" …', run);
 };
 F.makePortrait = async function (i, quiet) {
   const d = F.draft, c = d.cast[i]; if (!c) return;
-  const run = async () => { const png = await genImage(portraitPrompt(c), '1024x1536', 'portrait ' + c.key); F.art.portraits[c.key] = await toPortrait(png); };
+  const run = async () => { const png = await genImage(portraitPrompt(c), '1024x1536', 'portrait ' + c.key); F.art.portraits[c.key] = await toPortrait(png); F.saveArt(); };
   quiet ? await run() : await guard('Painting ' + c.name + ' …', run);
 };
 const DEVICE_LIST = () => Object.entries(SECURITY_DEVICE_CATALOG).map(([k, v]) => k + ' [' + v.category + (v.detectionShape ? ', ' + v.detectionShape : '') + ']').join(' · ');
@@ -14513,7 +14552,7 @@ F.placeLocation = async function (i, quiet) {
     const grid = await gridJpeg(F.art.maps[l.key].url);
     const text = `[STAGE:place]\nThis is the top-down battle map "${l.name}" (${l.type}, about ${l.scaleMeters} m wide) with a labelled 10% grid: numbers on the top edge are X percent (left to right), numbers on the left edge are Y percent (top to bottom). Read positions straight off the grid.\nGameplay objects the map should contain: ${(l.mustContain || []).join('; ') || '—'}.\nNPCs that may be here (place only these): ${JSON.stringify(present)}.\nAvailable security devices (use these EXACT names): ${DEVICE_LIST()}.\nRules: put locks on doors, scanners at gates and lifts, cameras in room corners facing INTO the room, floor sensors on routes, consoles where hacking happens; 5-12 devices; rotation 0 = pointing up, 90 = right, 180 = down, 270 = left; range in REAL metres (cameras 6-14, motion/audio 3-8); tokens only on open floor, never on walls or props; fog "entrance" = an ellipse (cx, cy, rx, ry in percent) around where the crew arrives; estimate the real width of the whole map in metres from props of known size (doors about 1 m, cars about 4.5 m, tables about 2 m).\nReturn JSON: {"scaleMeters":40,"entrance":{"cx":50,"cy":88,"rx":14,"ry":10},"devices":[{"deviceType":"","name":"what it guards","x":50,"y":50,"rotation":0,"coneAngle":70,"range":8,"note":""}],"tokens":{"npc_key":{"x":50,"y":40}}}`;
     const r = await F.claude({ tier: 'mid', stage: 'place', label: 'placement ' + l.key, effort: 'low', maxTokens: 3500, content: [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: grid } }, { type: 'text', text }] });
-    F.art.placements[l.key] = sanitizePlacement(r, l, present);
+    F.art.placements[l.key] = sanitizePlacement(r, l, present); F.saveArt();
   };
   quiet ? await run() : await guard('Placing security on "' + l.name + '" …', run);
 };
@@ -14563,6 +14602,7 @@ F.buildAll = async function () {
     F.buildLog = [];
     const log = (s) => { F.buildLog.push(s); setBusy(s); const el = $('forge-buildlog'); if (el) el.innerHTML = F.buildLog.map(x => '<div>' + E(x) + '</div>').join(''); };
     if (!d.cast.length || !d.locations.length) { log('Casting NPCs and places …'); await castStage(d); }
+    if (!d.cast.length || !d.locations.length) throw new Error('There are no NPCs or no places to build yet.');
     for (let i = 0; i < d.locations.length; i++) { if (F.abort) break; const l = d.locations[i]; if (F.art.maps[l.key]) { log('Map "' + l.name + '" already exists — skipped'); continue; } log('Painting map ' + (i + 1) + '/' + d.locations.length + ': ' + l.name); await F.makeMap(i, true); }
     for (let i = 0; i < d.cast.length; i++) { if (F.abort) break; const c = d.cast[i]; if (F.art.portraits[c.key]) continue; log('Painting portrait ' + (i + 1) + '/' + d.cast.length + ': ' + c.name); await F.makePortrait(i, true); }
     for (let i = 0; i < d.locations.length; i++) { if (F.abort) break; const l = d.locations[i]; if (F.art.placements[l.key]) continue; log('Placing security on "' + l.name + '"'); await F.placeLocation(i, true); }
@@ -14705,7 +14745,7 @@ F.editSeg = function (id, f, v) { F.draft.seg[id][f] = v; F.save(); };
 // step 3 ──────────────────────────────────────────────────────────────
 function step3(d) {
   if (!d.outline) return `<div class="fg-card fg-sm">Build the beat chart first.</div>`;
-  let h = `<div class="fg-row" style="margin-bottom:8px"><button class="btn btn-primary btn-small" onclick="Forge.makeCast()">✦ ${d.cast.length ? 'RE-' : ''}CAST NPCs & PLACES <span style="opacity:.7">(~$0.01)</span></button>${d.cast.length ? `<button class="btn btn-primary btn-small" onclick="Forge.addToRoster()">＋ ADD NPCs + ENCOUNTER PRESETS TO THE ROSTER${d.rosterAdded ? ' (again)' : ''}</button><button class="btn btn-ghost btn-small" onclick="Forge.downloadArtSheet()">DOWNLOAD ART REQUEST SHEET</button><button class="btn btn-primary btn-small" onclick="Forge.go(4)">NEXT: BUILD →</button>` : ''}</div>
+  let h = `<div class="fg-row" style="margin-bottom:8px"><button class="btn btn-primary btn-small" onclick="Forge.makeCast()">✦ ${d.cast.length ? 'RE-' : ''}CAST NPCs & PLACES <span style="opacity:.7">(~$0.01)</span></button>${d.cast.length && !d.locations.length ? `<button class="btn btn-primary btn-small" onclick="Forge.makePlaces()">✦ MAKE THE PLACES (no maps possible without them)</button>` : ''}${d.cast.length ? `<button class="btn btn-primary btn-small" onclick="Forge.addToRoster()">＋ ADD NPCs + ENCOUNTER PRESETS TO THE ROSTER${d.rosterAdded ? ' (again)' : ''}</button><button class="btn btn-ghost btn-small" onclick="Forge.downloadArtSheet()">DOWNLOAD ART REQUEST SHEET</button><button class="btn btn-primary btn-small" onclick="Forge.go(4)">NEXT: BUILD →</button>` : ''}</div>
   <div class="fg-sm" style="margin-bottom:8px">NPC numbers (HP, armor, Firewall, talents) are rolled by the tool's own generator from the tier and archetype — the AI only chooses the concept and gear. Adding to the roster files them under the mission name.</div>`;
   if (!d.cast.length) return h + `<div class="fg-card fg-sm">No cast yet.</div>`;
   h += d.cast.map((c, i) => `<div class="fg-card"><div class="fg-row"><input class="fg-in" style="flex:1;min-width:140px;width:auto;font-weight:700" value="${bq(c.name)}" onchange="Forge.editCast(${i},'name',this.value)">
@@ -14715,6 +14755,7 @@ function step3(d) {
     <div class="fg-sm">${E(c.role)}${c.want ? ' · wants: ' + E(c.want) : ''}${c.secret ? ' · <span style="color:var(--gold-bright)">secret: ' + E(c.secret) + '</span>' : ''}</div>
     <div class="fg-row"><div style="flex:1;min-width:160px"><span class="fg-lbl">Weapons (comma separated)</span><input class="fg-in" value="${bq((c.weapons || []).join(', '))}" onchange="Forge.editCast(${i},'weapons',this.value)"></div><div style="flex:1;min-width:140px"><span class="fg-lbl">Armor</span><select class="fg-in" onchange="Forge.editCast(${i},'armor',this.value)">${Object.keys(ARMOR_CATALOG).map(x => `<option ${c.armor === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div></div>
     <span class="fg-lbl">Portrait prompt</span><textarea class="fg-in" onchange="Forge.editCast(${i},'imagePrompt',this.value)">${E(c.imagePrompt)}</textarea></div>`).join('');
+  if (!d.locations.length) h += `<div class="fg-card fg-sm" style="border-color:var(--gold-bright)">⚠ No places yet — without them there are no maps, security placement or scenes. Press <strong>MAKE THE PLACES</strong> above.</div>`;
   h += `<div class="fg-lbl" style="margin-top:12px">Places (one battle map each)</div>` + d.locations.map((l, i) => `<div class="fg-card"><div class="fg-row"><input class="fg-in" style="flex:1;min-width:140px;width:auto;font-weight:700" value="${bq(l.name)}" onchange="Forge.editLoc(${i},'name',this.value)"><span class="fg-sm">≈</span><input class="fg-in" style="width:70px" type="number" value="${l.scaleMeters}" onchange="Forge.editLoc(${i},'scaleMeters',this.value)"><span class="fg-sm">m wide</span><button class="btn btn-danger btn-small" onclick="Forge.dropLoc(${i})">✕</button></div>
     <span class="fg-lbl">Must be on the map (one per line, with positions)</span><textarea class="fg-in" onchange="Forge.editLoc(${i},'mustContain',this.value)">${E((l.mustContain || []).join('\n'))}</textarea>
     <span class="fg-lbl">Map prompt (the style block is added automatically)</span><textarea class="fg-in" onchange="Forge.editLoc(${i},'mapPrompt',this.value)">${E(l.mapPrompt)}</textarea></div>`).join('');
@@ -14733,7 +14774,7 @@ function step4(d) {
     <div class="fg-row" style="margin-top:8px"><button class="btn btn-primary" onclick="Forge.buildAll()" ${!hasKey || !d.outline ? 'disabled' : ''}>⚡ BUILD EVERYTHING → IMPORT</button><button class="btn btn-ghost btn-small" onclick="Forge.importNow()" ${Object.keys(F.art.maps).length ? '' : 'disabled'}>IMPORT WHAT EXISTS NOW</button><button class="btn btn-ghost btn-small" onclick="Forge.downloadPack()" ${Object.keys(F.art.maps).length ? '' : 'disabled'}>DOWNLOAD PACK (.cpmission.json)</button><button class="btn btn-ghost btn-small" onclick="Forge.downloadArtSheet()" ${d.cast.length ? '' : 'disabled'}>ART SHEET FOR THE LAUNCHER</button></div>
     <div id="forge-buildlog" class="fg-sm" style="margin-top:6px"></div>
     <div class="fg-sm" style="color:var(--text3);margin-top:4px">The browser may block direct image calls on some setups — then use the art sheet with the double-click launcher. Pictures live in memory until you reload the page; import before closing the tab.</div></div>`;
-  if (!d.locations.length) return h + `<div class="fg-card fg-sm">Cast the NPCs and places in step 3 first (or press BUILD EVERYTHING and it will do that for you).</div>`;
+  if (!d.locations.length) return h + `<div class="fg-card fg-sm" style="border-color:var(--gold-bright)">⚠ There are no <strong>places</strong> yet, so there are no maps to paint. Press ⚡ BUILD EVERYTHING (it works the places out first) or use MAKE THE PLACES in step 3.</div>`;
   h += `<div class="fg-lbl">Maps</div>` + d.locations.map((l, i) => { const m = F.art.maps[l.key], p = F.art.placements[l.key]; return `<div class="fg-card fg-row">${m ? `<img class="fg-thumb" src="${m.url}">` : '<div class="fg-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:10px">no map</div>'}<div style="flex:1;min-width:140px"><strong>${E(l.name)}</strong><div class="fg-sm">${p ? p.devices.length + ' devices · ' + Object.keys(p.tokens).length + ' tokens · ≈ ' + p.scaleMeters + ' m' : 'not placed yet'}</div></div><button class="btn btn-ghost btn-small" onclick="Forge.makeMap(${i})" ${hasKey ? '' : 'disabled'}>${m ? '↻ REPAINT' : 'PAINT'}</button><button class="btn btn-ghost btn-small" onclick="Forge.placeLocation(${i})" ${m ? '' : 'disabled'}>${p ? '↻ RE-PLACE' : 'PLACE SECURITY'}</button></div>`; }).join('');
   h += `<div class="fg-lbl">Portraits</div><div class="fg-row">` + d.cast.map((c, i) => { const p = F.art.portraits[c.key]; return `<div class="fg-card" style="width:130px;text-align:center">${p ? `<img class="fg-port" src="${p.crop}">` : '<div class="fg-port" style="margin:0 auto;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:9px">none</div>'}<div class="fg-sm" style="font-size:10px">${E(c.name)}</div><button class="btn btn-ghost btn-small" style="font-size:9px" onclick="Forge.makePortrait(${i})" ${hasKey ? '' : 'disabled'}>${p ? '↻' : 'PAINT'}</button></div>`; }).join('') + '</div>';
   return h;
