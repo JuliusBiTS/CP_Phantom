@@ -1210,6 +1210,7 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
     <button class="tab active" onclick="switchTab('combat')">Combat</button>
     <button class="tab" onclick="switchTab('characters')">Characters</button>
     <button class="tab" onclick="switchTab('generator')">Generator</button>
+    <button class="tab" onclick="switchTab('forge')">Forge</button>
     <button class="tab" onclick="switchTab('settings')">Settings</button>
   </div>
 
@@ -1341,6 +1342,9 @@ html.perf-lite .hp-numbers.critical, html.perf-lite .dmg-display { text-shadow: 
   </div>
 
   <!-- GENERATOR TAB -->
+  <!-- FORGE TAB (rendered by the separate Forge script at the end of the page) -->
+  <div id="tab-forge" class="tab-content main-scroll"><div id="forge-root"></div></div>
+
   <div id="tab-generator" class="tab-content main-scroll">
     <div style="padding:12px 16px">
       <!-- API key missing warning -->
@@ -2994,7 +2998,7 @@ function logout() { session = { role: null, charId: null }; stopConnectionWatch(
 // TABS
 // ═══════════════════════════════════════════════════════════════
 function switchTab(name) {
-  const names = ['combat','characters','generator','settings'];
+  const names = ['combat','characters','generator','forge','settings'];
   document.querySelectorAll('#screen-gm .tab').forEach((t, i) => t.classList.toggle('active', names[i] === name));
   document.querySelectorAll('#screen-gm .tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + name));
   if (name === 'settings') renderSettings();
@@ -3002,6 +3006,7 @@ function switchTab(name) {
   if (name === 'generator') {
     refreshApiKeyUI();
   }
+  if (name === 'forge') { try { window.Forge && Forge.onOpen(); } catch (e) { console.error('Forge', e); } }
 }
 
 function switchPlayerTab(name) {
@@ -13990,6 +13995,767 @@ window.addEventListener('load', () => {
   if (url) { initFirebase(url); showLogin(); }
   else showLogin();
 });
+</script>
+<script>
+// ═══════════════════════════════════════════════════════════════
+// MISSION FORGE — brief -> pitches -> beat-chart outline -> segment cards -> cast & places
+// -> art + placement -> mission pack -> the normal importer. Self-contained: its own script
+// block, its own namespace (window.Forge); it only calls existing tool functions
+// (readApiKey, esc, showToast, dbUpdate, state, genResultToCharacter, processGeneratedEnemy,
+// validateMissionPack, previewMissionPack ...). Drafts live under  <campaign>/forge/  in
+// Firebase (plus a localStorage mirror). Generated images are kept in memory only.
+// Method: the Cyberpunk RED "Beat Chart" (Hook / Development / Cliffhanger / Climax /
+// Resolution, alternating) — paraphrased, never quoted.
+// ═══════════════════════════════════════════════════════════════
+(function () {
+'use strict';
+if (window.Forge) return;
+const F = window.Forge = { version: 1 };
+const E = (s) => esc(s == null ? '' : String(s));
+const $ = (id) => document.getElementById(id);
+const uid = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, Number.isFinite(+v) ? +v : (a + b) / 2));
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// ── models & prices (USD per million tokens: input, output) ─────────────────────────────
+const MODELS = { cheap: 'claude-haiku-5-5', mid: 'claude-sonnet-5-5', strong: 'claude-opus-5-5' };
+const PRICE = { 'claude-haiku-5-5': [0.10, 0.50], 'claude-sonnet-5-5': [2, 10], 'claude-opus-5-5': [4, 20] };
+const IMG_PRICE = { low: 0.006, medium: 0.041, high: 0.165 };
+
+// ── knowledge: the setting, the method, the house style (the static, CACHED prompt prefix) ──
+const BIBLE_DEFAULT = `SETTING: Night City 2045, the Time of the Red — a city rebuilding after the Fourth Corporate War; red-tinted fallout, smog, rain, no stars; decay under gloss, end-stage capitalism, contrast between glittering corporate towers and cold desperate streets; paranoia (no clean good and evil). Areas have threat ratings (Corporate, Moderate, Combat, Hot). Currency: ED. Real powers: Militech, Arasaka (expelled from North America but present through subsidiaries), Biotechnica, Network 54, NetWatch, the Valentinos, Tyger Claws, Voodoo Boys; invented layer: Zetatech, Palisade Continuity, the Time Market (an Arasaka subsidiary), Veinbreakers, Wakako Okada (fixer).
+CAMPAIGN "CYNOSURE PROTOCOL" (GM truth): the players stole a small sealed cube from a Militech convoy; inside is the Cynosure chip — a contact sequence, a phone line to whatever evolved behind the Blackwall for fifty years. Militech's Project Cynosure built it; a defector let it escape. Whatever answers is a post-human intelligence that has begun to protect the netrunner. The campaign question: should anyone make the call, and who decides? Militech burned every Nomad camp in the region to find it. Arasaka and NetWatch are not yet aware / would destroy it.
+PLAYER CHARACTERS: Varun (netrunner, played by Phil; fled Night City years ago after a rogue-AI encounter) and Aiden (combat medic) are the core table. A third player, a Samurai, is a "jumper" who joins only sometimes — every mission must work without him and offer him one simple optional slot.
+CANON MISSIONS (exist as separate runbooks; do not replay or pre-empt them): 1 The Last Night in the Desert (played) · 1.5 Second Click (election-night heist, Wakako's first job) · 2 Dead Air (Veyr, Rook, Palisade Continuity; Cynosure's first warning) · 3 The Time Market (body-rental recoveries, Arasaka trail) · 4 Breakwater (Pacifica blacksite break-out: Vera and Tomás are alive and held by Militech; Varun's brother; NetWatch; Cynosure offers integration). Bishop and Sparrow are dead.
+HOUSE STYLE (from the GM's own runbooks): two-player table, tone arc stated up front (e.g. "competence -> comfort -> unease -> complicity"); FIXED outcomes (always happen) vs FLEXIBLE outcomes (player-owned); GM priorities; each player gets a mechanical spotlight AND a personal pressure; AT MOST THREE active hostile units at once — pressure comes from clocks, doors, cameras, Exposure, witnesses and public narrative, never from secret HP changes; every round has a visible objective, a clock and a consequence; telegraph lethal hazards; fail forward (failure costs time, position, evidence, health or relationships, never the right to continue); non-lethal options matter; moral weight over body count; "the system works as written" is scarier than a hidden villain; no clean wins; Cynosure helps rarely and clearly and is never a constant tactical assistant.`;
+const METHOD = `METHOD — the Beat Chart (Cyberpunk RED). Five beat types: HOOK (once, first; short, wakes the crew up and ties to the plot), DEVELOPMENT (non-action: clues, talk, revelations), CLIFFHANGER (action: a contest whose outcome is in doubt), CLIMAX (once, near the end), RESOLUTION (once, last; may overturn the climax). Rules: always open with a Hook; always end Climax then Resolution; NEVER two Cliffhangers or two Developments in a row (after an action Hook start with a Development; after a cerebral Hook start with a Cliffhanger; end on a Development if the Climax is active, on a Cliffhanger if it is mental). One beat is about 30 minutes of play: Hook+Climax+Resolution = 1.5 h, the rest alternates. Escalate: early fights are winnable, the strongest comes last. Keep Cliffhangers short and deadly. It is always personal (hang the plot on a character's Lifepath / a contact), it is street level, and it is a Caper: a crew with roles (face, runner, tech, medtech, muscle, driver). Every story spike comes from a technical, a combat or a persuasion angle. Enemies play smart (armor, traps, hostages, decoys). Missions are non-linear: every clue reachable by at least two routes; when players derail, offer another route to the same information.
+HOOK TYPES: Coronet Blue (they are expected to know a plan) · Crisis · Discovery · False Accusation · Kidnapped · Looming Threat · Murder · Cliffhanger-start (Ambush/Confrontation/Fist Fight) · Development-start (Secret Meeting/Mistaken Identity/Treachery) · Revelation · Screamsheet (an in-world news item that is the job) · Fixer pitch.
+CLIFFHANGER KINDS: Ambush, Battle, Chase, Confrontation (verbal), Contest, Dogfight, Duel, Fist Fight, Monster (turrets/drones), Obstacles (always beatable, clues beforehand), Pursuit, Race, Skirmish.
+DEVELOPMENT KINDS: Advantage Revealed, Alliance, Betrayal, Clue, Foreshadowing, Framed, Gain Mastery, Hazardous Quest, Hesitation, Not What It Seems, Lie Revealed, Mistaken Identity, Monologue, Personal Stake, Puzzle, Rescuers, Retreat, Revealed Weakness, Revelation, Romance, Sabotage, Second Chance, Secret Meeting, Strange Bedfellows, Turnabout, Vengeance, Warning.
+CLIMAX KINDS: Final Battle, Final Revelation, Final Act (the heist plan executes). RESOLUTION KINDS: Antagonist Escapes / Killed / Toppled, Edgerunners Captured / Escape, Ending Cliffhanger, Greater Threat, Happy Ending, Pyrrhic Victory.
+ENCOUNTER SCALE: 1 Mook (GRUNT) = 1 crew member, 1 Lieutenant (THREAT) = 2, 1 Mini Boss (BOSS) = 3; better gear instead of more bodies. PAY per person: Easy 500 / Typical 1,000 / Dangerous 2,000 ED.
+OUTPUT DISCIPLINE: answer with ONE JSON value only (no prose, no markdown fences). Be concrete and specific to Night City; no filler. Never invent stat numbers (the tool computes them). Keep every text field tight.`;
+const SYSTEM_STATIC = () => `You are the mission designer of a Cyberpunk RED-style campaign played with the homebrew "CP Phantom" rules.\n\n${F.meta.bible || BIBLE_DEFAULT}\n\n${METHOD}`;
+
+const THREADS = [['cynosure', 'Cynosure / Blackwall'], ['militech', 'Militech hunt'], ['arasaka', 'Arasaka / Time Market'], ['netwatch', 'NetWatch'], ['captives', 'Vera & Tomás'], ['wakako', 'Wakako'], ['brother', "Varun's brother"], ['politics', 'Zetatech / city politics'], ['cube', 'Opening the cube']];
+const REL = {
+  gig: { label: 'Just a gig (money only)', rule: 'STANDALONE GIG. It must NOT touch the macro plot: do not mention or hint at Cynosure, the Blackwall, the chip, Militech\'s hunt for the cube, NetWatch, Prometheus, or anything on the HIDDEN list. Stakes are local: pay, reputation, a person, a place. It still needs a personal hook, a real twist, complications and local consequences.' },
+  seeded: { label: 'Seeded gig', rule: 'SEEDED GIG: standalone, but plant exactly ONE foreshadow (a clue, rumour, name or object) pointing at one of the listed THREADS, flagged "seedClue":true on that clue. It reveals nothing from the HIDDEN list.' },
+  plot: { label: 'Plot-relevant', rule: 'PLOT-RELEVANT: it advances the listed THREADS. It may reveal items from the HIDDEN list only up to the REVEAL BUDGET (none = nothing, hint = ambiguous clues only, partial = one concrete fact, major = a big reveal). Obey the canon timeline (do not replay or pre-empt Missions 1.5-4). Return stateDeltas.' },
+};
+const TIERS = { easy: [500, 'Easy'], typical: [1000, 'Typical'], dangerous: [2000, 'Dangerous'] };
+const BEAT_COLOR = { Hook: 'var(--gold-bright)', Development: 'var(--blue)', Cliffhanger: 'var(--red-bright)', Climax: 'var(--gold-bright)', Resolution: 'var(--green-bright)' };
+const MAP_STYLE = 'Top-down orthographic tactical battle map, straight overhead view with the roof removed, no perspective tilt, 16:9 landscape, the entire location visible edge to edge. Realistic painted concept-art rendering with rich material detail, dark moody night lighting with neon accents in teal, magenta and amber, wet reflective surfaces where it fits. Walls, doorways and door openings clearly readable; furniture and props at believable human scale. No characters or people, no text, no lettering, no labels, no UI, no grid, no watermark.';
+const PORTRAIT_STYLE = ' Framing: three-quarter shot, vertical 3:4, the head and shoulders centred horizontally in the upper third of the image. Cyberpunk noir illustration, dramatic neon rim lighting, detailed digital art, portrait framing.';
+
+// ── persistent state ────────────────────────────────────────────────────────────────────
+F.drafts = {}; F.draft = null; F.step = 1; F.loaded = false; F.abort = false; F.busy = '';
+F.meta = { bible: '', known: [], hidden: [] };
+F.settings = { cap: 1.5, imgModel: 'gpt-image-2.5-sunburst', imgQuality: 'low' };
+F.session = { usd: 0, calls: 0 };
+F.art = { maps: {}, portraits: {}, placements: {} };   // in memory only (large)
+const KNOWN_DEFAULT = [
+  'They stole a sealed cube (never opened) from a Militech convoy in the Badlands.',
+  'Militech burned the Nomad camps hunting it; their camp fell; Bishop and Sparrow died. Vera sent them north to Night City and to a name: Wakako Okada.',
+  'Varun heard a voice from the cube once — a presence of the rogue-AI kind (he fled Night City years ago after a rogue-AI encounter).',
+  'They are refugees with a damaged vehicle (the Warwick) and no money.',
+];
+const HIDDEN_DEFAULT = [
+  'The cube holds the Cynosure chip: a Blackwall contact sequence.',
+  "Militech's Project Cynosure; a defector let it escape.",
+  'The Time Market / Arasaka trail; NetWatch would destroy the chip.',
+  'Vera and Tomás are alive in Militech\'s Pacifica blacksite (rescue = Mission 4).',
+  'Cynosure protects Varun and will later offer integration.',
+];
+const LS_KEY = 'cp_forge_drafts_v1';
+const fbPath = (p) => dbPath() + '/forge/' + p;
+function clean(o) { return JSON.parse(JSON.stringify(o, (k, v) => (v === undefined ? null : v))); }
+function lsLoad() { try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch (e) { return {}; } }
+function lsSave() { try { localStorage.setItem(LS_KEY, JSON.stringify(F.drafts)); } catch (e) { /* quota / private mode */ } }
+let saveTimer = null;
+F.save = function () {
+  if (!F.draft) return;
+  F.draft.updated = Date.now(); F.drafts[F.draft.id] = F.draft; lsSave();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try { if (window.db) await db.ref(fbPath('drafts/' + F.draft.id)).set(clean(F.draft)); setStatus('saved'); }
+    catch (e) { setStatus('Could not sync to Firebase (kept in this browser): ' + (e.message || e)); }
+  }, 700);
+};
+F.saveMeta = async function () {
+  try { if (window.db) await db.ref(fbPath('meta')).set(clean(F.meta)); } catch (e) { setStatus('Could not sync campaign notes: ' + (e.message || e)); }
+  try { localStorage.setItem('cp_forge_meta_v1', JSON.stringify(F.meta)); } catch (e) { /* ignore */ }
+};
+function setStatus(t) { const el = $('forge-status'); if (el) el.textContent = t === 'saved' ? '✓ saved' : t; }
+
+F.onOpen = async function () {
+  if (!F.loaded) {
+    F.loaded = true;
+    F.drafts = lsLoad();
+    try { F.meta = Object.assign(F.meta, JSON.parse(localStorage.getItem('cp_forge_meta_v1') || '{}')); } catch (e) { /* ignore */ }
+    try {
+      if (window.db && session.role === 'gm') {
+        const [d, m] = await Promise.all([db.ref(fbPath('drafts')).once('value'), db.ref(fbPath('meta')).once('value')]);
+        if (d.exists()) Object.assign(F.drafts, d.val());
+        if (m.exists()) F.meta = Object.assign(F.meta, m.val());
+      }
+    } catch (e) { setStatus('Offline mode: ' + (e.message || e)); }
+    if (!F.meta.known || !F.meta.known.length) F.meta.known = KNOWN_DEFAULT.slice();
+    if (!F.meta.hidden || !F.meta.hidden.length) F.meta.hidden = HIDDEN_DEFAULT.slice();
+    const ids = Object.keys(F.drafts).sort((a, b) => (F.drafts[b].updated || 0) - (F.drafts[a].updated || 0));
+    if (ids.length) { F.draft = F.drafts[ids[0]]; F.step = F.draft.outline ? 2 : 1; }
+    try { F.settings = Object.assign(F.settings, JSON.parse(localStorage.getItem('cp_forge_settings') || '{}')); } catch (e) { /* ignore */ }
+  }
+  F.render();
+};
+function persistSettings() { try { localStorage.setItem('cp_forge_settings', JSON.stringify(F.settings)); } catch (e) { /* ignore */ } }
+
+function newDraft() {
+  return { id: uid('fm_'), created: Date.now(), updated: Date.now(), title: 'Untitled mission',
+    brief: { text: '', relevance: 'gig', threads: [], reveal: 'none', hours: 4, varun: true, aiden: true, samurai: false, tier: 'typical', tone: '', region: '', must: '', ban: '', lang: 'English' },
+    pitches: [], pick: null, outline: null, seg: {}, locks: {}, notes: {}, cast: [], locations: [], rosterAdded: false, cost: { total: 0, calls: [] } };
+}
+F.newDraft = function () { F.draft = newDraft(); F.step = 1; F.save(); F.render(); };
+F.selectDraft = function (id) { if (F.drafts[id]) { F.draft = F.drafts[id]; F.step = F.draft.outline ? 2 : 1; F.render(); } };
+F.deleteDraft = async function () {
+  if (!F.draft || !confirm('Delete this draft "' + F.draft.title + '"? (It cannot be undone.)')) return;
+  const id = F.draft.id; delete F.drafts[id]; lsSave();
+  try { if (window.db) await db.ref(fbPath('drafts/' + id)).set(null); } catch (e) { /* ignore */ }
+  const ids = Object.keys(F.drafts); F.draft = ids.length ? F.drafts[ids[0]] : null; F.render();
+};
+F.duplicateDraft = function () {
+  if (!F.draft) return;
+  const c = clean(F.draft); c.id = uid('fm_'); c.title = F.draft.title + ' (copy)'; c.created = c.updated = Date.now(); c.cost = { total: 0, calls: [] }; c.rosterAdded = false;
+  F.drafts[c.id] = c; F.draft = c; F.save(); F.render();
+};
+
+// ── the Claude call: cached static prefix, cost accounting, cap, retry, JSON parsing ─────
+function recordCost(label, model, u) {
+  const [pi, po] = PRICE[model] || [2, 10];
+  const usd = ((u.input_tokens || 0) * pi + (u.cache_creation_input_tokens || 0) * pi * 1.25 + (u.cache_read_input_tokens || 0) * pi * 0.1 + (u.output_tokens || 0) * po) / 1e6;
+  F.session.usd += usd; F.session.calls++;
+  if (F.draft) { F.draft.cost.total = +(F.draft.cost.total + usd).toFixed(5); F.draft.cost.calls.push({ label, model, in: (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0), cached: u.cache_read_input_tokens || 0, out: u.output_tokens || 0, usd: +usd.toFixed(5) }); if (F.draft.cost.calls.length > 120) F.draft.cost.calls.shift(); }
+  updateMeter(); return usd;
+}
+function estimate(tier, userLen, maxTokens) {
+  const [pi, po] = PRICE[MODELS[tier]];
+  return (SYSTEM_STATIC().length / 3.6 * pi * 0.4 + userLen / 3.6 * pi + maxTokens * 0.55 * po) / 1e6;   // static prefix mostly cached (assume 40% effective)
+}
+function parseJson(txt) {
+  let t = String(txt || '').replace(/```json|```/gi, '').trim();
+  const a = Math.min(...['{', '['].map(c => { const i = t.indexOf(c); return i < 0 ? 1e9 : i; }));
+  const b = Math.max(t.lastIndexOf('}'), t.lastIndexOf(']'));
+  if (a < 1e9 && b > a) t = t.slice(a, b + 1);
+  return JSON.parse(t);
+}
+async function rawClaude(model, body, label) {
+  const key = readApiKey();
+  if (!key) throw new Error('No Anthropic API key — set it in Settings first.');
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let res;
+    try {
+      res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify(body) });
+    } catch (e) { lastErr = new Error('Network error: ' + e.message); await sleep(1500 * (attempt + 1)); continue; }
+    if (res.status === 429 || res.status >= 500) { lastErr = new Error('Claude API busy (' + res.status + ')'); await sleep(3000 * (attempt + 1)); continue; }
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((data && data.error && data.error.message) || ('HTTP ' + res.status));
+    if (data.usage) recordCost(label, model, data.usage);
+    if (data.stop_reason === 'refusal') throw new Error('The model declined this request (safety classifier). Rephrase the brief and try again.');
+    return { text: (data.content || []).map(b => b.text || '').join(''), stop: data.stop_reason };
+  }
+  throw lastErr || new Error('Claude request failed');
+}
+// opts: { tier, stage (marker), system (extra, uncached), user | content[], maxTokens, effort, label }
+F.claude = async function (opts) {
+  if (F.abort) throw new Error('Stopped.');
+  const model = MODELS[opts.tier];
+  const userStr = typeof opts.user === 'string' ? opts.user : JSON.stringify(opts.content || '').slice(0, 4000);
+  const est = estimate(opts.tier, userStr.length, opts.maxTokens || 4000);
+  const total = F.draft ? F.draft.cost.total : 0;
+  if (total + est > F.settings.cap) {
+    if (!confirm('This step is estimated at $' + est.toFixed(2) + ' and would take this mission to about $' + (total + est).toFixed(2) + ', above your cap of $' + F.settings.cap.toFixed(2) + '. Continue anyway?')) throw new Error('Cancelled (cost cap).');
+  }
+  const body = { model, max_tokens: opts.maxTokens || 4000,
+    system: [{ type: 'text', text: SYSTEM_STATIC(), cache_control: { type: 'ephemeral' } }].concat(opts.system ? [{ type: 'text', text: opts.system }] : []),
+    messages: [{ role: 'user', content: opts.content || ('[STAGE:' + opts.stage + ']\n' + opts.user) }],
+    output_config: { effort: opts.effort || 'low' } };
+  let out = await rawClaude(model, body, opts.label || opts.stage);
+  try { return parseJson(out.text); }
+  catch (e) {   // one cheap repair attempt instead of re-running the whole stage
+    const fix = await rawClaude(MODELS.cheap, { model: MODELS.cheap, max_tokens: Math.min(8000, (opts.maxTokens || 4000)), system: 'You repair broken JSON. Return only the corrected JSON value, nothing else.', messages: [{ role: 'user', content: '[STAGE:repair]\n' + out.text.slice(0, 24000) }], output_config: { effort: 'low' } }, 'json repair');
+    try { return parseJson(fix.text); } catch (e2) { throw new Error('The model returned malformed JSON' + (out.stop === 'max_tokens' ? ' (it was cut off — shorten the brief or try again)' : '') + '.'); }
+  }
+};
+function updateMeter() {
+  const el = $('forge-meter'); if (!el) return;
+  const t = F.draft ? F.draft.cost.total : 0;
+  el.innerHTML = 'This mission <strong>$' + t.toFixed(3) + '</strong> / cap $' + F.settings.cap.toFixed(2) + ' · this session $' + F.session.usd.toFixed(3);
+}
+
+// ── context strings ─────────────────────────────────────────────────────────────────────
+function briefBlock(d) {
+  const b = d.brief, rel = REL[b.relevance];
+  const players = ['Varun (netrunner)', 'Aiden (combat medic)'].concat(b.samurai ? ['the Samurai (jumper — present tonight)'] : []).join(', ');
+  const threads = b.relevance === 'gig' ? 'none' : (b.threads.map(t => (THREADS.find(x => x[0] === t) || [t, t])[1]).join('; ') || 'none ticked');
+  return `GM BRIEF (the GM's own words):\n${b.text || '(none — surprise me within the rules below)'}\n\nPLOT RELEVANCE: ${rel.label}\n${rel.rule}\nTHREADS: ${threads}\nREVEAL BUDGET: ${b.relevance === 'plot' ? b.reveal : 'none'}\nPLAYERS TONIGHT: ${players}${b.samurai ? '' : ' (the Samurai may still join — add one optional slot for him)'}\nLENGTH: about ${b.hours} hours of play (about ${Math.round(b.hours * 2)} beats)\nDANGER TIER / PAY: ${TIERS[b.tier][1]}, ${TIERS[b.tier][0]} ED per person\nREGION / LOCATION: ${b.region || 'any'}\nTONE: ${b.tone || 'GM-defined arc (state it)'}\nMUST INCLUDE: ${b.must || '—'}\nMUST AVOID: ${b.ban || '—'}\nTEXT LANGUAGE: ${b.lang}\n\nWHAT THE PLAYERS KNOW NOW (never exceed this knowledge):\n- ${(F.meta.known || []).join('\n- ')}\nHIDDEN FROM THE PLAYERS (do not reveal beyond the budget):\n- ${(F.meta.hidden || []).join('\n- ')}`;
+}
+function compactOutline(d) {
+  const o = d.outline; if (!o) return '';
+  return JSON.stringify({ title: o.title, logline: o.logline, toneArc: o.toneArc, twist: o.twist, beats: o.beatChart.map(b => ({ id: b.id, beat: b.beat, kind: b.kind, title: b.title, summary: b.summary, location: b.location })) });
+}
+
+// ── stage 1: pitches ────────────────────────────────────────────────────────────────────
+F.makePitches = async function () {
+  const d = F.draft; if (!d) return;
+  if (!d.brief.text.trim() && !confirm('The brief is empty — generate pitches from the settings only?')) return;
+  await guard('Writing 3 pitches …', async () => {
+    const r = await F.claude({ tier: 'mid', stage: 'pitches', label: 'pitches', effort: 'low', maxTokens: 3500, user: briefBlock(d) + `\n\nTASK: propose 3 clearly DIFFERENT mission pitches that obey the plot-relevance rule. ${d.pitches.length ? 'Do not repeat these titles: ' + d.pitches.map(p => p.title).join('; ') + '.' : ''}\nReturn JSON: {"pitches":[{"title":"","logline":"max 30 words","hook":{"type":"<one of the HOOK TYPES>","text":"2-3 sentences: what the players see and must react to"},"personalStake":"tie to Varun/Aiden/a contact","twist":"one sentence, foreshadowable","threads":["keys"],"reveals":["only if the budget allows"],"vibe":"3 words"}]}` });
+    const list = (r.pitches || r).filter(p => p && p.title);
+    d.pitches = d.pitches.concat(list.map(p => Object.assign({ id: uid('p_') }, p)));
+    F.save();
+  });
+};
+F.useMyBrief = function () {
+  const d = F.draft; const t = d.brief.text.trim(); if (!t) { showToast('Write the brief first.'); return; }
+  const p = { id: uid('p_'), title: (t.split(/[.\n]/)[0] || 'My mission').slice(0, 60), logline: t.slice(0, 220), hook: { type: 'GM-defined', text: '(from your brief)' }, personalStake: '', twist: '', threads: d.brief.threads.slice(), reveals: [], vibe: '' };
+  d.pitches.push(p); F.pickPitch(p.id);
+};
+F.pickPitch = function (id) { const d = F.draft; d.pick = id; const p = d.pitches.find(x => x.id === id); if (p && (!d.title || d.title === 'Untitled mission')) d.title = p.title; F.save(); F.render(); };
+F.dropPitch = function (id) { const d = F.draft; d.pitches = d.pitches.filter(p => p.id !== id); if (d.pick === id) d.pick = null; F.save(); F.render(); };
+
+// ── stage 2: the beat chart ─────────────────────────────────────────────────────────────
+function beatPrompt(d, p) {
+  const n = Math.max(5, Math.round(d.brief.hours * 2));
+  return briefBlock(d) + `\n\nCHOSEN PITCH:\n${JSON.stringify(p)}\n\nTASK: build the BEAT CHART with about ${n} beats (Hook + middle beats that strictly alternate Development/Cliffhanger + Climax + Resolution). ${d.brief.relevance === 'plot' ? 'Also return stateDeltas.' : 'Return stateDeltas as an empty array.'}\nReturn JSON: {"title":"","logline":"","toneArc":"arrow words","estHours":${d.brief.hours},"twist":{"what":"","truth":"","foreshadowIn":["beat ids"],"revealIn":"beat id"},"beatChart":[{"id":"b1","beat":"Hook|Development|Cliffhanger|Climax|Resolution","kind":"<name from the lists>","title":"","summary":"2-3 sentences: what happens and what the players decide","location":"short place name","minutes":30,"spotlight":"Varun|Aiden|both|any","playstyle":["Warrior|Socializer|Explorer|Roleplayer"],"hostile":0}],"clocks":[{"name":"","ticks":4,"effect":""}],"payout":{"perPersonED":${TIERS[d.brief.tier][0]},"notes":""},"fixedOutcomes":[""],"flexibleOutcomes":[""],"gmPriorities":[""],"jumperSlot":"one simple optional role for the Samurai","stateDeltas":[{"type":"players learn|npc status|thread","text":""}]}`;
+}
+F.makeOutline = async function () {
+  const d = F.draft; const p = d.pitches.find(x => x.id === d.pick); if (!p) { showToast('Pick a pitch first.'); return; }
+  await guard('Building the beat chart …', async () => {
+    const tier = d.brief.relevance === 'gig' ? 'mid' : 'strong';
+    const r = await F.claude({ tier, stage: 'outline', label: 'beat chart', effort: tier === 'strong' ? 'medium' : 'low', maxTokens: 7000, user: beatPrompt(d, p) });
+    if (!r || !Array.isArray(r.beatChart) || !r.beatChart.length) throw new Error('No beat chart came back — try again.');
+    r.beatChart.forEach((b, i) => { b.id = b.id || 'b' + (i + 1); b.minutes = clamp(b.minutes || 30, 5, 120); });
+    d.outline = r; d.title = r.title || d.title; d.seg = {}; d.locks = {}; d.cast = []; d.locations = []; d.rosterAdded = false;
+    F.step = 2; F.save();
+  });
+};
+function newBeatId(d) { let n = 1; const ids = new Set(d.outline.beatChart.map(b => b.id)); while (ids.has('b' + n)) n++; return 'b' + n; }
+F.moveBeat = function (i, dir) { const a = F.draft.outline.beatChart; const j = i + dir; if (j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; F.save(); F.render(); };
+F.deleteBeat = function (i) { const d = F.draft; const b = d.outline.beatChart[i]; if (!b || !confirm('Delete the beat "' + b.title + '"?')) return; d.outline.beatChart.splice(i, 1); delete d.seg[b.id]; delete d.locks[b.id]; F.save(); F.render(); };
+F.toggleLock = function (i) { const d = F.draft; const b = d.outline.beatChart[i]; d.locks[b.id] = !d.locks[b.id]; F.save(); F.render(); };
+F.editBeat = function (i, field, v) { F.draft.outline.beatChart[i][field] = v; F.save(); runChecksSoon(); };
+F.setNote = function (id, v) { F.draft.notes[id] = v; };
+F.rewriteBeat = async function (i) {
+  const d = F.draft; const a = d.outline.beatChart; const b = a[i]; if (d.locks[b.id]) { showToast('This beat is locked.'); return; }
+  await guard('Rewriting the beat …', async () => {
+    const prev = a[i - 1], next = a[i + 1];
+    const r = await F.claude({ tier: 'mid', stage: 'beat', label: 'rewrite beat', effort: 'low', maxTokens: 900, user: briefBlock(d) + `\n\nOUTLINE: ${compactOutline(d)}\nREWRITE ONLY beat ${b.id} (type must stay ${b.beat}${prev ? '; previous beat is a ' + prev.beat : ''}${next ? '; next is a ' + next.beat : ''}). GM note: ${d.notes[b.id] || 'make it stronger and more specific'}\nReturn JSON for that one beat: {"beat":"${b.beat}","kind":"","title":"","summary":"","location":"","minutes":${b.minutes},"spotlight":"","playstyle":[],"hostile":0}` });
+    Object.assign(b, r, { id: b.id, beat: b.beat }); delete d.seg[b.id]; F.save();
+  });
+};
+F.addBeat = async function (after, type) {
+  const d = F.draft; if (!d.outline) return;
+  await guard('Adding a beat …', async () => {
+    const a = d.outline.beatChart; const prev = a[after], next = a[after + 1]; const id = newBeatId(d);
+    const r = await F.claude({ tier: 'mid', stage: 'beat', label: 'add beat', effort: 'low', maxTokens: 900, user: briefBlock(d) + `\n\nOUTLINE: ${compactOutline(d)}\nINSERT one new ${type} beat with id ${id} after ${prev ? prev.id : 'the start'}${next ? ' and before ' + next.id : ''}. GM note: ${d.notes['new'] || 'fit the story'}\nReturn JSON for that one beat: {"beat":"${type}","kind":"","title":"","summary":"","location":"","minutes":30,"spotlight":"","playstyle":[],"hostile":0}` });
+    a.splice(after + 1, 0, Object.assign({}, r, { id, beat: type })); F.save();
+  });
+};
+
+// ── stage 3: segment cards (per beat) ───────────────────────────────────────────────────
+function detailPrompt(d, b, i) {
+  const a = d.outline.beatChart; const prev = a[i - 1], next = a[i + 1];
+  const done = a.slice(0, i).filter(x => d.seg[x.id]).map(x => x.id + ': ' + (d.seg[x.id].purpose || x.title)).join(' | ');
+  return briefBlock(d) + `\n\nOUTLINE: ${compactOutline(d)}\nALREADY DETAILED: ${done || 'none'}\nDETAIL beat ${b.id} (${b.beat}: ${b.kind} — "${b.title}"). ${prev ? 'Previous: ' + prev.title + '.' : ''} ${next ? 'Next: ' + next.title + '.' : ''}\n${d.notes[b.id] ? 'GM NOTE FOR THIS SEGMENT: ' + d.notes[b.id] + '\n' : ''}Twist info: ${JSON.stringify(d.outline.twist || {})}. Respect: at most 3 active hostiles, fail forward, every clue reachable two ways, plan B, plot-relevance and reveal budget.\nReturn JSON: {"purpose":"one line","scene":"GM-facing: setting, who is there, what happens, 4-7 sentences","cast":["names of NPCs involved"],"hostiles":[{"name":"","tier":"GRUNT|THREAT|BOSS","count":1}],"stakes":"","obstacles":["max 4, each beatable"],"clues":[{"text":"","routes":["route one","route two"],"foreshadowsTwist":false,"seedClue":false}],"failForward":"","planB":"if the players skip or derail this","exits":["where it can lead"],"keyLine":"one memorable line of dialogue","samurai":"optional slot for the Samurai, one sentence"}`;
+}
+F.detailBeat = async function (i, quiet) {
+  const d = F.draft; const b = d.outline.beatChart[i]; if (!b) return;
+  if (d.locks[b.id] && d.seg[b.id]) { if (!quiet) showToast('This segment is locked.'); return; }
+  const run = async () => {
+    const r = await F.claude({ tier: 'mid', stage: 'detail', label: 'detail ' + b.id, effort: 'low', maxTokens: 2200, user: detailPrompt(d, b, i) });
+    d.seg[b.id] = r; F.save();
+  };
+  if (quiet) await run(); else await guard('Detailing "' + b.title + '" …', run);
+};
+F.detailAll = async function () {
+  const d = F.draft; if (!d.outline) return;
+  await guard('Detailing all segments …', async () => {
+    const a = d.outline.beatChart;
+    for (let i = 0; i < a.length; i++) {
+      if (F.abort) break;
+      const b = a[i]; if (d.seg[b.id]) continue;
+      setBusy('Detailing ' + (i + 1) + ' / ' + a.length + ': ' + b.title + ' …');
+      await F.detailBeat(i, true); F.render(true);
+    }
+  });
+};
+
+// ── checks (pure JS, free) ──────────────────────────────────────────────────────────────
+const GATE_HARD = ['cynosure', 'blackwall', 'prometheus', 'netwatch', 'contact sequence', 'project cynosure'];
+F.runChecks = function (d) {
+  const out = []; if (!d || !d.outline) return out;
+  const a = d.outline.beatChart; const ok = (t) => out.push({ l: 'ok', t }); const warn = (t) => out.push({ l: 'warn', t }); const bad = (t) => out.push({ l: 'bad', t });
+  if (a[0].beat !== 'Hook') bad('The first beat must be a Hook.'); else ok('Opens with a Hook.');
+  if (a[a.length - 1].beat !== 'Resolution') bad('The last beat must be a Resolution.');
+  if (a.length > 1 && a[a.length - 2].beat !== 'Climax') bad('The beat before the Resolution must be the Climax.'); else ok('Ends Climax → Resolution.');
+  const mid = a.filter(b => b.beat === 'Development' || b.beat === 'Cliffhanger');
+  let streak = 0; for (let i = 1; i < a.length; i++) { const x = a[i - 1].beat, y = a[i].beat; if ((x === y) && (x === 'Development' || x === 'Cliffhanger')) { bad('Two ' + x + 's in a row at beats ' + a[i - 1].id + ' and ' + a[i].id + ' (RED rule: alternate).'); streak++; } }
+  if (!streak) ok('Developments and Cliffhangers alternate.');
+  const mins = a.reduce((s, b) => s + (+b.minutes || 30), 0);
+  (Math.abs(mins / 60 - d.brief.hours) > 1.2) ? warn('Planned ' + (mins / 60).toFixed(1) + ' h vs ' + d.brief.hours + ' h target.') : ok('Length ≈ ' + (mins / 60).toFixed(1) + ' h.');
+  const det = a.filter(b => d.seg[b.id]).length; if (det < a.length) warn(det + ' of ' + a.length + ' segments detailed.'); else ok('All segments detailed.');
+  let overHostile = 0, badClues = 0, noPlanB = 0, noFF = 0, found = 0, seed = 0; const allText = [];
+  a.forEach(b => {
+    const s = d.seg[b.id]; allText.push(b.title + ' ' + b.summary); if (!s) return;
+    const n = (s.hostiles || []).reduce((t, h) => t + (+h.count || 1), 0); if (n > 3) overHostile++;
+    (s.clues || []).forEach(c => { if (!c.routes || c.routes.length < 2) badClues++; if (c.foreshadowsTwist) found++; if (c.seedClue) seed++; });
+    if (!s.planB) noPlanB++; if (!s.failForward) noFF++;
+    allText.push(JSON.stringify(s));
+  });
+  overHostile ? bad(overHostile + ' segment(s) have more than 3 active hostiles.') : ok('Max 3 hostiles per segment.');
+  badClues ? warn(badClues + ' clue(s) have fewer than 2 routes.') : (det ? ok('Every clue has 2+ routes.') : 0);
+  if (d.outline.twist && d.outline.twist.what) { (det && found < 2) ? warn('The twist is foreshadowed by ' + found + ' clue(s); aim for 2+.') : (det ? ok('Twist foreshadowed (' + found + ' clues).') : 0); }
+  if (noPlanB || noFF) warn((noPlanB ? noPlanB + ' without plan B. ' : '') + (noFF ? noFF + ' without fail-forward.' : ''));
+  const txt = allText.join(' ').toLowerCase(); const rel = d.brief.relevance;
+  const hits = GATE_HARD.filter(t => txt.includes(t));
+  if (rel === 'gig') hits.length ? bad('A "just a gig" must not touch the macro plot, but the text mentions: ' + hits.join(', ') + '.') : ok('No macro-plot terms (gig stays standalone).');
+  if (rel === 'seeded') { (seed > 1 || hits.length > 1) ? warn('Seeded gig: more than one plot hint (' + (hits.join(', ') || seed + ' seed clues') + ').') : ok('Seed level looks right.'); if (det && seed === 0) warn('No clue is flagged as the seed clue.'); }
+  if (rel === 'plot') { const strong = ['blackwall', 'contact sequence', 'project cynosure', 'prometheus']; const sh = strong.filter(t => txt.includes(t)); if (['none', 'hint'].includes(d.brief.reveal) && sh.length) warn('Reveal budget is "' + d.brief.reveal + '" but the text names: ' + sh.join(', ') + '.'); else ok('Reveal budget respected.'); }
+  if (/\b(bishop|sparrow)\b/.test(txt)) warn('Bishop and Sparrow are dead — check how they are mentioned.');
+  if (rel !== 'plot' && !d.brief.threads.includes('captives') && /\b(vera|tomás|tomas)\b/.test(txt)) warn('Vera/Tomás appear but the Vera & Tomás thread is not ticked.');
+  return out;
+};
+let checkTimer = null; function runChecksSoon() { clearTimeout(checkTimer); checkTimer = setTimeout(() => { const el = $('forge-checks'); if (el) el.innerHTML = checksHtml(); }, 300); }
+function checksHtml() {
+  const c = F.runChecks(F.draft); if (!c.length) return '';
+  const col = { ok: 'var(--green-bright)', warn: 'var(--gold-bright)', bad: 'var(--red-bright)' }, ic = { ok: '✓', warn: '⚠', bad: '✕' };
+  return c.map(x => `<div style="font-size:11px;line-height:1.6;color:${col[x.l]}">${ic[x.l]} <span style="color:var(--text2)">${E(x.t)}</span></div>`).join('');
+}
+
+// ── stage 4: cast & places ──────────────────────────────────────────────────────────────
+const ARCHS = ['BRUISER', 'GUNNER', 'SNIPER', 'NETRUNNER', 'STEALTH', 'SUPPORT', 'HEAVY'];
+async function castStage(d) {
+  {
+    const segs = d.outline.beatChart.map(b => ({ id: b.id, title: b.title, location: b.location, cast: (d.seg[b.id] || {}).cast || [], hostiles: (d.seg[b.id] || {}).hostiles || [], scene: ((d.seg[b.id] || {}).scene || b.summary).slice(0, 380) }));
+    const weapons = Object.keys(WEAPON_TABLE).filter(n => (WEAPON_TABLE[n].slotType || '') !== 'shield').join(', ');
+    const r = await F.claude({ tier: 'cheap', stage: 'cast', label: 'cast & places', effort: 'low', maxTokens: 7000,
+      user: `MISSION: ${d.title} — ${d.outline.logline}\nSEGMENTS: ${JSON.stringify(segs)}\n\nTASK: list every NPC the GM must run (named people, hostile squads as individual members, key civilians) and every distinct PLACE that needs a battle map. Do NOT include the player characters. Combatants must use these weapon names exactly: ${weapons}. Armor must be one of: ${Object.keys(ARMOR_CATALOG).join(', ')}. Tiers: GRUNT (fodder), THREAT (named operatives), BOSS (climax). Archetypes: ${ARCHS.join(', ')}. Hostile segments may contain at most 3 hostile members. Use "ally" for friendly/neutral people, "enemy" for anyone who may turn on the crew. Maximum 12 NPCs and 6 places.\nReturn JSON: {"cast":[{"key":"snake_case","name":"","fac":"enemy|ally","tier":"GRUNT|THREAT|BOSS","archetype":"","weapons":[""],"armor":"","cyberware":["free text, optional"],"role":"one line","want":"","secret":"","keyLine":"","tactics":"how they fight / behave","gm":"GM-only notes","flavor":"2 noir sentences","imagePrompt":"ONE paragraph, visual only: age, build, face, hair, exact clothing and colours, weapon/cyberware, pose, expression, background; no stats","segments":["b2"],"visibleAtStart":false}],"locations":[{"key":"snake_case","name":"","type":"interior|exterior|rooftop|vehicle|arena","scaleMeters":40,"mustContain":["every gameplay object WITH its position on the image, e.g. entrance bottom centre"],"mapPrompt":"one paragraph: the place, its layout with positions (top/bottom/left/right), key features; no style words","segments":["b2"]}]}` });
+    if (!r || !Array.isArray(r.cast)) throw new Error('No cast came back — try again.');
+    d.cast = r.cast.map(c => sanitizeCast(c)); d.locations = (r.locations || []).map(l => ({ key: slug(l.key || l.name), name: l.name || 'Location', type: l.type || 'interior', scaleMeters: clamp(l.scaleMeters || 40, 8, 300), mustContain: l.mustContain || [], mapPrompt: l.mapPrompt || '', segments: l.segments || [] }));
+    F.save();
+  }
+}
+F.makeCast = async function () {
+  const d = F.draft; if (!d.outline) return;
+  await guard('Casting NPCs and places …', async () => { await castStage(d); F.step = 3; });
+};
+const slug = (s) => String(s || 'x').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24) || 'x';
+function sanitizeCast(c) {
+  const wn = (n) => { try { return (typeof matchWeaponName === 'function' && matchWeaponName(n)) ? n : null; } catch (e) { return null; } };
+  const tier = ['GRUNT', 'THREAT', 'BOSS'].includes(String(c.tier).toUpperCase()) ? String(c.tier).toUpperCase() : 'GRUNT';
+  const arch = ARCHS.includes(String(c.archetype).toUpperCase()) ? String(c.archetype).toUpperCase() : 'GUNNER';
+  let weapons = (c.weapons || []).map(wn).filter(Boolean); if (!weapons.length && c.fac !== 'ally') weapons = [arch === 'BRUISER' ? 'Medium Melee' : 'Medium Pistol'];
+  return Object.assign({}, c, { key: slug(c.key || c.name), name: c.name || 'NPC', fac: c.fac === 'ally' ? 'ally' : 'enemy', tier, archetype: arch, weapons, armor: ARMOR_CATALOG[c.armor] ? c.armor : (tier === 'BOSS' ? 'Heavy Armorjack' : 'Light Armorjack'), cyberware: c.cyberware || [], segments: c.segments || [], visibleAtStart: !!c.visibleAtStart });
+}
+F.editCast = function (i, field, v) { const c = F.draft.cast[i]; if (!c) return; if (field === 'weapons') c.weapons = String(v).split(',').map(s => s.trim()).filter(Boolean); else c[field] = v; F.save(); };
+F.editLoc = function (i, field, v) { const l = F.draft.locations[i]; if (!l) return; if (field === 'mustContain') l.mustContain = String(v).split('\n').map(s => s.trim()).filter(Boolean); else if (field === 'scaleMeters') l.scaleMeters = clamp(v, 8, 300); else l[field] = v; F.save(); };
+F.dropCast = function (i) { F.draft.cast.splice(i, 1); F.save(); F.render(); };
+F.dropLoc = function (i) { F.draft.locations.splice(i, 1); F.save(); F.render(); };
+
+// encounter preset members for a beat: only fight beats, only enemies, max 3 (house rule)
+function fightMembers(d, b) {
+  const s = d.seg[b.id]; const fight = b.beat === 'Cliffhanger' || b.beat === 'Climax' || (+b.hostile > 0) || !!(s && (s.hostiles || []).length);
+  if (!fight) return [];
+  const names = ((s && s.cast) || []).map(x => String(x).toLowerCase());
+  return d.cast.filter(c => c.fac === 'enemy' && (names.includes(c.name.toLowerCase()) || (c.segments || []).includes(b.id))).slice(0, 3);
+}
+// the cast member as a character record using the tool's OWN generator (all numbers come from the tool)
+function castToCharacter(c, mission) {
+  const input = { name: c.name, tier: c.tier, archetype: c.archetype, faction: c.fac, armor: { name: c.armor }, weapons: (c.weapons || []).map(n => ({ name: n })), cyberware: c.cyberware || [], flink: false,
+    tactics: [c.tactics, c.keyLine ? 'Key line: ' + c.keyLine : ''].filter(Boolean).join('\n'), loot: [], gmNote: [c.role, c.want ? 'Wants: ' + c.want : '', c.secret ? 'Secret: ' + c.secret : '', c.gm].filter(Boolean).join('\n'), flavor: c.flavor || '', imagePrompt: (c.imagePrompt || '') + PORTRAIT_STYLE };
+  const ch = genResultToCharacter(processGeneratedEnemy(input));
+  ch.mission = mission; ch.isAlly = c.fac === 'ally'; ch.isNPC = true;
+  return ch;
+}
+F.addToRoster = async function () {
+  const d = F.draft; if (!d.cast.length) { showToast('Cast the NPCs first.'); return; }
+  if (d.rosterAdded && !confirm('These NPCs were already added once. Add them again as new copies?')) return;
+  await guard('Adding NPCs to the roster …', async () => {
+    const updates = {}; const idOf = {}; const prev = {};   // prev: the real 'before' values (state is mutated first), so ↺ UNDO removes the NPCs again
+    d.cast.forEach((c, i) => { const id = 'char_' + Date.now().toString(36) + '_' + i + Math.random().toString(36).slice(2, 4); idOf[c.key] = id; const ch = castToCharacter(c, d.title); state.characters[id] = ch; updates['characters/' + id] = ch; prev['characters/' + id] = null; });
+    // one encounter preset per segment that has hostile cast
+    let np = 0;
+    d.outline.beatChart.forEach((b, bi) => {
+      const ids = fightMembers(d, b).map(c => idOf[c.key]);
+      if (ids.length) { updates['encounterPresets/enc_forge_' + d.id.slice(-6) + '_' + bi] = { name: d.title + ' — ' + b.title, charIds: ids, sceneId: null, mission: d.title, ts: Date.now() + bi }; prev['encounterPresets/enc_forge_' + d.id.slice(-6) + '_' + bi] = null; np++; }
+    });
+    await dbUpdate(updates, 'Forge: added "' + d.title + '" cast', prev);
+    d.rosterAdded = true; F.save(); renderCharList(); if (typeof renderPresets === 'function') renderPresets();
+    showToast(d.cast.length + ' NPCs and ' + np + ' encounter presets added (mission folder "' + d.title + '").');
+  });
+};
+
+// ── export ──────────────────────────────────────────────────────────────────────────────
+F.toMarkdown = function () {
+  const d = F.draft, o = d.outline; if (!o) return '';
+  const L = []; const b = d.brief;
+  L.push('# ' + d.title, '', '> ' + (o.logline || ''), '', `**Plot relevance:** ${REL[b.relevance].label}${b.relevance === 'plot' ? ' · reveal budget: ' + b.reveal + ' · threads: ' + b.threads.join(', ') : ''}  `, `**Tone:** ${o.toneArc || b.tone}  ·  **Length:** ≈ ${o.estHours || b.hours} h  ·  **Pay:** ${(o.payout && o.payout.perPersonED) || TIERS[b.tier][0]} ED per person${o.payout && o.payout.notes ? ' — ' + o.payout.notes : ''}`, '');
+  if (o.twist) L.push('## Twist', `**What:** ${o.twist.what || ''}  `, `**Truth (GM only):** ${o.twist.truth || ''}  `, `Foreshadowed in: ${(o.twist.foreshadowIn || []).join(', ')} · revealed in: ${o.twist.revealIn || ''}`, '');
+  const list = (t, a) => { if (a && a.length) { L.push('## ' + t); a.forEach(x => L.push('- ' + x)); L.push(''); } };
+  list('Fixed outcomes', o.fixedOutcomes); list('Flexible outcomes', o.flexibleOutcomes); list('GM priorities', o.gmPriorities);
+  if (o.clocks && o.clocks.length) { L.push('## Clocks'); o.clocks.forEach(c => L.push(`- **${c.name}** (${c.ticks}): ${c.effect}`)); L.push(''); }
+  if (o.jumperSlot) L.push('## Samurai (jumper) slot', o.jumperSlot, '');
+  L.push('## Beat chart', '', '| # | Beat | Kind | Title | Min | Spotlight |', '|---|---|---|---|---|---|');
+  o.beatChart.forEach((x, i) => L.push(`| ${i + 1} | ${x.beat} | ${x.kind || ''} | ${x.title} | ${x.minutes} | ${x.spotlight || ''} |`));
+  L.push('', '## Segments');
+  o.beatChart.forEach((x, i) => {
+    const s = d.seg[x.id]; L.push('', `### ${i + 1}. ${x.beat} — ${x.kind || ''}: ${x.title} (${x.minutes} min)`, `*${x.location || ''}*`, '', x.summary || '');
+    if (!s) return; L.push('', `**Purpose:** ${s.purpose || ''}`, '', s.scene || '');
+    if ((s.cast || []).length) L.push('', '**Cast:** ' + s.cast.join(', ')); if ((s.hostiles || []).length) L.push('**Hostiles:** ' + s.hostiles.map(h => `${h.count || 1}× ${h.name} (${h.tier})`).join(', '));
+    if (s.stakes) L.push('', '**Stakes:** ' + s.stakes); if ((s.obstacles || []).length) { L.push('', '**Obstacles:**'); s.obstacles.forEach(t => L.push('- ' + t)); }
+    if ((s.clues || []).length) { L.push('', '**Clues:**'); s.clues.forEach(c => L.push(`- ${c.text} _(routes: ${(c.routes || []).join(' / ')})_${c.foreshadowsTwist ? ' · foreshadows the twist' : ''}${c.seedClue ? ' · seed clue' : ''}`)); }
+    if (s.failForward) L.push('', '**Fail forward:** ' + s.failForward); if (s.planB) L.push('**Plan B:** ' + s.planB); if ((s.exits || []).length) L.push('**Exits:** ' + s.exits.join('; ')); if (s.keyLine) L.push('', '> ' + s.keyLine); if (s.samurai) L.push('', '*Samurai slot:* ' + s.samurai);
+  });
+  if (d.cast.length) { L.push('', '## Cast'); d.cast.forEach(c => L.push(`- **${c.name}** (${c.fac}, ${c.tier} ${c.archetype}) — ${c.role || ''}${c.want ? ' · wants: ' + c.want : ''}${c.secret ? ' · secret: ' + c.secret : ''}${c.keyLine ? ' · "' + c.keyLine + '"' : ''}`)); }
+  if (d.locations.length) { L.push('', '## Places'); d.locations.forEach(l => L.push(`- **${l.name}** (${l.type}, ≈ ${l.scaleMeters} m wide): ${(l.mustContain || []).join('; ')}`)); }
+  if ((o.stateDeltas || []).length) { L.push('', '## Campaign changes if this mission is played'); o.stateDeltas.forEach(x => L.push(`- (${x.type}) ${x.text}`)); }
+  return L.join('\n');
+};
+F.copyMd = async function () { try { await navigator.clipboard.writeText(F.toMarkdown()); showToast('Mission copied as Markdown.'); } catch (e) { showToast('Copy blocked — use DOWNLOAD instead.'); } };
+function download(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: type || 'text/plain' })); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1500); }
+F.downloadMd = function () { download(slug(F.draft.title) + '.md', F.toMarkdown(), 'text/markdown'); };
+// art request sheet in the exact format scripts/gen_images.js (the double-click launcher) reads — the fallback when the browser can't call the image API
+F.artSheet = function () {
+  const d = F.draft, L = ['# ' + d.title + ' — art requests', '', '## Maps', '', '| ✓ | Priority | Save as | Used by |', '|---|---|---|---|'];
+  d.locations.forEach(l => L.push(`| [ ] | **P1** | \`maps\\${l.key}.png\` | ${l.name} |`)); L.push('');
+  d.locations.forEach(l => L.push(`**Prompt — \`maps\\${l.key}.png\`**`, '', '```', mapPrompt(l), '```', ''));
+  L.push('## Portraits', '', '| ✓ | Priority | Save as | Character |', '|---|---|---|---|'); d.cast.forEach(c => L.push(`| [ ] | **${c.tier === 'GRUNT' ? 'P2' : 'P1'}** | \`portraits\\${c.key}.png\` | ${c.name} |`)); L.push('');
+  d.cast.forEach(c => L.push(`**${c.name} — \`portraits\\${c.key}.png\`**`, '', '```', portraitPrompt(c), '```', ''));
+  return L.join('\n');
+};
+F.downloadArtSheet = function () { download(slug(F.draft.title) + ' - map & art requests.md', F.artSheet(), 'text/markdown'); };
+function mapPrompt(l) { return `${l.mapPrompt} ${MAP_STYLE}\nMust contain: ${(l.mustContain || []).join('; ')}. Must NOT contain: people, text, grid, labels, UI.`; }
+function portraitPrompt(c) { return (c.imagePrompt || (c.name + ', a Night City figure.')) + PORTRAIT_STYLE; }
+F._mapPrompt = mapPrompt; F._portraitPrompt = portraitPrompt;
+
+// campaign state: accept the deltas of a played plot mission
+F.applyDelta = function (i) {
+  const x = F.draft.outline.stateDeltas[i]; if (!x) return;
+  if (x.type === 'players learn') { F.meta.known.push(x.text); F.meta.hidden = F.meta.hidden.filter(h => !x.text.toLowerCase().includes(h.toLowerCase().slice(0, 18))); }
+  else F.meta.known.push('(' + F.draft.title + ') ' + x.text);
+  x.applied = true; F.saveMeta(); F.save(); F.render(); showToast('Added to what the players know.');
+};
+
+// ── busy / guard ────────────────────────────────────────────────────────────────────────
+function setBusy(t) { F.busy = t; const el = $('forge-busy'); if (el) { el.style.display = t ? 'flex' : 'none'; const m = $('forge-busy-text'); if (m) m.textContent = t; } }
+async function guard(label, fn) {
+  if (F.busy) { showToast('Still working: ' + F.busy); return; }
+  F.abort = false; setBusy(label); F.render(true);
+  try { await fn(); }
+  catch (e) { if (!/Cancelled|Stopped/.test(e.message)) { const el = $('forge-error'); F.lastError = e.message || String(e); showToast('Forge: ' + F.lastError, 6000); } }
+  finally { setBusy(''); F.render(); }
+}
+F.stop = function () { F.abort = true; showToast('Stopping after the current call …'); };
+
+// ── art: image API from the browser, canvas processing, vision placement, pack assembly ─────
+const OPENAI_KEY = 'cp_openai_key';
+F.openaiKey = () => { try { return localStorage.getItem(OPENAI_KEY) || ''; } catch (e) { return ''; } };
+F.setOpenaiKey = function (v) { try { v && v.trim() ? localStorage.setItem(OPENAI_KEY, v.trim()) : localStorage.removeItem(OPENAI_KEY); } catch (e) { showToast('This browser blocked saving the key.'); } showToast(v && v.trim() ? 'OpenAI key saved in this browser.' : 'OpenAI key removed.'); F.render(true); };
+function addUsd(label, model, usd) { F.session.usd += usd; if (F.draft) { F.draft.cost.total = +(F.draft.cost.total + usd).toFixed(5); F.draft.cost.calls.push({ label, model, in: 0, cached: 0, out: 0, usd: +usd.toFixed(5) }); } updateMeter(); }
+async function genImage(prompt, size, label) {
+  const key = F.openaiKey(); if (!key) throw new Error('No OpenAI key — paste it in the Build step.');
+  if (F.abort) throw new Error('Stopped.');
+  let res;
+  try { res = await fetch('https://api.openai.com/v1/images/generations', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify({ model: F.settings.imgModel, prompt, n: 1, size, quality: F.settings.imgQuality, output_format: 'png' }) }); }
+  catch (e) { throw new Error('The browser could not reach the image API (' + e.message + '). Use "Download art request sheet" and the double-click launcher instead.'); }
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error((data && data.error && data.error.message) || ('Image API HTTP ' + res.status));
+  const dd = data && data.data && data.data[0]; if (!dd || !dd.b64_json) throw new Error('The image API returned no image.');
+  addUsd(label, F.settings.imgModel, IMG_PRICE[F.settings.imgQuality] || 0.006);
+  return 'data:image/png;base64,' + dd.b64_json;
+}
+function loadImg(src) { return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('Could not decode the image.')); im.src = src; }); }
+async function toMapJpeg(src) {
+  const im = await loadImg(src); const w = Math.min(1600, im.naturalWidth), h = Math.round(im.naturalHeight * w / im.naturalWidth);
+  const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(im, 0, 0, w, h);
+  return { url: c.toDataURL('image/jpeg', 0.85), aspect: w / h };
+}
+async function toPortrait(src) {   // same automatic crop the mission builder uses: face centred in the upper third
+  const im = await loadImg(src); const W = im.naturalWidth, H = im.naturalHeight; const sz = Math.round(Math.min(W, H) * 0.55), x = Math.round((W - sz) / 2), y = Math.round(H * 0.04);
+  const c1 = document.createElement('canvas'); c1.width = c1.height = 200; c1.getContext('2d').drawImage(im, x, y, sz, sz, 0, 0, 200, 200);
+  const k = Math.min(1, 768 / Math.max(W, H)); const c2 = document.createElement('canvas'); c2.width = Math.round(W * k); c2.height = Math.round(H * k); c2.getContext('2d').drawImage(im, 0, 0, c2.width, c2.height);
+  return { crop: c1.toDataURL('image/jpeg', 0.85), full: c2.toDataURL('image/jpeg', 0.8) };
+}
+async function gridJpeg(src) {   // the map with a labelled 10% grid, so the model can read positions straight off it
+  const im = await loadImg(src); const w = 1280, h = Math.round(im.naturalHeight * w / im.naturalWidth);
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); g.drawImage(im, 0, 0, w, h);
+  g.strokeStyle = 'rgba(255,230,0,0.65)'; g.fillStyle = '#ffe600'; g.lineWidth = 1; g.font = 'bold 14px sans-serif';
+  for (let p = 0; p <= 100; p += 10) { const x = p / 100 * w, y = p / 100 * h; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); g.fillText(String(p), Math.min(x + 3, w - 24), 14); g.fillText(String(p), 3, Math.min(y + 14, h - 4)); }
+  return c.toDataURL('image/jpeg', 0.8).split(',')[1];
+}
+
+F.makeMap = async function (i, quiet) {
+  const d = F.draft, l = d.locations[i]; if (!l) return;
+  const run = async () => { const png = await genImage(mapPrompt(l), '1536x1024', 'map ' + l.key); F.art.maps[l.key] = (await toMapJpeg(png)); delete F.art.placements[l.key]; };
+  quiet ? await run() : await guard('Painting the map "' + l.name + '" …', run);
+};
+F.makePortrait = async function (i, quiet) {
+  const d = F.draft, c = d.cast[i]; if (!c) return;
+  const run = async () => { const png = await genImage(portraitPrompt(c), '1024x1536', 'portrait ' + c.key); F.art.portraits[c.key] = await toPortrait(png); };
+  quiet ? await run() : await guard('Painting ' + c.name + ' …', run);
+};
+const DEVICE_LIST = () => Object.entries(SECURITY_DEVICE_CATALOG).map(([k, v]) => k + ' [' + v.category + (v.detectionShape ? ', ' + v.detectionShape : '') + ']').join(' · ');
+F.placeLocation = async function (i, quiet) {
+  const d = F.draft, l = d.locations[i]; if (!l || !F.art.maps[l.key]) { if (!quiet) showToast('Paint the map first.'); return; }
+  const run = async () => {
+    const present = d.cast.filter(c => (c.segments || []).some(s => (l.segments || []).includes(s))).map(c => ({ key: c.key, name: c.name, fac: c.fac, tier: c.tier }));
+    const grid = await gridJpeg(F.art.maps[l.key].url);
+    const text = `[STAGE:place]\nThis is the top-down battle map "${l.name}" (${l.type}, about ${l.scaleMeters} m wide) with a labelled 10% grid: numbers on the top edge are X percent (left to right), numbers on the left edge are Y percent (top to bottom). Read positions straight off the grid.\nGameplay objects the map should contain: ${(l.mustContain || []).join('; ') || '—'}.\nNPCs that may be here (place only these): ${JSON.stringify(present)}.\nAvailable security devices (use these EXACT names): ${DEVICE_LIST()}.\nRules: put locks on doors, scanners at gates and lifts, cameras in room corners facing INTO the room, floor sensors on routes, consoles where hacking happens; 5-12 devices; rotation 0 = pointing up, 90 = right, 180 = down, 270 = left; range in REAL metres (cameras 6-14, motion/audio 3-8); tokens only on open floor, never on walls or props; fog "entrance" = an ellipse (cx, cy, rx, ry in percent) around where the crew arrives; estimate the real width of the whole map in metres from props of known size (doors about 1 m, cars about 4.5 m, tables about 2 m).\nReturn JSON: {"scaleMeters":40,"entrance":{"cx":50,"cy":88,"rx":14,"ry":10},"devices":[{"deviceType":"","name":"what it guards","x":50,"y":50,"rotation":0,"coneAngle":70,"range":8,"note":""}],"tokens":{"npc_key":{"x":50,"y":40}}}`;
+    const r = await F.claude({ tier: 'mid', stage: 'place', label: 'placement ' + l.key, effort: 'low', maxTokens: 3500, content: [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: grid } }, { type: 'text', text }] });
+    F.art.placements[l.key] = sanitizePlacement(r, l, present);
+  };
+  quiet ? await run() : await guard('Placing security on "' + l.name + '" …', run);
+};
+function sanitizePlacement(r, l, present) {
+  const keys = new Set(present.map(p => p.key));
+  const devices = (r.devices || []).filter(x => SECURITY_DEVICE_CATALOG[x.deviceType]).slice(0, 14).map(x => {
+    const o = { deviceType: x.deviceType, name: String(x.name || x.deviceType).slice(0, 60), pos: { x: clamp(x.x, 1, 99), y: clamp(x.y, 1, 99) }, revealed: false };
+    if (SECURITY_DEVICE_CATALOG[x.deviceType].detectionShape === 'cone') { o.rotation = ((Math.round(+x.rotation) % 360) + 360) % 360 || 0; o.coneAngle = clamp(x.coneAngle || 70, 20, 120); }
+    if (Number.isFinite(+x.range)) o.rangeMetersOverride = clamp(x.range, 3, 40);
+    if (x.note) o.note = String(x.note).slice(0, 200);
+    return o;
+  });
+  const tokens = {}; Object.entries(r.tokens || {}).forEach(([k, p]) => { if (keys.has(k) && p) tokens[k] = { x: clamp(p.x, 2, 98), y: clamp(p.y, 2, 98) }; });
+  const e = r.entrance || {};
+  return { scaleMeters: clamp(r.scaleMeters || l.scaleMeters, 8, 300), entrance: { cx: clamp(e.cx, 0, 100), cy: clamp(e.cy, 0, 100), rx: clamp(e.rx || 14, 4, 40), ry: clamp(e.ry || 10, 4, 40) }, devices, tokens };
+}
+
+F.buildPack = function () {
+  const d = F.draft; if (!d.cast.length || !d.locations.length) throw new Error('Cast the NPCs and places first.');
+  const characters = {}; d.cast.forEach(c => { const ch = castToCharacter(c, d.title); const p = F.art.portraits[c.key]; if (p) ch.portrait = { crop: p.crop, full: p.full }; characters[c.key] = ch; });
+  const sceneOfBeat = {}; const scenes = [];
+  d.locations.forEach(l => {
+    const m = F.art.maps[l.key]; if (!m) return; const pl = F.art.placements[l.key] || { scaleMeters: l.scaleMeters, entrance: { cx: 50, cy: 85, rx: 16, ry: 12 }, devices: [], tokens: {} };
+    const tokens = {}; Object.entries(pl.tokens).forEach(([k, p]) => { const c = d.cast.find(x => x.key === k); tokens[k] = { x: p.x, y: p.y, hidden: !(c && c.visibleAtStart) }; });
+    scenes.push({ key: l.key, name: l.name, image: m.url, imageAspect: m.aspect, scaleMetersWidth: pl.scaleMeters, drawings: [], fog: { enabled: true, autoReveal: true, visionRadius: 15, shapes: [{ shape: 'ellipse', type: 'reveal', cx: pl.entrance.cx, cy: pl.entrance.cy, rx: pl.entrance.rx, ry: pl.entrance.ry }] }, tokens, security: pl.devices });
+    (l.segments || []).forEach(b => { sceneOfBeat[b] = l.key; });
+  });
+  const presets = [];
+  d.outline.beatChart.forEach(b => {
+    const sk = sceneOfBeat[b.id]; if (!sk) return;
+    const ks = fightMembers(d, b).map(c => c.key);
+    if (ks.length) presets.push({ name: b.title, sceneKey: sk, characters: ks });
+  });
+  return { format: (typeof MISSION_PACK_FORMAT !== 'undefined' ? MISSION_PACK_FORMAT : 'cp-phantom-mission'), version: (typeof MISSION_PACK_VERSION !== 'undefined' ? MISSION_PACK_VERSION : 1), id: 'forge-' + d.id, mission: d.title, createdAt: new Date().toISOString(), characters, scenes, presets };
+};
+F.importNow = async function () {
+  try { const pack = F.buildPack(); const v = validateMissionPack(pack); if (v.errors.length) throw new Error(v.errors.slice(0, 3).join(' · ')); await previewMissionPack(pack, 'Forge — ' + F.draft.title); }
+  catch (e) { showToast('Forge: ' + e.message, 6000); }
+};
+F.downloadPack = function () { try { const pack = F.buildPack(); download(slug(F.draft.title) + '.cpmission.json', JSON.stringify(pack), 'application/json'); } catch (e) { showToast('Forge: ' + e.message, 6000); } };
+
+// the one-button build: cast & places -> maps -> portraits -> placement -> pack -> importer preview. Skips whatever already exists (credit saving).
+F.buildAll = async function () {
+  const d = F.draft; if (!d || !d.outline) { showToast('Build the beat chart first.'); return; }
+  if (!d.outline.beatChart.every(b => d.seg[b.id]) && !confirm('Not every segment is detailed yet. Build anyway?')) return;
+  await guard('Building everything …', async () => {
+    F.buildLog = [];
+    const log = (s) => { F.buildLog.push(s); setBusy(s); const el = $('forge-buildlog'); if (el) el.innerHTML = F.buildLog.map(x => '<div>' + E(x) + '</div>').join(''); };
+    if (!d.cast.length || !d.locations.length) { log('Casting NPCs and places …'); await castStage(d); }
+    for (let i = 0; i < d.locations.length; i++) { if (F.abort) break; const l = d.locations[i]; if (F.art.maps[l.key]) { log('Map "' + l.name + '" already exists — skipped'); continue; } log('Painting map ' + (i + 1) + '/' + d.locations.length + ': ' + l.name); await F.makeMap(i, true); }
+    for (let i = 0; i < d.cast.length; i++) { if (F.abort) break; const c = d.cast[i]; if (F.art.portraits[c.key]) continue; log('Painting portrait ' + (i + 1) + '/' + d.cast.length + ': ' + c.name); await F.makePortrait(i, true); }
+    for (let i = 0; i < d.locations.length; i++) { if (F.abort) break; const l = d.locations[i]; if (F.art.placements[l.key]) continue; log('Placing security on "' + l.name + '"'); await F.placeLocation(i, true); }
+    if (F.abort) throw new Error('Stopped.');
+    log('Assembling the mission pack …'); const pack = F.buildPack(); const v = validateMissionPack(pack);
+    if (v.errors.length) throw new Error('Pack check failed: ' + v.errors.slice(0, 3).join(' · '));
+    log('Done — opening the importer.'); await previewMissionPack(pack, 'Forge — ' + d.title);
+  });
+};
+
+// ── UI ───────────────────────────────────────────────────────────────────────────────────
+(function css() {
+  if ($('forge-css')) return; const s = document.createElement('style'); s.id = 'forge-css';
+  s.textContent = `#forge-root{padding:14px 14px 40px;max-width:980px;margin:0 auto}
+  .fg-card{background:var(--surface);border:1px solid var(--border);padding:10px 12px;margin-bottom:8px}
+  .fg-beat{background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--border);border-left:3px solid var(--border2);padding:10px 12px;margin-bottom:8px}
+  .fg-badge{font-size:9px;letter-spacing:.14em;text-transform:uppercase;padding:2px 7px;border:1px solid currentColor;white-space:nowrap}
+  .fg-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .fg-lbl{font-size:10px;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;margin:8px 0 3px;display:block}
+  .fg-in{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border2);padding:6px 8px;font:inherit;font-size:12px}
+  textarea.fg-in{min-height:60px;resize:vertical;line-height:1.5}
+  .fg-step{flex:1;min-width:84px;padding:7px 4px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;background:transparent;border:1px solid var(--border2);color:var(--text3);cursor:pointer;font-family:var(--font)}
+  .fg-step.on{background:var(--cyan-dim);color:var(--cyan);border-color:var(--cyan)}
+  .fg-sm{font-size:11px;color:var(--text2);line-height:1.6}
+  .fg-chk label{display:inline-flex;gap:5px;align-items:center;font-size:11px;margin:2px 10px 2px 0;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;color:var(--text2)}
+  .fg-chk input{width:auto}
+  .fg-seg{border-top:1px dashed var(--border2);margin-top:8px;padding-top:6px}
+  .fg-thumb{width:96px;height:54px;object-fit:cover;border:1px solid var(--border2)}
+  .fg-port{width:54px;height:54px;object-fit:cover;border:1px solid var(--border2)}
+  @media (max-width:480px){#screen-gm .tabs .tab{padding-left:8px;padding-right:8px;letter-spacing:.8px}}`;
+  document.head.appendChild(s);
+})();
+const bq = (s) => String(s == null ? '' : s).replace(/'/g, '&#39;');
+function stepper() { const n = ['1 Brief', '2 Outline', '3 Cast & places', '4 Build', '5 Campaign']; return '<div class="fg-row" style="margin:8px 0 12px">' + n.map((t, i) => `<button class="fg-step ${F.step === i + 1 ? 'on' : ''}" onclick="Forge.go(${i + 1})">${t}</button>`).join('') + '</div>'; }
+F.go = function (n) { F.step = n; F.render(); };
+F.setBrief = function (k, v) { F.draft.brief[k] = v; F.save(); if (k === 'relevance') F.render(true); };
+F.toggleThread = function (k) { const t = F.draft.brief.threads; const i = t.indexOf(k); i < 0 ? t.push(k) : t.splice(i, 1); F.save(); };
+F.setTitle = function (v) { F.draft.title = v; F.save(); };
+
+function html() {
+  const d = F.draft;
+  let h = `<div class="fg-row" style="justify-content:space-between"><div class="section-heading" style="margin:0">MISSION FORGE</div><div class="fg-sm" id="forge-meter"></div></div>
+  <div class="fg-sm" style="margin:2px 0 8px">Brief → pitches → beat chart → segments → cast → art → one importer click. Everything is a draft until you import it. <span id="forge-status" style="color:var(--text3)"></span></div>`;
+  h += '<div class="fg-row" style="margin-bottom:6px">';
+  const ids = Object.keys(F.drafts).sort((a, b) => (F.drafts[b].updated || 0) - (F.drafts[a].updated || 0));
+  if (ids.length) h += `<select class="fg-in" style="flex:1;min-width:180px;width:auto" onchange="Forge.selectDraft(this.value)">${ids.map(id => `<option value="${id}" ${d && d.id === id ? 'selected' : ''}>${E(F.drafts[id].title)} — ${REL[F.drafts[id].brief.relevance].label}</option>`).join('')}</select>`;
+  h += `<button class="btn btn-primary btn-small" onclick="Forge.newDraft()">＋ NEW MISSION</button>`;
+  if (d) h += `<button class="btn btn-ghost btn-small" onclick="Forge.duplicateDraft()">DUPLICATE</button><button class="btn btn-danger btn-small" onclick="Forge.deleteDraft()">DELETE</button>`;
+  h += '</div>';
+  h += `<div id="forge-busy" style="display:${F.busy ? 'flex' : 'none'};gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--cyan);background:var(--cyan-dim);margin:6px 0;font-size:12px"><span id="forge-busy-text">${E(F.busy)}</span><span style="flex:1"></span><button class="btn btn-danger btn-small" onclick="Forge.stop()">STOP</button></div>`;
+  if (!d) return h + `<div class="fg-card fg-sm" style="margin-top:10px">No mission yet. Press <strong>＋ NEW MISSION</strong>, write what you want in your own words, tick whether it is a plain gig or touches the main plot, and the Forge proposes pitches, then a beat chart you can edit segment by segment.</div>`;
+  h += stepper();
+  h += [step1, step2, step3, step4, step5][F.step - 1](d);
+  return h;
+}
+F.render = function () {
+  const root = $('forge-root'); if (!root) return;
+  const k = typeof holdScroll === 'function' ? holdScroll(root) : null;
+  try { root.innerHTML = html(); } catch (e) { root.innerHTML = '<div class="fg-card" style="color:var(--red-bright)">Forge display error: ' + E(e.message) + '</div>'; console.error(e); }
+  if (k && typeof releaseScroll === 'function') releaseScroll(k);
+  updateMeter(); const c = $('forge-checks'); if (c) c.innerHTML = checksHtml();
+};
+
+// step 1 ──────────────────────────────────────────────────────────────
+function step1(d) {
+  const b = d.brief;
+  let h = `<div class="fg-card"><span class="fg-lbl" style="margin-top:0">Your brief — beats, characters, builds, anything you want in it</span>
+  <textarea class="fg-in" style="min-height:120px" placeholder="e.g. A corp courier is dead and her cyberarm is missing. Aiden knew her from the clinic. I want a chase over the monorail, a fixer who sells them out, and one fight where the netrunner has to hack a drone swarm …" oninput="Forge.setBrief('text',this.value)">${E(b.text)}</textarea>
+  <span class="fg-lbl">Plot relevance</span>
+  <div class="fg-chk">${Object.entries(REL).map(([k, v]) => `<label><input type="radio" name="fg-rel" ${b.relevance === k ? 'checked' : ''} onchange="Forge.setBrief('relevance','${k}')"> <strong style="color:var(--text)">${v.label}</strong></label>`).join('')}</div>
+  <div class="fg-sm" style="margin-top:4px">${E(REL[b.relevance].rule)}</div>`;
+  if (b.relevance !== 'gig') {
+    h += `<span class="fg-lbl">Threads it touches</span><div class="fg-chk">${THREADS.map(([k, t]) => `<label><input type="checkbox" ${b.threads.includes(k) ? 'checked' : ''} onchange="Forge.toggleThread('${k}')"> ${t}</label>`).join('')}</div>`;
+    if (b.relevance === 'plot') h += `<span class="fg-lbl">Reveal budget</span><select class="fg-in" style="width:auto" onchange="Forge.setBrief('reveal',this.value)">${[['none', 'Nothing — pressure only'], ['hint', 'Hint — ambiguous clues'], ['partial', 'Partial — one concrete fact'], ['major', 'Major — a big reveal']].map(([v, t]) => `<option value="${v}" ${b.reveal === v ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+  }
+  h += `<div class="fg-row" style="margin-top:6px">
+    <div style="flex:1;min-width:110px"><span class="fg-lbl">Length (hours)</span><input class="fg-in" type="number" min="1" max="10" step="0.5" value="${b.hours}" oninput="Forge.setBrief('hours',+this.value||4)"></div>
+    <div style="flex:1;min-width:140px"><span class="fg-lbl">Danger / pay per person</span><select class="fg-in" onchange="Forge.setBrief('tier',this.value)">${Object.entries(TIERS).map(([k, v]) => `<option value="${k}" ${b.tier === k ? 'selected' : ''}>${v[1]} — ${v[0]} ED</option>`).join('')}</select></div>
+    <div style="flex:1;min-width:130px"><span class="fg-lbl">Text language</span><select class="fg-in" onchange="Forge.setBrief('lang',this.value)">${['English', 'Deutsch'].map(x => `<option ${b.lang === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div></div>
+  <div class="fg-chk" style="margin-top:6px"><label><input type="checkbox" checked disabled> Varun</label><label><input type="checkbox" checked disabled> Aiden</label><label><input type="checkbox" ${b.samurai ? 'checked' : ''} onchange="Forge.setBrief('samurai',this.checked)"> Samurai is here tonight (jumper — an optional slot is always included)</label></div>
+  <div class="fg-row"><div style="flex:1;min-width:160px"><span class="fg-lbl">Region / place</span><input class="fg-in" value="${bq(b.region)}" placeholder="Heywood, Pacifica, Watson …" oninput="Forge.setBrief('region',this.value)"></div><div style="flex:1;min-width:160px"><span class="fg-lbl">Tone / arc</span><input class="fg-in" value="${bq(b.tone)}" placeholder="competence → unease → complicity" oninput="Forge.setBrief('tone',this.value)"></div></div>
+  <div class="fg-row"><div style="flex:1;min-width:160px"><span class="fg-lbl">Must include</span><input class="fg-in" value="${bq(b.must)}" oninput="Forge.setBrief('must',this.value)"></div><div style="flex:1;min-width:160px"><span class="fg-lbl">Must avoid</span><input class="fg-in" value="${bq(b.ban)}" oninput="Forge.setBrief('ban',this.value)"></div></div>
+  <div class="fg-row" style="margin-top:10px"><button class="btn btn-primary" onclick="Forge.makePitches()">✦ GENERATE 3 PITCHES <span style="opacity:.7">(~$0.02)</span></button><button class="btn btn-ghost btn-small" onclick="Forge.useMyBrief()" title="Skip the pitches: your brief is the pitch">USE MY BRIEF AS THE PITCH</button></div></div>`;
+  if (d.pitches.length) {
+    h += `<div class="fg-lbl" style="margin-top:12px">Pitches</div>` + d.pitches.map(p => `<div class="fg-card" style="${d.pick === p.id ? 'border-color:var(--cyan)' : ''}">
+      <div class="fg-row" style="justify-content:space-between"><strong style="font-size:13px">${E(p.title)}</strong><span class="fg-sm">${E(p.vibe || '')}</span></div>
+      <div class="fg-sm">${E(p.logline)}</div>
+      <div class="fg-sm"><span style="color:var(--gold-bright)">HOOK${p.hook && p.hook.type ? ' (' + E(p.hook.type) + ')' : ''}:</span> ${E(p.hook && p.hook.text)}</div>
+      ${p.personalStake ? `<div class="fg-sm"><span style="color:var(--cyan)">PERSONAL:</span> ${E(p.personalStake)}</div>` : ''}
+      ${p.twist ? `<div class="fg-sm"><span style="color:var(--red-bright)">TWIST:</span> ${E(p.twist)}</div>` : ''}
+      ${(p.threads || []).length ? `<div class="fg-sm" style="color:var(--text3)">Threads: ${E(p.threads.join(', '))}${(p.reveals || []).length ? ' · reveals: ' + E(p.reveals.join('; ')) : ''}</div>` : ''}
+      <div class="fg-row" style="margin-top:6px"><button class="btn btn-primary btn-small" onclick="Forge.pickPitch('${p.id}')">${d.pick === p.id ? '✓ PICKED' : 'USE THIS'}</button><button class="btn btn-ghost btn-small" onclick="Forge.dropPitch('${p.id}')">✕</button></div></div>`).join('')
+      + `<div class="fg-row"><button class="btn btn-ghost btn-small" onclick="Forge.makePitches()">＋ 3 MORE PITCHES</button>${d.pick ? `<button class="btn btn-primary" onclick="Forge.makeOutline()">BUILD THE BEAT CHART → <span style="opacity:.7">(~$${b.relevance === 'gig' ? '0.04' : '0.12'})</span></button>` : ''}${d.outline ? `<button class="btn btn-ghost btn-small" onclick="Forge.go(2)">Open outline →</button>` : ''}</div>`;
+  }
+  return h;
+}
+
+// step 2 ──────────────────────────────────────────────────────────────
+function step2(d) {
+  const o = d.outline;
+  if (!o) return `<div class="fg-card fg-sm">No beat chart yet. Pick a pitch in step 1 and press <strong>BUILD THE BEAT CHART</strong>.</div>`;
+  let h = `<div class="fg-card"><input class="fg-in" style="font-size:15px;font-weight:700" value="${bq(d.title)}" oninput="Forge.setTitle(this.value)">
+    <div class="fg-sm" style="margin-top:4px">${E(o.logline)}</div>
+    <div class="fg-sm" style="color:var(--text3)">Tone: ${E(o.toneArc)} · ≈ ${E(o.estHours || d.brief.hours)} h · ${E(REL[d.brief.relevance].label)} · pay ${E((o.payout && o.payout.perPersonED) || '')} ED each${o.payout && o.payout.notes ? ' — ' + E(o.payout.notes) : ''}</div>
+    ${o.twist ? `<div class="fg-sm" style="margin-top:4px"><span style="color:var(--red-bright)">TWIST:</span> ${E(o.twist.what)} <span style="color:var(--text3)">(truth: ${E(o.twist.truth)} · foreshadowed in ${E((o.twist.foreshadowIn || []).join(', '))} · revealed in ${E(o.twist.revealIn)})</span></div>` : ''}
+    ${(o.clocks || []).length ? `<div class="fg-sm">${o.clocks.map(c => '⏱ ' + E(c.name) + ' (' + E(c.ticks) + '): ' + E(c.effect)).join(' · ')}</div>` : ''}
+    ${o.jumperSlot ? `<div class="fg-sm"><span style="color:var(--gold-bright)">SAMURAI SLOT:</span> ${E(o.jumperSlot)}</div>` : ''}
+    <div id="forge-checks" style="margin-top:6px"></div></div>`;
+  h += `<div class="fg-row" style="margin-bottom:8px"><button class="btn btn-primary btn-small" onclick="Forge.detailAll()">✦ DETAIL ALL SEGMENTS <span style="opacity:.7">(~$${(0.02 * o.beatChart.filter(b => !d.seg[b.id]).length).toFixed(2)})</span></button><button class="btn btn-ghost btn-small" onclick="Forge.copyMd()">COPY AS MARKDOWN</button><button class="btn btn-ghost btn-small" onclick="Forge.downloadMd()">DOWNLOAD .MD</button><button class="btn btn-primary btn-small" onclick="Forge.go(3)">NEXT: CAST & PLACES →</button></div>`;
+  h += o.beatChart.map((b, i) => beatCard(d, b, i)).join('');
+  if ((o.fixedOutcomes || []).length || (o.flexibleOutcomes || []).length || (o.gmPriorities || []).length) h += `<div class="fg-card fg-sm">${[['Fixed outcomes', o.fixedOutcomes], ['Flexible outcomes', o.flexibleOutcomes], ['GM priorities', o.gmPriorities]].filter(x => (x[1] || []).length).map(x => `<div style="margin-bottom:4px"><strong style="color:var(--text)">${x[0]}</strong><br>${x[1].map(E).join('<br>')}</div>`).join('')}</div>`;
+  if (d.brief.relevance === 'plot' && (o.stateDeltas || []).length) h += `<div class="fg-card"><span class="fg-lbl" style="margin-top:0">Campaign changes if you PLAY this mission</span>${o.stateDeltas.map((x, i) => `<div class="fg-row fg-sm" style="margin:3px 0"><span style="color:var(--text3)">${E(x.type)}</span><span style="flex:1">${E(x.text)}</span>${x.applied ? '<span style="color:var(--green-bright)">✓ in state</span>' : `<button class="btn btn-ghost btn-small" onclick="Forge.applyDelta(${i})">ADD TO WHAT THE PLAYERS KNOW</button>`}</div>`).join('')}</div>`;
+  return h;
+}
+function beatCard(d, b, i) {
+  const s = d.seg[b.id], lock = d.locks[b.id], col = BEAT_COLOR[b.beat] || 'var(--border2)';
+  let h = `<div class="fg-beat" style="border-left-color:${col}">
+    <div class="fg-row"><span class="fg-badge" style="color:${col}">${E(b.beat)}</span><span class="fg-sm">${E(b.kind || '')}</span><strong style="flex:1;font-size:13px;min-width:140px">${E(b.title)}</strong><span class="fg-sm" style="color:var(--text3)">${E(b.minutes)} min · ${E(b.spotlight || '')}${(b.playstyle || []).length ? ' · ' + E(b.playstyle.join('/')) : ''}</span>
+      <button class="btn btn-ghost btn-small" title="Lock (never overwritten)" onclick="Forge.toggleLock(${i})">${lock ? '🔒' : '🔓'}</button><button class="btn btn-ghost btn-small" onclick="Forge.moveBeat(${i},-1)">▲</button><button class="btn btn-ghost btn-small" onclick="Forge.moveBeat(${i},1)">▼</button><button class="btn btn-danger btn-small" onclick="Forge.deleteBeat(${i})">✕</button></div>
+    <textarea class="fg-in" onchange="Forge.editBeat(${i},'summary',this.value)">${E(b.summary)}</textarea>
+    <div class="fg-row"><div style="flex:1;min-width:150px"><span class="fg-lbl">Location</span><input class="fg-in" value="${bq(b.location)}" onchange="Forge.editBeat(${i},'location',this.value)"></div></div>`;
+  if (s) {
+    h += `<div class="fg-seg"><div class="fg-sm"><strong style="color:var(--text)">${E(s.purpose || '')}</strong></div>
+      <textarea class="fg-in" onchange="Forge.editSeg('${b.id}','scene',this.value)">${E(s.scene)}</textarea>
+      ${(s.cast || []).length ? `<div class="fg-sm"><span style="color:var(--cyan)">CAST:</span> ${E(s.cast.join(', '))}</div>` : ''}
+      ${(s.hostiles || []).length ? `<div class="fg-sm"><span style="color:var(--red-bright)">HOSTILES:</span> ${E(s.hostiles.map(x => (x.count || 1) + '× ' + x.name + ' (' + x.tier + ')').join(', '))}</div>` : ''}
+      ${s.stakes ? `<div class="fg-sm"><span style="color:var(--gold-bright)">STAKES:</span> ${E(s.stakes)}</div>` : ''}
+      ${(s.obstacles || []).length ? `<div class="fg-sm"><span style="color:var(--text3)">OBSTACLES:</span> ${s.obstacles.map(E).join(' · ')}</div>` : ''}
+      ${(s.clues || []).length ? `<div class="fg-sm"><span style="color:var(--text3)">CLUES:</span> ${s.clues.map(c => E(c.text) + ' <span style="color:var(--text3)">[' + E((c.routes || []).join(' / ')) + ']</span>' + (c.foreshadowsTwist ? ' <span style="color:var(--red-bright)">◆twist</span>' : '') + (c.seedClue ? ' <span style="color:var(--cyan)">◆seed</span>' : '')).join('<br>')}</div>` : ''}
+      ${s.failForward ? `<div class="fg-sm"><span style="color:var(--text3)">FAIL FORWARD:</span> ${E(s.failForward)}</div>` : ''}${s.planB ? `<div class="fg-sm"><span style="color:var(--text3)">PLAN B:</span> ${E(s.planB)}</div>` : ''}
+      ${(s.exits || []).length ? `<div class="fg-sm"><span style="color:var(--text3)">EXITS:</span> ${s.exits.map(E).join(' · ')}</div>` : ''}${s.keyLine ? `<div class="fg-sm" style="font-style:italic">„${E(s.keyLine)}“</div>` : ''}${s.samurai ? `<div class="fg-sm"><span style="color:var(--gold-bright)">SAMURAI:</span> ${E(s.samurai)}</div>` : ''}</div>`;
+  }
+  h += `<div class="fg-row" style="margin-top:6px"><input class="fg-in" style="flex:1;min-width:150px;width:auto" placeholder="note for the AI (e.g. less combat, add a betrayal)…" value="${bq(d.notes[b.id] || '')}" oninput="Forge.setNote('${b.id}',this.value)">
+    <button class="btn btn-primary btn-small" onclick="Forge.detailBeat(${i})">${s ? '↻ REDO DETAIL' : 'DETAIL THIS'}</button><button class="btn btn-ghost btn-small" onclick="Forge.rewriteBeat(${i})">↻ REWRITE BEAT</button>
+    <select id="fg-add-${i}" class="fg-in" style="width:auto"><option>Development</option><option>Cliffhanger</option></select><button class="btn btn-ghost btn-small" onclick="Forge.addBeat(${i},document.getElementById('fg-add-${i}').value)">＋ BEAT AFTER</button></div></div>`;
+  return h;
+}
+F.editSeg = function (id, f, v) { F.draft.seg[id][f] = v; F.save(); };
+
+// step 3 ──────────────────────────────────────────────────────────────
+function step3(d) {
+  if (!d.outline) return `<div class="fg-card fg-sm">Build the beat chart first.</div>`;
+  let h = `<div class="fg-row" style="margin-bottom:8px"><button class="btn btn-primary btn-small" onclick="Forge.makeCast()">✦ ${d.cast.length ? 'RE-' : ''}CAST NPCs & PLACES <span style="opacity:.7">(~$0.01)</span></button>${d.cast.length ? `<button class="btn btn-primary btn-small" onclick="Forge.addToRoster()">＋ ADD NPCs + ENCOUNTER PRESETS TO THE ROSTER${d.rosterAdded ? ' (again)' : ''}</button><button class="btn btn-ghost btn-small" onclick="Forge.downloadArtSheet()">DOWNLOAD ART REQUEST SHEET</button><button class="btn btn-primary btn-small" onclick="Forge.go(4)">NEXT: BUILD →</button>` : ''}</div>
+  <div class="fg-sm" style="margin-bottom:8px">NPC numbers (HP, armor, Firewall, talents) are rolled by the tool's own generator from the tier and archetype — the AI only chooses the concept and gear. Adding to the roster files them under the mission name.</div>`;
+  if (!d.cast.length) return h + `<div class="fg-card fg-sm">No cast yet.</div>`;
+  h += d.cast.map((c, i) => `<div class="fg-card"><div class="fg-row"><input class="fg-in" style="flex:1;min-width:140px;width:auto;font-weight:700" value="${bq(c.name)}" onchange="Forge.editCast(${i},'name',this.value)">
+      <select class="fg-in" style="width:auto" onchange="Forge.editCast(${i},'fac',this.value)">${['enemy', 'ally'].map(x => `<option ${c.fac === x ? 'selected' : ''}>${x}</option>`).join('')}</select>
+      <select class="fg-in" style="width:auto" onchange="Forge.editCast(${i},'tier',this.value)">${['GRUNT', 'THREAT', 'BOSS'].map(x => `<option ${c.tier === x ? 'selected' : ''}>${x}</option>`).join('')}</select>
+      <select class="fg-in" style="width:auto" onchange="Forge.editCast(${i},'archetype',this.value)">${ARCHS.map(x => `<option ${c.archetype === x ? 'selected' : ''}>${x}</option>`).join('')}</select><button class="btn btn-danger btn-small" onclick="Forge.dropCast(${i})">✕</button></div>
+    <div class="fg-sm">${E(c.role)}${c.want ? ' · wants: ' + E(c.want) : ''}${c.secret ? ' · <span style="color:var(--gold-bright)">secret: ' + E(c.secret) + '</span>' : ''}</div>
+    <div class="fg-row"><div style="flex:1;min-width:160px"><span class="fg-lbl">Weapons (comma separated)</span><input class="fg-in" value="${bq((c.weapons || []).join(', '))}" onchange="Forge.editCast(${i},'weapons',this.value)"></div><div style="flex:1;min-width:140px"><span class="fg-lbl">Armor</span><select class="fg-in" onchange="Forge.editCast(${i},'armor',this.value)">${Object.keys(ARMOR_CATALOG).map(x => `<option ${c.armor === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div></div>
+    <span class="fg-lbl">Portrait prompt</span><textarea class="fg-in" onchange="Forge.editCast(${i},'imagePrompt',this.value)">${E(c.imagePrompt)}</textarea></div>`).join('');
+  h += `<div class="fg-lbl" style="margin-top:12px">Places (one battle map each)</div>` + d.locations.map((l, i) => `<div class="fg-card"><div class="fg-row"><input class="fg-in" style="flex:1;min-width:140px;width:auto;font-weight:700" value="${bq(l.name)}" onchange="Forge.editLoc(${i},'name',this.value)"><span class="fg-sm">≈</span><input class="fg-in" style="width:70px" type="number" value="${l.scaleMeters}" onchange="Forge.editLoc(${i},'scaleMeters',this.value)"><span class="fg-sm">m wide</span><button class="btn btn-danger btn-small" onclick="Forge.dropLoc(${i})">✕</button></div>
+    <span class="fg-lbl">Must be on the map (one per line, with positions)</span><textarea class="fg-in" onchange="Forge.editLoc(${i},'mustContain',this.value)">${E((l.mustContain || []).join('\n'))}</textarea>
+    <span class="fg-lbl">Map prompt (the style block is added automatically)</span><textarea class="fg-in" onchange="Forge.editLoc(${i},'mapPrompt',this.value)">${E(l.mapPrompt)}</textarea></div>`).join('');
+  return h;
+}
+
+// step 4 ──────────────────────────────────────────────────────────────
+function step4(d) {
+  const hasKey = !!F.openaiKey();
+  const nMaps = d.locations.filter(l => !F.art.maps[l.key]).length, nPort = d.cast.filter(c => !F.art.portraits[c.key]).length, nPlace = d.locations.filter(l => !F.art.placements[l.key]).length;
+  const estImg = (nMaps + nPort) * (IMG_PRICE[F.settings.imgQuality] || 0.006), estPlace = nPlace * 0.03 + ((!d.cast.length) ? 0.02 : 0);
+  let h = `<div class="fg-card"><span class="fg-lbl" style="margin-top:0">Image API (OpenAI) — your key stays in this browser</span>
+    <div class="fg-row"><input class="fg-in" type="password" style="flex:1;min-width:200px;width:auto" placeholder="sk-…" ${hasKey ? 'value="••••••••••••"' : ''} onchange="Forge.setOpenaiKey(this.value.indexOf('•')>=0 ? Forge.openaiKey() : this.value)"><span class="fg-sm">${hasKey ? '✓ key saved' : 'no key yet'}</span></div>
+    <div class="fg-row"><div><span class="fg-lbl">Image model</span><select class="fg-in" style="width:auto" onchange="Forge.setImg('imgModel',this.value)">${['gpt-image-2.5-sunburst', 'gpt-image-2.5-flare', 'gpt-image-2', 'gpt-image-1.5'].map(m => `<option ${F.settings.imgModel === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div><div><span class="fg-lbl">Quality</span><select class="fg-in" style="width:auto" onchange="Forge.setImg('imgQuality',this.value)">${['low', 'medium', 'high'].map(m => `<option ${F.settings.imgQuality === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div></div>
+    <div class="fg-sm" style="margin-top:6px">Still to make: <strong>${nMaps}</strong> map(s), <strong>${nPort}</strong> portrait(s), <strong>${nPlace}</strong> placement(s). Estimated cost ≈ <strong>$${(estImg + estPlace).toFixed(2)}</strong> (images $${estImg.toFixed(2)}, placement vision ≈ $${estPlace.toFixed(2)}). Anything that already exists is skipped.</div>
+    <div class="fg-row" style="margin-top:8px"><button class="btn btn-primary" onclick="Forge.buildAll()" ${!hasKey || !d.outline ? 'disabled' : ''}>⚡ BUILD EVERYTHING → IMPORT</button><button class="btn btn-ghost btn-small" onclick="Forge.importNow()" ${Object.keys(F.art.maps).length ? '' : 'disabled'}>IMPORT WHAT EXISTS NOW</button><button class="btn btn-ghost btn-small" onclick="Forge.downloadPack()" ${Object.keys(F.art.maps).length ? '' : 'disabled'}>DOWNLOAD PACK (.cpmission.json)</button><button class="btn btn-ghost btn-small" onclick="Forge.downloadArtSheet()" ${d.cast.length ? '' : 'disabled'}>ART SHEET FOR THE LAUNCHER</button></div>
+    <div id="forge-buildlog" class="fg-sm" style="margin-top:6px"></div>
+    <div class="fg-sm" style="color:var(--text3);margin-top:4px">The browser may block direct image calls on some setups — then use the art sheet with the double-click launcher. Pictures live in memory until you reload the page; import before closing the tab.</div></div>`;
+  if (!d.locations.length) return h + `<div class="fg-card fg-sm">Cast the NPCs and places in step 3 first (or press BUILD EVERYTHING and it will do that for you).</div>`;
+  h += `<div class="fg-lbl">Maps</div>` + d.locations.map((l, i) => { const m = F.art.maps[l.key], p = F.art.placements[l.key]; return `<div class="fg-card fg-row">${m ? `<img class="fg-thumb" src="${m.url}">` : '<div class="fg-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:10px">no map</div>'}<div style="flex:1;min-width:140px"><strong>${E(l.name)}</strong><div class="fg-sm">${p ? p.devices.length + ' devices · ' + Object.keys(p.tokens).length + ' tokens · ≈ ' + p.scaleMeters + ' m' : 'not placed yet'}</div></div><button class="btn btn-ghost btn-small" onclick="Forge.makeMap(${i})" ${hasKey ? '' : 'disabled'}>${m ? '↻ REPAINT' : 'PAINT'}</button><button class="btn btn-ghost btn-small" onclick="Forge.placeLocation(${i})" ${m ? '' : 'disabled'}>${p ? '↻ RE-PLACE' : 'PLACE SECURITY'}</button></div>`; }).join('');
+  h += `<div class="fg-lbl">Portraits</div><div class="fg-row">` + d.cast.map((c, i) => { const p = F.art.portraits[c.key]; return `<div class="fg-card" style="width:130px;text-align:center">${p ? `<img class="fg-port" src="${p.crop}">` : '<div class="fg-port" style="margin:0 auto;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:9px">none</div>'}<div class="fg-sm" style="font-size:10px">${E(c.name)}</div><button class="btn btn-ghost btn-small" style="font-size:9px" onclick="Forge.makePortrait(${i})" ${hasKey ? '' : 'disabled'}>${p ? '↻' : 'PAINT'}</button></div>`; }).join('') + '</div>';
+  return h;
+}
+F.setImg = function (k, v) { F.settings[k] = v; persistSettings(); F.render(true); };
+
+// step 5 ──────────────────────────────────────────────────────────────
+F.saveBible = function (v) { F.meta.bible = v.trim() === BIBLE_DEFAULT.trim() ? '' : v; F.saveMeta(); showToast('Campaign bible saved.'); };
+F.resetBible = function () { if (confirm('Reset the campaign bible to the built-in version?')) { F.meta.bible = ''; F.saveMeta(); F.render(); } };
+F.saveLists = function (k, v) { F.meta[k] = String(v).split('\n').map(s => s.trim()).filter(Boolean); F.saveMeta(); };
+F.setCap = function (v) { F.settings.cap = Math.max(0.1, +v || 1.5); persistSettings(); updateMeter(); };
+function step5(d) {
+  const calls = d.cost.calls.slice(-30).reverse();
+  return `<div class="fg-card"><span class="fg-lbl" style="margin-top:0">What the players know now (one per line) — the generator never exceeds this</span><textarea class="fg-in" style="min-height:110px" onchange="Forge.saveLists('known',this.value)">${E((F.meta.known || []).join('\n'))}</textarea>
+    <span class="fg-lbl">Hidden from the players (one per line)</span><textarea class="fg-in" style="min-height:90px" onchange="Forge.saveLists('hidden',this.value)">${E((F.meta.hidden || []).join('\n'))}</textarea></div>
+  <div class="fg-card"><span class="fg-lbl" style="margin-top:0">Campaign bible (setting, canon missions, house style) — sent with every request, cached so it costs ~10%</span><textarea class="fg-in" style="min-height:220px" onchange="Forge.saveBible(this.value)">${E(F.meta.bible || BIBLE_DEFAULT)}</textarea><div class="fg-row" style="margin-top:4px"><button class="btn btn-ghost btn-small" onclick="Forge.resetBible()">RESET TO BUILT-IN</button></div></div>
+  <div class="fg-card"><span class="fg-lbl" style="margin-top:0">Cost cap per mission (USD) — the Forge asks before going past it</span><input class="fg-in" style="width:100px" type="number" min="0.1" step="0.1" value="${F.settings.cap}" onchange="Forge.setCap(this.value)">
+    <div class="fg-sm" style="margin-top:6px">Models: ${E(MODELS.cheap)} (cast, repairs) · ${E(MODELS.mid)} (pitches, segments, placement) · ${E(MODELS.strong)} (beat chart of plot missions). This mission so far: <strong>$${d.cost.total.toFixed(3)}</strong> in ${d.cost.calls.length} calls.</div>
+    ${calls.length ? `<table style="width:100%;font-size:10px;margin-top:6px;border-collapse:collapse">${calls.map(c => `<tr style="color:var(--text2)"><td>${E(c.label)}</td><td>${E(c.model)}</td><td style="text-align:right">${c.in}+${c.cached}c → ${c.out}</td><td style="text-align:right">$${c.usd.toFixed(4)}</td></tr>`).join('')}</table>` : ''}</div>`;
+}
+})();
+
 </script>
 </body>
 </html>
